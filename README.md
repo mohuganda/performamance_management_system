@@ -2,7 +2,8 @@
 
 Integrated performance, leave, attendance, and workforce management platform for the **Ministry of Health Uganda**. The stack pairs **Goravel v1.18** (Go API) with a **React + TypeScript** SPA, **MySQL** (legacy iHRIS extract + normalized PMS schema), and **Redis** for caching and sessions.
 
-**User documentation:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+**User documentation:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md)  
+**Deployment guide:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ## Features
 
@@ -20,11 +21,14 @@ Integrated performance, leave, attendance, and workforce management platform for
 
 ```text
 performamance_management_system/
+├── setup.sh          # Production deployment script (Docker + nginx)
 ├── backend/          # Goravel v1.18 API
 ├── frontend/         # React + Vite + TypeScript SPA
+├── deploy/           # Production compose, nginx configs, generated .env
 ├── database/sql/legacy/01_legacy_source_tables.sql
 ├── docker-compose.yml
 └── docs/
+    ├── DEPLOYMENT.md
     ├── USER_GUIDE.md
     └── REACT_IMPLEMENTATION_GUIDE.md
 ```
@@ -47,38 +51,24 @@ After containers are healthy, open the frontend and sign in with a demo account 
 
 ## Production deployment (nginx + Docker)
 
-Use **`setup.sh`** on a Linux server with Docker installed. It builds production images, starts MySQL/Redis/API/frontend, and exposes the app through an **nginx gateway** on your server IP.
+Use **`setup.sh`** on a Linux server with Docker installed. Full instructions: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
 
 ```bash
-# Clone the repo on the server, then:
 chmod +x setup.sh
 ./setup.sh
 ```
 
 Open **`http://<server-ip>/`** in your browser.
 
-### Common options
+### Quick examples
 
 ```bash
-# Set public IP/hostname explicitly
-./setup.sh --host 203.0.113.50
-
-# Production without demo seed data
-./setup.sh --no-demo-data --admin-password 'YourSecurePass123!'
-
-# Use system nginx on port 80 (Docker gateway on localhost:8080)
-sudo ./setup.sh --install-host-nginx --host 203.0.113.50
-
-# Custom HTTP port (e.g. when port 80 is taken)
-./setup.sh --http-port 8080
-
-# Force image rebuild
-./setup.sh --rebuild
-
-# Stop / status / logs
-./setup.sh --down
-./setup.sh --status
-./setup.sh --logs backend
+./setup.sh --host 203.0.113.50                    # explicit IP
+./setup.sh --no-demo-data --admin-password '…'  # production
+./setup.sh --http-port 8080                       # non-standard port
+sudo ./setup.sh --install-host-nginx              # system nginx on :80
+./setup.sh --rebuild                              # after code update
+./setup.sh --down                                 # stop stack
 ```
 
 | Option | Default | Description |
@@ -87,10 +77,9 @@ sudo ./setup.sh --install-host-nginx --host 203.0.113.50
 | `--ihris-demo` / `--no-ihris-demo` | on with demo | Load legacy `ihrisdata` demo table |
 | `--http-port` | `80` | Port users access in the browser |
 | `--install-host-nginx` | off | Install `/etc/nginx/sites-available/moh-pms` |
-| `--expose-mysql` | off | Publish MySQL on host port 3307 |
-| `--expose-redis` | off | Publish Redis on host port 6379 |
+| `--expose-mysql` / `--expose-redis` | off | Publish data services on host |
 
-Generated config and secrets are stored in **`deploy/.env`** (git-ignored). See `./setup.sh --help` for all flags.
+Secrets are stored in **`deploy/.env`** (git-ignored). Run `./setup.sh --help` for all options.
 
 ### Stack layout
 
@@ -100,8 +89,6 @@ Browser → nginx gateway (:80)
             ├── /api/    → backend (:3030)
             └── /swagger → API docs
 ```
-
-Files: `deploy/docker-compose.prod.yml`, `deploy/nginx/gateway.conf`, `frontend/Dockerfile.prod`
 
 ## Local Development
 
@@ -275,6 +262,7 @@ Primary green `#2E7D32`, accent gold `#F9A825`, background `#F8FAF5`. Typography
 | Document | Audience |
 |----------|----------|
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | End users (staff, supervisors, HR, admins) |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Server deployment with `setup.sh`, Docker, and nginx |
 | [docs/REACT_IMPLEMENTATION_GUIDE.md](docs/REACT_IMPLEMENTATION_GUIDE.md) | Frontend implementation notes |
 | [leave.md](leave.md) | Leave policy reference |
 

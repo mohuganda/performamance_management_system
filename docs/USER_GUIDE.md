@@ -5,16 +5,18 @@ This guide explains how to use the web application for day-to-day performance ma
 ## Contents
 
 1. [Getting started](#1-getting-started)
-2. [Navigation and roles](#2-navigation-and-roles)
-3. [Dashboard](#3-dashboard)
-4. [Performance management](#4-performance-management)
-5. [Leave](#5-leave)
-6. [Out of station](#6-out-of-station)
-7. [Attendance](#7-attendance)
-8. [Notifications](#8-notifications)
-9. [Profile and settings](#9-profile-and-settings)
-10. [Administration (HR and system admins)](#10-administration-hr-and-system-admins)
-11. [Troubleshooting](#11-troubleshooting)
+2. [System architecture and data flow](#2-system-architecture-and-data-flow)
+3. [Navigation and roles](#3-navigation-and-roles)
+4. [Dashboard](#4-dashboard)
+5. [Performance management](#5-performance-management)
+6. [Leave](#6-leave)
+7. [Out of station](#7-out-of-station)
+8. [Attendance](#8-attendance)
+9. [Notifications](#9-notifications)
+10. [Profile and settings](#10-profile-and-settings)
+11. [Administration (HR and system admins)](#11-administration-hr-and-system-admins)
+12. [Troubleshooting](#12-troubleshooting)
+13. [Accessing a deployed server](#13-accessing-a-deployed-server)
 
 ---
 
@@ -22,7 +24,9 @@ This guide explains how to use the web application for day-to-day performance ma
 
 ### Sign in
 
-1. Open the application URL provided by your IT team (demo: **http://localhost:5173**).
+1. Open the application URL provided by your IT team:
+   - **Deployed server:** `http://<server-ip>/` (or your organisation domain)
+   - **Local development:** `http://localhost:5173`
 2. Enter your **email** and **password**.
 3. Click **Sign in**.
 
@@ -286,7 +290,36 @@ For technical support, contact your facility or national PMS support desk with y
 
 ---
 
+## 12. Accessing a deployed server
+
+When IT deploys PMS on a server using the project **`setup.sh`** script, you typically access it by IP or hostname in the browser — no port number needed when using the default configuration.
+
+| Environment | URL example |
+|-------------|-------------|
+| Production (default) | `http://203.0.113.50/` |
+| Custom port | `http://203.0.113.50:8080/` |
+| Organisation domain | `https://pms.moh.go.ug/` |
+
+### Demo vs production
+
+| | Demo deployment | Production deployment |
+|--|-----------------|----------------------|
+| Sample users | Yes (`worker@moh.go.ug`, etc.) | Created by administrators |
+| Password | `Demo@Moh2026!` (unless changed) | Assigned per user |
+| Sample KPIs / leave data | Pre-loaded | Configured by HR |
+
+If you cannot reach the URL, confirm with IT that:
+
+- The server firewall allows HTTP on the configured port
+- Your network can route to the server IP
+- You are using `http://` (not `https://`) unless TLS has been configured
+
+Server administrators: see **[DEPLOYMENT.md](DEPLOYMENT.md)** for full install and operations instructions.
+
+---
+
 ## Related documents
 
 - [README](../README.md) — setup and architecture for developers
+- [DEPLOYMENT.md](DEPLOYMENT.md) — server deployment with Docker and nginx
 - [leave.md](../leave.md) — detailed leave policy reference
