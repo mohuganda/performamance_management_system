@@ -50,7 +50,222 @@ Default demo password: **`Demo@Moh2026!`**
 
 ---
 
-## 2. Navigation and roles
+## 2. System architecture and data flow
+
+This section gives a simple picture of how the system is built and how your actions move through it. You do not need technical knowledge to use PMS — this is here to help staff, supervisors, and HR understand **where information comes from** and **who sees what**.
+
+### 2.1 Big picture — layers
+
+When you use PMS in a browser, your request passes through a few layers before data is saved or returned:
+
+```text
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  You        │     │  Web app    │     │  API        │     │  Database   │
+│  (browser)  │ ──► │  (screens)  │ ──► │  (server)   │ ──► │  (records)  │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+      │                    │                    │                    │
+  Click, type          Dashboard,           Rules, roles,        Staff, leave,
+  sign in              Leave,               approvals,           KPIs, reports
+                       Performance          permissions          attendance
+```
+
+| Layer | What it does | What you see |
+|-------|----------------|--------------|
+| **Browser** | Your phone or computer | Login page, menus, forms, charts |
+| **Web app** | Screens and navigation | Dashboard, Performance, Leave, etc. |
+| **API (server)** | Business rules and security | Nothing directly — works behind the scenes |
+| **Database** | Permanent storage | Your saved requests, balances, reports |
+
+On a deployed server, a **gateway (nginx)** sits in front and sends `/` to the web app and `/api/` to the server — so you use one address (e.g. `http://203.0.113.50/`) for everything.
+
+```mermaid
+flowchart LR
+  subgraph users [Users]
+    Staff[Staff]
+    Supervisor[Supervisor]
+    HR[HR / Admin]
+  end
+
+  subgraph presentation [What you interact with]
+    Browser[Web browser]
+    UI[MoH PMS screens]
+  end
+
+  subgraph platform [Platform — behind the scenes]
+    API[API server]
+    DB[(Database)]
+    Cache[(Session cache)]
+  end
+
+  subgraph sources [Data sources]
+    IHRIS[iHRIS staff records]
+    HRConfig[HR policy config]
+  end
+
+  Staff --> Browser
+  Supervisor --> Browser
+  HR --> Browser
+  Browser --> UI
+  UI -->|requests| API
+  API --> DB
+  API --> Cache
+  IHRIS -->|staff sync| DB
+  HRConfig -->|leave types, KPIs| DB
+  API -->|responses| UI
+  UI --> Browser
+```
+
+### 2.2 Where master data comes from
+
+| Data | Source | Who maintains it |
+|------|--------|------------------|
+| Staff names, jobs, facilities | **iHRIS** (synced into PMS) | National HR / iHRIS |
+| User login and roles | **PMS accounts** | System administrators |
+| Supervisors (up to 3 per staff) | **Staff management** | HR officers |
+| KPI catalog and assignments | **KPI management** | HR / performance admins |
+| Leave types, entitlements, stages | **Leave configuration** | HR officers |
+| Your leave requests, PPAs, reports | **You and your approvers** | Created in PMS as you work |
+
+PMS does **not** replace iHRIS for core HR master data — it **reads** staff deployment information and adds performance, leave workflow, and attendance on top.
+
+### 2.3 Sign-in and access control
+
+Every action is tied to your **account**, **role**, and **scope** (e.g. own records only, supervised staff, or whole district).
+
+```mermaid
+sequenceDiagram
+  participant U as You
+  participant UI as Web app
+  participant API as API server
+  participant DB as Database
+
+  U->>UI: Enter email and password
+  UI->>API: Login request
+  API->>DB: Verify account and role
+  DB-->>API: User, permissions, staff link
+  API-->>UI: Secure session token
+  UI-->>U: Dashboard (menus filtered by role)
+
+  Note over U,DB: Later actions send the token with each request
+  U->>UI: Open Leave / Performance
+  UI->>API: Request data (with token)
+  API->>API: Check permission and scope
+  API->>DB: Read or write allowed records only
+  DB-->>API: Result
+  API-->>UI: Data for your screen
+  UI-->>U: Show only what you may see
+```
+
+**Takeaway:** You only see menus and records your role allows. A health worker cannot open HR-wide leave administration; an HR officer can see org-wide balances but still follows permission rules.
+
+### 2.4 Performance data flow (PPA and reporting)
+
+```mermaid
+flowchart TD
+  A[HR defines KPIs in catalog] --> B[Assign to job / department / staff]
+  B --> C[Staff sees assigned KPIs]
+  C --> D[Staff builds PPA — weights and targets]
+  D --> E[Supervisor reviews and approves plan]
+  E --> F[Staff files quarterly reports]
+  F --> G[Actuals and narrative saved per period]
+  G --> H[Dashboards and summaries]
+  G --> I{Cumulative KPI?}
+  I -->|Yes| J[YTD total tracked across periods]
+  I -->|No| K[Period actual vs target]
+  J --> H
+  K --> H
+```
+
+| Step | Data created | Stored as |
+|------|----------------|-----------|
+| HR sets KPIs | Indicator definitions | KPI catalog |
+| Assignment | Who must report which KPI | KPI assignments |
+| PPA planning | Weights % and annual targets | Performance plan (PPA) |
+| Quarterly report | Actual value + evidence text | Report entries per period |
+| Cumulative KPI | Running year-to-date total | Each period stores latest YTD |
+
+### 2.5 Leave and approval data flow
+
+```mermaid
+flowchart LR
+  subgraph employee [Employee]
+    E1[Submit leave request]
+  end
+
+  subgraph workflow [Approval chain]
+    S[Supervisor]
+    RO[Responsible officer]
+    HR[HR finalization]
+  end
+
+  subgraph records [Records updated]
+    LR[Leave request]
+    LB[Leave balance]
+    N[Notification]
+  end
+
+  E1 --> LR
+  LR --> S
+  S -->|approve| RO
+  S -->|reject| N
+  RO -->|approve| HR
+  HR --> LB
+  HR --> N
+```
+
+| Stage | What happens to data |
+|-------|----------------------|
+| Submit | Request saved; days calculated; balance checked against policy |
+| Supervisor / officer | Approval status and comments updated |
+| HR finalize | Request marked complete; **used days** added to balance |
+| Notifications | You and approvers get in-app alerts |
+
+Leave rules (types, entitlements by salary grade, advance notice) come from **HR configuration** in the database — not hardcoded — so policy changes flow to new requests automatically.
+
+### 2.6 Out of station and attendance
+
+```mermaid
+flowchart TD
+  OOS[Staff submits OOS request with map location] --> Approve[Supervisor approves]
+  Approve --> Approved[Approved destination stored]
+  Clock[Staff clocks in/out with GPS] --> Check{Approved OOS today?}
+  Check -->|Yes| Geo[Compare GPS to destination]
+  Check -->|No| Station[Record at duty station]
+  Geo --> Status[verified_oos / outside_geofence]
+  Station --> Status
+  Status --> History[Attendance history]
+```
+
+Attendance clock data links to **approved out-of-station** records so the system can verify you were at the declared location (within the configured distance).
+
+### 2.7 End-to-end summary
+
+```text
+ iHRIS ──sync──► Staff directory ──► Your account linked to staff record
+                                      │
+ HR config ──► KPIs, leave policy ─────┤
+                                      ▼
+                              You use the web app
+                                      │
+                    ┌─────────────────┼─────────────────┐
+                    ▼                 ▼                 ▼
+              Performance          Leave          Attendance
+              (PPA, reports)    (requests)      (clock, OOS)
+                    │                 │                 │
+                    └─────────────────┼─────────────────┘
+                                      ▼
+                              Database (single source
+                              of truth inside PMS)
+                                      │
+                                      ▼
+                    Dashboards, notifications, HR admin views
+```
+
+**In short:** iHRIS and HR configuration **feed in** master data; you and your approvers **create** transactional data (plans, reports, leave, attendance); the API **enforces** rules and permissions; everyone with the right role **sees** aggregated views on dashboards and admin screens.
+
+---
+
+## 3. Navigation and roles
 
 The sidebar shows only the sections your account is allowed to access. Menu groups include:
 
@@ -76,7 +291,7 @@ The sidebar shows only the sections your account is allowed to access. Menu grou
 
 ---
 
-## 3. Dashboard
+## 4. Dashboard
 
 After sign-in you land on **Dashboard**. The view adapts to your role:
 
@@ -89,7 +304,7 @@ Use dashboard cards and charts to drill into areas that need action (e.g. pendin
 
 ---
 
-## 4. Performance management
+## 5. Performance management
 
 Go to **Performance** in the sidebar.
 
@@ -145,7 +360,7 @@ Shows PPA status, total weight, current workflow stage, and reporting window sta
 
 ---
 
-## 5. Leave
+## 6. Leave
 
 Go to **Leave** under **Time & Attendance**.
 
@@ -173,7 +388,7 @@ Supervisors see team requests on their dashboard and can **approve** or **reject
 
 ---
 
-## 6. Out of station
+## 7. Out of station
 
 Go to **Out of station** when you need approval to work away from your duty station.
 
@@ -186,7 +401,7 @@ After approval, attendance clocking at that location can be verified against the
 
 ---
 
-## 7. Attendance
+## 8. Attendance
 
 Go to **Attendance** to **clock in** or **clock out**.
 
@@ -198,7 +413,7 @@ Work hours and clock windows follow MoH policy configured in the system.
 
 ---
 
-## 8. Notifications
+## 9. Notifications
 
 Go to **Notifications** for in-app alerts:
 
@@ -210,7 +425,7 @@ The bell icon in the header shows unread count. Open a notification to see detai
 
 ---
 
-## 9. Profile and settings
+## 10. Profile and settings
 
 ### Profile
 
@@ -226,7 +441,7 @@ Administrators may configure additional system settings via admin APIs; most sta
 
 ---
 
-## 10. Administration (HR and system admins)
+## 11. Administration (HR and system admins)
 
 Visible under **Administration** when you have the right permissions.
 
@@ -274,7 +489,7 @@ System administrators:
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 | Issue | What to try |
 |-------|-------------|
@@ -290,7 +505,7 @@ For technical support, contact your facility or national PMS support desk with y
 
 ---
 
-## 12. Accessing a deployed server
+## 13. Accessing a deployed server
 
 When IT deploys PMS on a server using the project **`setup.sh`** script, you typically access it by IP or hostname in the browser — no port number needed when using the default configuration.
 
