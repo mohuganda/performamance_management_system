@@ -213,7 +213,7 @@ func (s *LeaveAdminService) enrichRequest(req models.LeaveRequest) LeaveRequestA
 		DaysRequested:  req.DaysRequested,
 		Status:         req.Status,
 		ApprovalStage:  req.ApprovalStage,
-		AwaitingHr:     req.Status == "approved" && req.ApprovalStage == "hr",
+		AwaitingHr:     s.isAwaitingHrFinalize(req),
 	}
 	if req.SubmittedAt != nil {
 		row.SubmittedAt = req.SubmittedAt.Format(time.RFC3339)
@@ -232,7 +232,8 @@ func (s *LeaveAdminService) ListRequests(filter LeaveRequestListFilter) (Paginat
 		query = query.Where("status", filter.Status)
 	}
 	if filter.AwaitingHr == "true" {
-		query = query.Where("status", "approved").Where("approval_stage", "hr")
+		hrCodes := NewLeaveWorkflowService().HrFinalizeStageCodes()
+		query = query.Where("status", "approved").Where("approval_stage IN ?", hrCodes)
 	}
 	if filter.LeaveTypeID > 0 {
 		query = query.Where("leave_type_id", filter.LeaveTypeID)
@@ -330,8 +331,8 @@ func (s *LeaveAdminService) FinalizeRequest(requestID uint) error {
 	if err := facades.Orm().Query().Where("id", requestID).First(&req); err != nil || req.ID == 0 {
 		return fmt.Errorf("leave request not found")
 	}
-	if req.Status != "approved" || req.ApprovalStage != "hr" {
-		return fmt.Errorf("only supervisor-approved requests awaiting HR recording can be finalized")
+	if req.Status != "approved" || !s.isAwaitingHrFinalize(req) {
+		return fmt.Errorf("only workflow-approved requests awaiting HR recording can be finalized")
 	}
 
 	year := req.StartDate.Year()
@@ -520,7 +521,7 @@ func (s *LeaveAdminService) OverviewStats(year int) (map[string]any, error) {
 
 	pendingHr, _ := facades.Orm().Query().Model(&models.LeaveRequest{}).
 		Where("status", "approved").
-		Where("approval_stage", "hr").
+		Where("approval_stage IN ?", NewLeaveWorkflowService().HrFinalizeStageCodes()).
 		Count()
 
 	pendingSupervisor, _ := facades.Orm().Query().Model(&models.LeaveRequest{}).
@@ -546,4 +547,11 @@ func (s *LeaveAdminService) OverviewStats(year int) (map[string]any, error) {
 		"advance_notice_days":       settings.AdvanceNoticeDays,
 		"allow_carry_over":          settings.AllowCarryOver,
 	}, nil
+}
+
+func (s *LeaveAdminService) isAwaitingHrFinalize(req models.LeaveRequest) bool {
+	if req.Status != "approved" || req.ApprovalStage == "completed" {
+		return false
+	}
+	return NewLeaveWorkflowService().IsHrFinalizeStage(req.ApprovalStage)
 }

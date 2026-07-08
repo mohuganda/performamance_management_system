@@ -1,21 +1,24 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import Highcharts from 'highcharts'
 import { HighchartsReact } from 'highcharts-react-official'
-import { Clock, MapPin, Target } from 'lucide-react'
+import { Award, Clock, MapPin, Target } from 'lucide-react'
 import { dashboardService } from '@/api/services/pms'
 import { AttendanceIntegrationBanner } from '@/components/dashboard/AttendanceIntegrationBanner'
+import { DashboardDrilldownPanel, useDashboardDrilldown } from '@/components/dashboard/DashboardDrilldownPanel'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { DashboardHeader } from '@/components/organisms/DashboardHeader'
 import { ModuleQuickLinks } from '@/components/organisms/ModuleQuickLinks'
 import { QueryState } from '@/components/organisms/QueryState'
 import { useAuthStore } from '@/stores/appStore'
-import { DataTable } from '@/components/organisms/DataTable'
 import { ProgressBar } from '@/components/molecules/ProgressBar'
 import { Card } from '@/components/atoms/Card'
+import { buildHealthWorkerDrilldowns } from '@/utils/dashboardDrilldown'
 import type { AttendanceIntegration, DashboardAnalytics, PersonalAttendanceRow } from '@/types/dashboard'
 
 export function HealthWorkerDashboard() {
   const { displayName, quarter, staffId } = useAuthStore()
+  const { activeId, openDrilldown, closeDrilldown, panelRef } = useDashboardDrilldown('task_completion')
   const { data, isLoading, isError, error, refetch, isPending } = useQuery({
     queryKey: ['dashboard', 'health-worker', quarter, staffId],
     queryFn: () => dashboardService.healthWorker(staffId ?? 1, quarter),
@@ -32,6 +35,23 @@ export function HealthWorkerDashboard() {
   }
   const quarterlyTasks = (data?.quarterly_tasks ?? []) as Array<Record<string, string>>
   const notifications = (data?.notifications ?? []) as Array<{ type: string; message: string }>
+  const overallPerf = (data?.overall_performance ?? {}) as {
+    normalized_score?: number
+    raw_score?: number
+    latest_score?: number
+    ppa_status?: string
+  }
+
+  const drilldowns = useMemo(
+    () =>
+      buildHealthWorkerDrilldowns(
+        attendanceRows,
+        quarterlyTasks,
+        immediateFocus.tasks_due_this_week ?? [],
+        immediateFocus.upcoming_deadlines ?? [],
+      ),
+    [attendanceRows, quarterlyTasks, immediateFocus.tasks_due_this_week, immediateFocus.upcoming_deadlines],
+  )
 
   const chartOptions: Highcharts.Options = {
     chart: { backgroundColor: 'transparent', height: 260 },
@@ -54,6 +74,7 @@ export function HealthWorkerDashboard() {
       isError={isError}
       error={error}
       label="dashboard"
+      variant="dashboard"
       onRetry={() => refetch()}
     >
       {data ? (
@@ -69,13 +90,38 @@ export function HealthWorkerDashboard() {
           {integration ? <AttendanceIntegrationBanner data={integration} /> : null}
 
           {latest ? (
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard
+                title="Overall performance"
+                value={
+                  (overallPerf.normalized_score ?? 0) > 0
+                    ? `${overallPerf.normalized_score}%`
+                    : '—'
+                }
+                hint={
+                  (overallPerf.normalized_score ?? 0) > 0
+                    ? `Raw avg ${overallPerf.raw_score ?? 0} · PPA ${String(overallPerf.ppa_status ?? '—').replace(/_/g, ' ')}`
+                    : 'File reports to generate your score'
+                }
+                icon={Award}
+                accent={
+                  (overallPerf.normalized_score ?? 0) >= 80
+                    ? 'green'
+                    : (overallPerf.normalized_score ?? 0) >= 60
+                      ? 'amber'
+                      : 'green'
+                }
+                onClick={() => openDrilldown('task_completion')}
+                active={activeId === 'task_completion'}
+              />
               <MetricCard
                 title="Combined attendance"
                 value={`${latest.combined_percent}%`}
                 hint={`Target ${latest.target}%`}
                 icon={Target}
                 accent={latest.combined_percent >= latest.target ? 'green' : 'amber'}
+                onClick={() => openDrilldown('combined_attendance')}
+                active={activeId === 'combined_attendance'}
               />
               <MetricCard
                 title="Out-of-station (PMS)"
@@ -83,6 +129,8 @@ export function HealthWorkerDashboard() {
                 hint={`${latest.oos_clock_events ?? 0} GPS clock events`}
                 icon={MapPin}
                 accent="blue"
+                onClick={() => openDrilldown('oos_attendance')}
+                active={activeId === 'oos_attendance'}
               />
               <MetricCard
                 title="Duty station (HRM)"
@@ -90,15 +138,37 @@ export function HealthWorkerDashboard() {
                 hint="From HRM Attend summaries"
                 icon={Clock}
                 accent="purple"
+                onClick={() => openDrilldown('hrm_attendance')}
+                active={activeId === 'hrm_attendance'}
               />
             </div>
-          ) : null}
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard
+                title="Overall performance"
+                value={
+                  (overallPerf.normalized_score ?? 0) > 0
+                    ? `${overallPerf.normalized_score}%`
+                    : '—'
+                }
+                hint={
+                  (overallPerf.normalized_score ?? 0) > 0
+                    ? `Raw avg ${overallPerf.raw_score ?? 0}`
+                    : 'File reports to generate your score'
+                }
+                icon={Award}
+                accent="green"
+              />
+            </div>
+          )}
 
           <Card>
             <ProgressBar
               value={taskCompletion.percent ?? 0}
               label="Task Completion"
               sublabel={`${taskCompletion.completed ?? 0} of ${taskCompletion.total ?? 0} tasks completed`}
+              onClick={() => openDrilldown('task_completion')}
+              active={activeId === 'task_completion'}
             />
           </Card>
 
@@ -109,65 +179,56 @@ export function HealthWorkerDashboard() {
             </Card>
           ) : null}
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card
+              role="button"
+              tabIndex={0}
+              className={`cursor-pointer p-4 transition hover:shadow-md hover:ring-2 hover:ring-moh-green/25 ${activeId === 'tasks_due' ? 'ring-2 ring-moh-green shadow-md' : ''}`}
+              onClick={() => openDrilldown('tasks_due')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  openDrilldown('tasks_due')
+                }
+              }}
+            >
               <h2 className="mb-3 text-sm font-bold uppercase text-moh-green">Tasks Due This Week</h2>
-              <ul className="space-y-2 text-sm">
-                {(immediateFocus.tasks_due_this_week ?? []).map(
-                  (item) => (
-                    <li key={item.task} className="flex justify-between border-b border-gray-100 py-2">
-                      <span>{item.task}</span>
-                      <span className="font-semibold text-moh-warning">{item.status}</span>
-                    </li>
-                  ),
-                )}
-              </ul>
+              <p className="text-2xl font-bold text-ui-text">
+                {(immediateFocus.tasks_due_this_week ?? []).length}
+              </p>
+              <p className="mt-1 text-xs text-moh-green">View details →</p>
             </Card>
-            <Card>
+            <Card
+              role="button"
+              tabIndex={0}
+              className={`cursor-pointer p-4 transition hover:shadow-md hover:ring-2 hover:ring-moh-green/25 ${activeId === 'deadlines' ? 'ring-2 ring-moh-green shadow-md' : ''}`}
+              onClick={() => openDrilldown('deadlines')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  openDrilldown('deadlines')
+                }
+              }}
+            >
               <h2 className="mb-3 text-sm font-bold uppercase text-moh-green">Upcoming Deadlines (7 Days)</h2>
-              <ul className="space-y-2 text-sm">
-                {(immediateFocus.upcoming_deadlines ?? []).map(
-                  (item) => (
-                    <li key={item.task} className="flex justify-between border-b border-gray-100 py-2">
-                      <span>{item.task}</span>
-                      <span className="text-moh-warning">{item.days_remaining} days</span>
-                    </li>
-                  ),
-                )}
-              </ul>
+              <p className="text-2xl font-bold text-ui-text">
+                {(immediateFocus.upcoming_deadlines ?? []).length}
+              </p>
+              <p className="mt-1 text-xs text-moh-green">View details →</p>
             </Card>
           </div>
 
-          {attendanceRows.length > 0 ? (
-            <DataTable
-              title="Attendance breakdown"
-              columns={['Month', 'HRM summary', 'PMS OOS', 'Combined', 'Status']}
-              rows={attendanceRows.map((row) => ({
-                Month: row.month,
-                'HRM summary': `${row.hrm_summary_percent}%`,
-                'PMS OOS': `${row.oos_attendance_percent}%`,
-                Combined: `${row.combined_percent}%`,
-                Status: row.status.replace('_', ' '),
-              }))}
-            />
-          ) : null}
-
-          <DataTable
-            title="Quarterly Task Breakdown"
-            columns={['ID', 'Task Description', 'Due Date', 'Status', 'Action']}
-            rows={quarterlyTasks.map((task) => ({
-              ID: task.id,
-              'Task Description': task.description,
-              'Due Date': task.due_date,
-              Status: task.status,
-              Action: task.action,
-            }))}
+          <DashboardDrilldownPanel
+            drilldowns={drilldowns}
+            activeId={activeId}
+            onClose={closeDrilldown}
+            panelRef={panelRef}
           />
 
           <Card>
             <h2 className="mb-3 text-sm font-bold uppercase text-moh-green">Notifications & Alerts</h2>
             <ul className="space-y-2 text-sm">
-              {(notifications).map((item) => (
+              {notifications.map((item) => (
                 <li
                   key={item.message}
                   className={

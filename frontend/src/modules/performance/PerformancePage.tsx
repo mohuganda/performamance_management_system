@@ -12,8 +12,14 @@ import {
   Textarea,
   Typography,
 } from '@material-tailwind/react'
-import { BarChart3, ClipboardList, LayoutDashboard, TrendingUp } from 'lucide-react'
+import { BarChart3, ClipboardList, LayoutDashboard, TrendingUp, UserCheck } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { performanceService } from '@/api/services/mobile'
+import {
+  PerformanceAppraisalSections,
+  useAppraisalFormState,
+  type AppraisalBundle,
+} from '@/components/performance/PerformanceAppraisalSections'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { ProcessGuide } from '@/components/organisms/ProcessGuide'
 import { QueryState } from '@/components/organisms/QueryState'
@@ -404,6 +410,10 @@ export function PerformancePage() {
   const [reportDraft, setReportDraft] = useState<
     Record<number, { actual: string; narrative: string }>
   >({})
+  const [selectedReviewReportId, setSelectedReviewReportId] = useState<number | null>(null)
+  const [reviewDrafts, setReviewDrafts] = useState<
+    Record<string, { comments: string; job_title: string }>
+  >({})
 
   const summaryQuery = useQuery({
     queryKey: ['performance', 'summary'],
@@ -423,6 +433,31 @@ export function PerformancePage() {
     enabled: Boolean(staffId) && activeTab === 'reporting',
     retry: false,
   })
+
+  const pendingAppraisalsQuery = useQuery({
+    queryKey: ['performance', 'pending-appraisals'],
+    queryFn: () => performanceService.listPendingAppraisals(),
+    enabled: Boolean(staffId),
+  })
+
+  const reviewAppraisalQuery = useQuery({
+    queryKey: ['performance', 'appraisal', selectedReviewReportId],
+    queryFn: () => performanceService.getAppraisal(selectedReviewReportId!),
+    enabled: Boolean(staffId) && activeTab === 'supervisor' && selectedReviewReportId != null,
+  })
+
+  const appraisalBundle = reportFormQuery.data?.appraisal as AppraisalBundle | undefined
+  const {
+    actionPlans,
+    setActionPlans,
+    appraiseeComments,
+    setAppraiseeComments,
+  } = useAppraisalFormState(appraisalBundle)
+
+  const reviewAppraisalBundle = reviewAppraisalQuery.data as AppraisalBundle | undefined
+  const reviewFormState = useAppraisalFormState(
+    activeTab === 'supervisor' ? reviewAppraisalBundle : null,
+  )
 
   const savePlanMutation = useMutation({
     mutationFn: () => {
@@ -446,8 +481,25 @@ export function PerformancePage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['performance'] }),
   })
 
+  const saveAppraisalMutation = useMutation({
+    mutationFn: () =>
+      performanceService.saveAppraisal({
+        report_type: 'endterm',
+        action_plans: actionPlans,
+        appraisee_comments: appraiseeComments,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['performance'] }),
+  })
+
   const submitReportMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      if (reportType === 'endterm') {
+        await performanceService.saveAppraisal({
+          report_type: 'endterm',
+          action_plans: actionPlans,
+          appraisee_comments: appraiseeComments,
+        })
+      }
       const groups = asArray<ReportGroup>(reportFormQuery.data?.subject_groups)
       const entries = groups.flatMap((g) =>
         g.kpis.map((k) => ({
@@ -459,6 +511,20 @@ export function PerformancePage() {
       return performanceService.submitReport({ report_type: reportType, entries })
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['performance'] }),
+  })
+
+  const reviewAppraisalMutation = useMutation({
+    mutationFn: (payload: {
+      report_id: number
+      decision: 'approve' | 'return'
+      comments: string
+      job_title: string
+      comment_role: string
+    }) => performanceService.reviewAppraisal(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['performance'] })
+      setReviewDrafts({})
+    },
   })
 
   const groups = asArray<SubjectGroup>(groupedQuery.data)
@@ -504,12 +570,40 @@ export function PerformancePage() {
     asArray<ReportKpi>(g.kpis).some((k) => k.is_cumulative),
   )
   const reportError = reportFormQuery.isError ? extractErrorMessage(reportFormQuery.error) : null
+  const pendingAppraisals = asArray<{
+    report_id: number
+    staff_id: number
+    staff_name: string
+    report_label: string
+    status: string
+    can_act: boolean
+    submitted_at?: string
+  }>(pendingAppraisalsQuery.data)
+  const pendingActionCount = pendingAppraisals.filter((p) => p.can_act).length
+  const reportAlreadySubmitted =
+    Boolean(appraisalBundle?.report_status) &&
+    appraisalBundle?.report_status !== 'draft' &&
+    appraisalBundle?.report_status !== '' &&
+    appraisalBundle?.report_status !== 'returned'
 
   return (
     <div className="pb-8">
       <PageHeader
         title="Performance Management"
         subtitle={`Plan your year, track KPIs, and file quarterly reports · ${quarter}`}
+        actions={
+          <Link to="/performance/reports">
+            <Button
+              {...mt}
+              variant="outlined"
+              size="sm"
+              className="flex items-center gap-2 rounded-sm normal-case"
+            >
+              <ClipboardList className="h-4 w-4" />
+              Reports
+            </Button>
+          </Link>
+        }
       />
 
       <ProcessGuide title="How performance management works" steps={PERFORMANCE_STEPS} />
@@ -542,6 +636,17 @@ export function PerformancePage() {
                   Reporting
                 </span>
               </Tab>
+              <Tab {...mt} value="supervisor" onClick={() => setActiveTab('supervisor')}>
+                <span className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4" />
+                  Supervisor review
+                  {pendingActionCount > 0 ? (
+                    <span className="ml-1 rounded-full bg-moh-green px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      {pendingActionCount}
+                    </span>
+                  ) : null}
+                </span>
+              </Tab>
             </TabsHeader>
           </Tabs>
 
@@ -551,6 +656,7 @@ export function PerformancePage() {
               isError={summaryQuery.isError}
               error={summaryQuery.error}
               label="performance summary"
+              variant="metrics"
               onRetry={() => summaryQuery.refetch()}
             >
               {summaryQuery.data ? (
@@ -708,6 +814,7 @@ export function PerformancePage() {
                 isError={groupedQuery.isError}
                 error={groupedQuery.error}
                 label="assigned KPIs"
+                variant="form"
                 onRetry={() => groupedQuery.refetch()}
               >
                 <div className="space-y-4">
@@ -861,6 +968,7 @@ export function PerformancePage() {
                 isError={false}
                 error={null}
                 label="report form"
+                variant="form"
                 onRetry={() => reportFormQuery.refetch()}
               >
                 <div className="space-y-6">
@@ -922,6 +1030,29 @@ export function PerformancePage() {
                   ))}
                 </div>
 
+                {reportType === 'endterm' && appraisalBundle ? (
+                  <div className="mt-8 border-t border-ui-border pt-8">
+                    <PerformanceAppraisalSections
+                      appraisal={appraisalBundle}
+                      actionPlans={actionPlans}
+                      appraiseeComments={appraiseeComments}
+                      onActionPlansChange={setActionPlans}
+                      onAppraiseeCommentsChange={setAppraiseeComments}
+                      onSaveDraft={
+                        appraisalBundle.can_edit_action_plan
+                          ? () => saveAppraisalMutation.mutate()
+                          : undefined
+                      }
+                      savingDraft={saveAppraisalMutation.isPending}
+                    />
+                    {saveAppraisalMutation.isSuccess ? (
+                      <Typography {...mt} className="mt-2 text-sm text-moh-green">
+                        Appraisal sections saved.
+                      </Typography>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div className="mt-6 rounded-sm border border-ui-border bg-ui-subtle/30 p-4">
                   <Button
                     {...mt}
@@ -930,7 +1061,8 @@ export function PerformancePage() {
                       submitReportMutation.isPending ||
                       reportGroups.length === 0 ||
                       !ppaSubmitted ||
-                      !reportWindowOpen
+                      !reportWindowOpen ||
+                      reportAlreadySubmitted
                     }
                     onClick={() => submitReportMutation.mutate()}
                   >
@@ -947,6 +1079,110 @@ export function PerformancePage() {
                   </Typography>
                 ) : null}
                 </div>
+              </QueryState>
+            </Card>
+          ) : null}
+
+          {activeTab === 'supervisor' ? (
+            <Card {...mt} className="rounded-sm border border-ui-border p-5 sm:p-6">
+              <Typography {...mt} className="text-sm font-bold uppercase text-ui-text">
+                End of year appraisal reviews
+              </Typography>
+              <Typography {...mt} className="mt-1 text-sm text-ui-muted">
+                Review supervised staff appraisals — add appraiser comments and approve or return
+                reports.
+              </Typography>
+
+              <QueryState
+                isLoading={pendingAppraisalsQuery.isLoading}
+                isError={pendingAppraisalsQuery.isError}
+                error={pendingAppraisalsQuery.error}
+                label="pending appraisals"
+                variant="table"
+                onRetry={() => pendingAppraisalsQuery.refetch()}
+              >
+                {pendingAppraisals.length === 0 ? (
+                  <Card {...mt} className="mt-4 rounded-sm border border-ui-border bg-ui-subtle/30 p-4">
+                    <Typography {...mt} className="text-sm text-ui-muted">
+                      No pending end of year appraisals for your team.
+                    </Typography>
+                  </Card>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    {pendingAppraisals.map((item) => (
+                      <button
+                        key={item.report_id}
+                        type="button"
+                        onClick={() => setSelectedReviewReportId(item.report_id)}
+                        className={cn(
+                          'w-full rounded-sm border px-4 py-3 text-left transition',
+                          selectedReviewReportId === item.report_id
+                            ? 'border-moh-green bg-moh-green/5'
+                            : 'border-ui-border bg-white hover:border-moh-green/40',
+                        )}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-semibold text-ui-text">{item.staff_name}</span>
+                          <Chip
+                            {...mt}
+                            size="sm"
+                            value={item.can_act ? 'Action required' : item.status.replace(/_/g, ' ')}
+                            className={cn(
+                              'rounded-sm capitalize',
+                              item.can_act ? 'bg-moh-green text-white' : 'bg-ui-subtle',
+                            )}
+                          />
+                        </div>
+                        <p className="mt-1 text-sm text-ui-muted">{item.report_label}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {selectedReviewReportId != null && reviewAppraisalBundle ? (
+                  <div className="mt-8 border-t border-ui-border pt-8">
+                    <PerformanceAppraisalSections
+                      appraisal={reviewAppraisalBundle}
+                      actionPlans={reviewFormState.actionPlans}
+                      appraiseeComments={reviewFormState.appraiseeComments}
+                      onActionPlansChange={reviewFormState.setActionPlans}
+                      onAppraiseeCommentsChange={reviewFormState.setAppraiseeComments}
+                      reviewMode
+                      reviewDrafts={reviewDrafts}
+                      onReviewDraftChange={(key, patch) =>
+                        setReviewDrafts((prev) => ({
+                          ...prev,
+                          [key]: {
+                            comments: prev[key]?.comments ?? '',
+                            job_title: prev[key]?.job_title ?? '',
+                            ...patch,
+                          },
+                        }))
+                      }
+                      onReviewSubmit={(key, role, decision) => {
+                        const draft = reviewDrafts[key] ?? { comments: '', job_title: '' }
+                        reviewAppraisalMutation.mutate({
+                          report_id: selectedReviewReportId,
+                          decision,
+                          comments: draft.comments,
+                          job_title: draft.job_title,
+                          comment_role: role,
+                        })
+                      }}
+                      reviewing={reviewAppraisalMutation.isPending}
+                    />
+                    {reviewAppraisalMutation.isSuccess ? (
+                      <Typography {...mt} className="mt-2 text-sm text-moh-green">
+                        Review recorded successfully.
+                      </Typography>
+                    ) : null}
+                    {reviewAppraisalMutation.isError ? (
+                      <Typography {...mt} className="mt-2 text-sm text-moh-error">
+                        {extractErrorMessage(reviewAppraisalMutation.error)}
+                      </Typography>
+                    ) : null}
+                  </div>
+                ) : null}
               </QueryState>
             </Card>
           ) : null}

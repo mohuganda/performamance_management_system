@@ -38,6 +38,7 @@ export type AdminSettings = {
       api_url: string
       sync_enabled: boolean
       use_demo_data: boolean
+      overwrite_enabled?: boolean
       require_email: boolean
       require_mobile: boolean
       last_sync_at: string

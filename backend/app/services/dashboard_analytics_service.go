@@ -18,15 +18,22 @@ func NewDashboardAnalyticsService() *DashboardAnalyticsService {
 }
 
 type DistrictCoverageRow struct {
-	DistrictID      string  `json:"district_id"`
-	District        string  `json:"district"`
-	Region          string  `json:"region,omitempty"`
-	StaffCount      int     `json:"staff_count"`
-	OosRate         float64 `json:"oos_attendance_rate"`
-	HrmSummaryRate  float64 `json:"hrm_summary_rate"`
-	CombinedRate    float64 `json:"combined_rate"`
-	Lat             float64 `json:"lat"`
-	Lon             float64 `json:"lon"`
+	DistrictID     string  `json:"district_id"`
+	District       string  `json:"district"`
+	Region         string  `json:"region,omitempty"`
+	MapKey         string  `json:"map_key"`
+	ISOCode        string  `json:"iso_code"`
+	StaffCount     int     `json:"staff_count"`
+	OosRate        float64 `json:"oos_attendance_rate"`
+	HrmSummaryRate float64 `json:"hrm_summary_rate"`
+	CombinedRate   float64 `json:"combined_rate"`
+	Lat            float64 `json:"lat"`
+	Lon            float64 `json:"lon"`
+}
+
+type districtMeta struct {
+	Code, Name, Region, MapKey, ISOCode string
+	Lat, Lon                              float64
 }
 
 var districtCentroids = map[string][2]float64{
@@ -48,12 +55,10 @@ var districtCentroids = map[string][2]float64{
 
 func (s *DashboardAnalyticsService) districtCoordinates() map[string][2]float64 {
 	out := map[string][2]float64{}
-	var rows []models.District
-	_ = facades.Orm().Query().Where("is_active", true).Get(&rows)
-	for _, d := range rows {
-		coords := [2]float64{d.Latitude, d.Longitude}
-		out[strings.ToUpper(strings.TrimSpace(d.Code))] = coords
-		out[strings.ToUpper(strings.TrimSpace(d.Name))] = coords
+	for _, meta := range s.districtCatalog() {
+		coords := [2]float64{meta.Lat, meta.Lon}
+		out[strings.ToUpper(strings.TrimSpace(meta.Code))] = coords
+		out[strings.ToUpper(strings.TrimSpace(meta.Name))] = coords
 	}
 	if len(out) == 0 {
 		for k, v := range districtCentroids {
@@ -61,6 +66,39 @@ func (s *DashboardAnalyticsService) districtCoordinates() map[string][2]float64 
 		}
 	}
 	return out
+}
+
+func (s *DashboardAnalyticsService) districtCatalog() map[string]districtMeta {
+	out := map[string]districtMeta{}
+	var rows []models.District
+	_ = facades.Orm().Query().Where("is_active", true).Get(&rows)
+	for _, d := range rows {
+		meta := districtMeta{
+			Code: d.Code, Name: d.Name, Region: d.Region,
+			MapKey: d.MapKey, ISOCode: d.ISOCode,
+			Lat: d.Latitude, Lon: d.Longitude,
+		}
+		out[strings.ToUpper(strings.TrimSpace(d.Code))] = meta
+		out[strings.ToUpper(strings.TrimSpace(d.Name))] = meta
+		if d.MapKey != "" {
+			out[strings.ToLower(strings.TrimSpace(d.MapKey))] = meta
+		}
+	}
+	return out
+}
+
+func lookupDistrictMeta(catalog map[string]districtMeta, name string) districtMeta {
+	key := strings.ToUpper(strings.TrimSpace(name))
+	if meta, ok := catalog[key]; ok {
+		return meta
+	}
+	normalized := strings.ReplaceAll(key, " ", "")
+	for k, meta := range catalog {
+		if strings.ReplaceAll(k, " ", "") == normalized {
+			return meta
+		}
+	}
+	return districtMeta{Name: name}
 }
 
 func (s *DashboardAnalyticsService) AttendanceTarget() float64 {
@@ -72,10 +110,6 @@ func (s *DashboardAnalyticsService) AttendanceTarget() float64 {
 }
 
 func (s *DashboardAnalyticsService) DistrictCoverage(limit int) []DistrictCoverageRow {
-	if limit <= 0 {
-		limit = 20
-	}
-
 	type agg struct {
 		districtID string
 		district   string
@@ -102,6 +136,7 @@ func (s *DashboardAnalyticsService) DistrictCoverage(limit int) []DistrictCovera
 
 	oosRates := s.oosRatesByDistrict()
 	coordsByDistrict := s.districtCoordinates()
+	catalog := s.districtCatalog()
 
 	rows := make([]DistrictCoverageRow, 0, len(buckets))
 	for key, b := range buckets {
@@ -112,15 +147,31 @@ func (s *DashboardAnalyticsService) DistrictCoverage(limit int) []DistrictCovera
 		}
 		hrmRate := 92 + float64(staffCount%8)
 		combined := math.Round((oosRate*0.35+hrmRate*0.65)*10) / 10
-		lat, lon := 1.0, 32.5
-		if coords, ok := coordsByDistrict[key]; ok {
-			lat, lon = coords[0], coords[1]
-		} else if coords, ok := coordsByDistrict[strings.ToUpper(b.district)]; ok {
-			lat, lon = coords[0], coords[1]
+		meta := lookupDistrictMeta(catalog, b.district)
+		lat, lon := meta.Lat, meta.Lon
+		if lat == 0 && lon == 0 {
+			if coords, ok := coordsByDistrict[key]; ok {
+				lat, lon = coords[0], coords[1]
+			} else if coords, ok := coordsByDistrict[strings.ToUpper(b.district)]; ok {
+				lat, lon = coords[0], coords[1]
+			} else {
+				lat, lon = 1.0, 32.5
+			}
+		}
+		region := meta.Region
+		if region == "" {
+			region = b.region
+		}
+		districtID := b.districtID
+		if districtID == "" {
+			districtID = meta.Code
 		}
 		rows = append(rows, DistrictCoverageRow{
-			DistrictID:     b.districtID,
+			DistrictID:     districtID,
 			District:       b.district,
+			Region:         region,
+			MapKey:         meta.MapKey,
+			ISOCode:        meta.ISOCode,
 			StaffCount:     staffCount,
 			OosRate:        math.Round(oosRate*10) / 10,
 			HrmSummaryRate: math.Round(hrmRate*10) / 10,
@@ -138,7 +189,7 @@ func (s *DashboardAnalyticsService) DistrictCoverage(limit int) []DistrictCovera
 			}
 		}
 	}
-	if len(rows) > limit {
+	if limit > 0 && len(rows) > limit {
 		rows = rows[:limit]
 	}
 	if len(rows) == 0 {
@@ -148,8 +199,32 @@ func (s *DashboardAnalyticsService) DistrictCoverage(limit int) []DistrictCovera
 }
 
 func (s *DashboardAnalyticsService) demoDistrictCoverage() []DistrictCoverageRow {
+	var districts []models.District
+	_ = facades.Orm().Query().Where("is_active", true).Order("name asc").Limit(25).Get(&districts)
+	rows := make([]DistrictCoverageRow, 0, len(districts))
+	for i, d := range districts {
+		staff := 25 + (i*7)%80
+		oos := 84 + float64(i%10)
+		hrm := 90 + float64(i%8)
+		combined := math.Round((oos*0.35+hrm*0.65)*10) / 10
+		rows = append(rows, DistrictCoverageRow{
+			DistrictID:     d.Code,
+			District:       d.Name,
+			Region:         d.Region,
+			MapKey:         d.MapKey,
+			ISOCode:        d.ISOCode,
+			StaffCount:     staff,
+			OosRate:        oos,
+			HrmSummaryRate: hrm,
+			CombinedRate:   combined,
+			Lat:            d.Latitude,
+			Lon:            d.Longitude,
+		})
+	}
+	if len(rows) > 0 {
+		return rows
+	}
 	coordsByDistrict := s.districtCoordinates()
-	rows := make([]DistrictCoverageRow, 0, len(coordsByDistrict))
 	for name, coords := range coordsByDistrict {
 		if len(rows) >= 15 {
 			break
@@ -341,7 +416,7 @@ func (s *DashboardAnalyticsService) AnalyticsBundle(scope string, staffID uint) 
 		"attendance_trends":      s.AttendanceTrends(6),
 	}
 	if scope == "national" || scope == "sector" {
-		bundle["district_coverage"] = s.DistrictCoverage(15)
+		bundle["district_coverage"] = s.DistrictCoverage(0)
 	}
 	if scope == "staff" && staffID > 0 {
 		bundle["personal_attendance"] = s.StaffAttendanceSummary(staffID)

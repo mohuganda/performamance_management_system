@@ -1,6 +1,9 @@
 import apiClient from '../client'
 import type { PaginatedResponse } from '@/types/pagination'
 import { unwrapPaginated } from '@/types/pagination'
+import { asArray } from '@/utils/asArray'
+import { normalizePermissionCodes, normalizePermissions } from '@/utils/normalizeApi'
+import { unwrapApiData } from '@/utils/unwrapApi'
 
 export type RoleCategory = 'operational' | 'executive' | 'administrative' | 'system'
 
@@ -23,6 +26,13 @@ export type RbacPermission = {
   action: string
 }
 
+export type ScopeAssignmentInput = {
+  scope_type: 'region' | 'district' | 'facility'
+  ref_id?: number
+  ref_code?: string
+  label?: string
+}
+
 export type RbacUserRow = {
   id: number
   name: string
@@ -40,11 +50,26 @@ export type RbacUserRow = {
   scope_facility_id?: number
   scope_facility_name?: string
   scope_district_name?: string
+  scope_assignments?: ScopeAssignmentInput[]
 }
 
 export type ScopeOptions = {
-  districts: Array<{ id: string; name: string }>
-  facilities: Array<{ id: number; name: string }>
+  regions: Array<{ id: number; code: string; name: string }>
+  districts: Array<{
+    id: string
+    ref_id: number
+    code: string
+    name: string
+    region_id?: number
+  }>
+  facilities: Array<{
+    id: number
+    name: string
+    district_ref_id?: number
+    district_id?: string
+    district_name?: string
+    region_id?: number
+  }>
   levels: Array<{ value: string; label: string; description: string }>
 }
 
@@ -79,12 +104,52 @@ export const rbacAdminService = {
     const { data } = await apiClient.get('/admin/rbac/roles', {
       params: category ? { category } : undefined,
     })
-    return Array.isArray(data) ? data : []
+    return asArray<RbacRole>(data)
   },
 
   listPermissions: async (): Promise<RbacPermission[]> => {
     const { data } = await apiClient.get('/admin/rbac/permissions')
-    return Array.isArray(data) ? data : []
+    return normalizePermissions(unwrapApiData(data))
+  },
+
+  listRolePermissions: async (roleCode: string): Promise<string[]> => {
+    const { data } = await apiClient.get(`/admin/rbac/roles/${encodeURIComponent(roleCode)}/permissions`)
+    return normalizePermissionCodes(data)
+  },
+
+  grantRolePermission: async (roleCode: string, permissionCode: string) => {
+    const { data } = await apiClient.post('/admin/rbac/grant-permission', {
+      role_code: roleCode,
+      permission_code: permissionCode,
+    })
+    return data
+  },
+
+  revokeRolePermission: async (roleCode: string, permissionCode: string) => {
+    const { data } = await apiClient.post('/admin/rbac/revoke-permission', {
+      role_code: roleCode,
+      permission_code: permissionCode,
+    })
+    return data
+  },
+
+  listUserPermissions: async (userId: number): Promise<string[]> => {
+    const { data } = await apiClient.get(`/admin/rbac/users/${userId}/permissions`)
+    return normalizePermissionCodes(data)
+  },
+
+  grantUserPermission: async (userId: number, permissionCode: string) => {
+    const { data } = await apiClient.post(`/admin/rbac/users/${userId}/permissions`, {
+      permission_code: permissionCode,
+    })
+    return data
+  },
+
+  revokeUserPermission: async (userId: number, permissionCode: string) => {
+    const { data } = await apiClient.delete(`/admin/rbac/users/${userId}/permissions`, {
+      params: { permission_code: permissionCode },
+    })
+    return data
   },
 
   listUsers: async (params?: {
@@ -109,6 +174,7 @@ export const rbacAdminService = {
     scope_level?: string
     scope_district_id?: string
     scope_facility_id?: number
+    scope_assignments?: ScopeAssignmentInput[]
   }) => {
     const { data } = await apiClient.post('/admin/rbac/users', payload)
     return data as RbacUserRow
@@ -122,6 +188,7 @@ export const rbacAdminService = {
       scope_level?: string
       scope_district_id?: string
       scope_facility_id?: number
+      scope_assignments?: ScopeAssignmentInput[]
     },
   ) => {
     const { data } = await apiClient.patch(`/admin/rbac/users/${id}`, payload)

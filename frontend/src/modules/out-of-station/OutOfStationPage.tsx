@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Card, Input, Option, Select, Textarea, Typography } from '@material-tailwind/react'
+import { Button, Card, Input, Textarea, Typography } from '@material-tailwind/react'
+import { Select, Option } from '@/components/molecules/MtSelect'
 import { oosService } from '@/api/services/mobile'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { ProcessGuide } from '@/components/organisms/ProcessGuide'
@@ -145,6 +146,7 @@ export function OutOfStationPage() {
           isError={pendingQuery.isError}
           error={pendingQuery.error}
           label="pending out-of-station approvals"
+          variant="cards"
           onRetry={() => pendingQuery.refetch()}
         >
           <Card {...mt} className="mb-6 rounded-sm border border-uganda-yellow/50 bg-uganda-yellow/5 p-4">
@@ -315,6 +317,7 @@ export function OutOfStationPage() {
         isError={requestsQuery.isError}
         error={requestsQuery.error}
         label="out-of-station requests"
+        variant="table"
         onRetry={() => requestsQuery.refetch()}
       >
         <Card {...mt} className="mt-6 rounded-sm border border-moh-green/15 p-4">

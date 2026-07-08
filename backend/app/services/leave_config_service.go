@@ -140,10 +140,19 @@ func (s *LeaveConfigService) PublicLeaveConfig() (map[string]any, error) {
 
 	return map[string]any{
 		"settings":     settings,
-		"types":          types,
+		"types":        types,
 		"stages":       stages,
 		"entitlements": entitlements,
+		"profiles":     s.listWorkflowProfiles(),
 	}, nil
+}
+
+func (s *LeaveConfigService) listWorkflowProfiles() []models.LeaveWorkflowProfile {
+	rows, _ := NewLeaveWorkflowService().ListProfiles()
+	if rows == nil {
+		return []models.LeaveWorkflowProfile{}
+	}
+	return rows
 }
 
 func (s *LeaveConfigService) ListActiveTypes() ([]models.LeaveType, error) {
@@ -191,6 +200,7 @@ func (s *LeaveConfigService) UpdateType(id uint, input models.LeaveType) (models
 	existing.EligibilityNotes = input.EligibilityNotes
 	existing.RequiresSupervisorApproval = input.RequiresSupervisorApproval
 	existing.RequiresHrApproval = input.RequiresHrApproval
+	existing.WorkflowProfileCode = input.WorkflowProfileCode
 	if err := facades.Orm().Query().Save(&existing); err != nil {
 		return models.LeaveType{}, err
 	}
@@ -273,6 +283,14 @@ func (s *LeaveConfigService) UpdateApprovalStage(id uint, input models.LeaveAppr
 	existing.ApproverRole = input.ApproverRole
 	existing.Description = input.Description
 	existing.IsActive = input.IsActive
+	existing.WorkflowProfileCode = input.WorkflowProfileCode
+	existing.StageType = input.StageType
+	existing.Scope = input.Scope
+	existing.JobTitleID = input.JobTitleID
+	existing.JobTitleMatch = input.JobTitleMatch
+	existing.SupervisorSequence = input.SupervisorSequence
+	existing.IsRequired = input.IsRequired
+	existing.SkipIfUnresolved = input.SkipIfUnresolved
 	if err := facades.Orm().Query().Save(&existing); err != nil {
 		return models.LeaveApprovalStage{}, err
 	}

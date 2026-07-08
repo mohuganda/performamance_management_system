@@ -3,6 +3,7 @@ package controllers
 import (
 	"github.com/goravel/framework/contracts/http"
 
+	"goravel/app/facades"
 	"goravel/app/http/authctx"
 	"goravel/app/models"
 	"goravel/app/services"
@@ -164,6 +165,16 @@ func (c *AuthController) UpdateProfile(ctx http.Context) http.Response {
 }
 
 func permissionList(principal authctx.Principal) []string {
+	if principal.IsSuperAdmin {
+		var permissions []models.Permission
+		if err := facades.Orm().Query().Get(&permissions); err == nil {
+			list := make([]string, 0, len(permissions))
+			for _, perm := range permissions {
+				list = append(list, perm.Code)
+			}
+			return list
+		}
+	}
 	list := make([]string, 0, len(principal.Permissions))
 	for code := range principal.Permissions {
 		list = append(list, code)

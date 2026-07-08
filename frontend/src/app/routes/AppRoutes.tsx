@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthStore } from '@/stores/appStore'
 import { AppLayout } from '@/components/templates/AppLayout'
 import { Card } from '@/components/atoms/Card'
+import { DashboardPageSkeleton } from '@/components/molecules/PageSkeletons'
 import { DashboardErrorBoundary } from '@/components/organisms/DashboardErrorBoundary'
 import { HealthWorkerDashboard } from '@/modules/dashboard/HealthWorkerDashboard'
 import { SupervisorDashboard } from '@/modules/dashboard/SupervisorDashboard'
@@ -13,6 +14,7 @@ import { LeavePage } from '@/modules/leave/LeavePage'
 import { OutOfStationPage } from '@/modules/out-of-station/OutOfStationPage'
 import { AttendancePage } from '@/modules/attendance/AttendancePage'
 import { PerformancePage } from '@/modules/performance/PerformancePage'
+import { PerformanceReportsPage } from '@/modules/performance/PerformanceReportsPage'
 import { ProfilePage } from '@/modules/profile/ProfilePage'
 import { NotificationsPage } from '@/modules/notifications/NotificationsPage'
 import { SettingsPage } from '@/modules/settings/SettingsPage'
@@ -20,6 +22,7 @@ import { LeaveAdminPage } from '@/modules/admin/LeaveAdminPage'
 import { StaffManagementPage } from '@/modules/admin/StaffManagementPage'
 import { RbacAdminPage } from '@/modules/admin/RbacAdminPage'
 import { KpiAdminPage } from '@/modules/admin/KpiAdminPage'
+import { SystemConfigPage } from '@/modules/admin/SystemConfigPage'
 
 function DashboardRouter() {
   const { hasPermission } = useAuthStore()
@@ -102,6 +105,7 @@ function AuthenticatedApp() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardRouter />} />
         <Route path="performance" element={<PerformancePage />} />
+        <Route path="performance/reports" element={<PerformanceReportsPage />} />
         <Route
           path="leave"
           element={
@@ -132,7 +136,7 @@ function AuthenticatedApp() {
         <Route
           path="admin/leave"
           element={
-            <RequirePermission permission="leave.config.manage">
+            <RequirePermission permission={['leave.config.manage', 'leave.workflow.manage']}>
               <LeaveAdminPage />
             </RequirePermission>
           }
@@ -148,6 +152,19 @@ function AuthenticatedApp() {
         <Route
           path="admin/supervision"
           element={<Navigate to="/admin/staff" replace />}
+        />
+        <Route
+          path="admin/system"
+          element={
+            <RequirePermission
+              permission={[
+                'settings.manage',
+                'settings.data_sources.manage',
+              ]}
+            >
+              <SystemConfigPage />
+            </RequirePermission>
+          }
         />
         <Route
           path="admin/kpi"
@@ -187,8 +204,8 @@ export function AppRoutes() {
 
   if (!authReady) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-moh-background text-sm text-gray-600">
-        Loading session...
+      <div className="min-h-screen bg-moh-background">
+        <DashboardPageSkeleton />
       </div>
     )
   }

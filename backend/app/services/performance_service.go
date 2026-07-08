@@ -150,8 +150,10 @@ type ReportForm struct {
 	ReportType      string                 `json:"report_type"`
 	FinancialYear   string                 `json:"financial_year"`
 	PpaStatus       string                 `json:"ppa_status"`
+	ReportStatus    string                 `json:"report_status,omitempty"`
 	SubjectGroups   []ReportFormGroup      `json:"subject_groups"`
 	ReportingWindow ReportingWindowStatus  `json:"reporting_window"`
+	Appraisal       *AppraisalBundle       `json:"appraisal,omitempty"`
 }
 
 type staffContext struct {
@@ -575,13 +577,32 @@ func (s *PerformanceService) GetReportForm(staffID uint, reportType string) (Rep
 	settings, _ := s.config.LoadSettings()
 	windowStatus := s.config.WindowStatus(reportType, fy, settings, time.Now())
 
-	return ReportForm{
+	form := ReportForm{
 		ReportType:      reportType,
 		FinancialYear:   fy.YearLabel,
 		PpaStatus:       ppa.Status,
 		SubjectGroups:   groups,
 		ReportingWindow: windowStatus,
-	}, nil
+	}
+	if report.ID > 0 {
+		form.ReportStatus = report.Status
+		if reportType == "endterm" {
+			bundle, err := s.loadAppraisalBundle(report, staffID)
+			if err == nil {
+				form.Appraisal = &bundle
+			}
+		}
+	} else if reportType == "endterm" {
+		// Empty appraisal scaffold for planning before first save
+		bundle, _ := s.loadAppraisalBundle(models.PerformanceReport{
+			StaffID:    staffID,
+			ReportType: reportType,
+			Status:     "draft",
+		}, staffID)
+		form.Appraisal = &bundle
+	}
+
+	return form, nil
 }
 
 func (s *PerformanceService) sortAvailableGroups(byArea map[uint8][]AvailableKpi) []SubjectAreaAvailableGroup {
@@ -868,8 +889,14 @@ func (s *PerformanceService) SubmitReport(staffID uint, reportType string, entri
 	}
 
 	now := time.Now()
-	report.Status = "submitted"
 	report.SubmittedAt = &now
+	if reportType == "endterm" {
+		if err := s.initAppraisalOnSubmit(&report, staffID); err != nil {
+			return err
+		}
+	} else {
+		report.Status = "submitted"
+	}
 	if err := facades.Orm().Query().Save(&report); err != nil {
 		return err
 	}

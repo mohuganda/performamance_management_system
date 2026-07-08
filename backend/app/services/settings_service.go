@@ -113,6 +113,7 @@ func (s *SettingsService) dataSourcesConfig() map[string]any {
 			"api_url":         s.GetString("ihris.api_url", ihrisAPIURL()),
 			"sync_enabled":    s.GetBool("ihris.sync_enabled", true),
 			"use_demo_data":   s.GetBool("ihris.use_demo_data", false),
+			"overwrite_enabled": s.GetBool("ihris.overwrite_enabled", false),
 			"require_email":   s.GetBool("ihris.require_email", true),
 			"require_mobile":  s.GetBool("ihris.require_mobile", false),
 			"last_sync_at":    s.GetString("ihris.last_sync_at", ""),
@@ -237,6 +238,19 @@ func lockedFieldsSet(profile *models.StaffHrProfile) map[string]bool {
 		}
 	}
 	return out
+}
+
+// effectiveIhrisLocks merges per-profile locks with global iHRIS overwrite policy.
+// When ihris.overwrite_enabled is false (default), email/mobile/department are protected from sync.
+func effectiveIhrisLocks(profile *models.StaffHrProfile) map[string]bool {
+	locked := lockedFieldsSet(profile)
+	settings := NewSettingsService()
+	if !settings.GetBool("ihris.overwrite_enabled", false) {
+		locked["email"] = true
+		locked["mobile"] = true
+		locked["department_id"] = true
+	}
+	return locked
 }
 
 func mergeStringPtr(existing *string, incoming *string, locked bool) *string {

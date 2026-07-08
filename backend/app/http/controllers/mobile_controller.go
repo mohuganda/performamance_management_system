@@ -12,6 +12,9 @@ import (
 )
 
 func jsonResponse(ctx http.Context, status int, obj any) http.Response {
+	if status == http.StatusOK {
+		return ctx.Response().Success().Json(obj)
+	}
 	payload, err := json.Marshal(obj)
 	if err != nil {
 		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
@@ -550,4 +553,109 @@ func (c *MobileController) SubmitPerformanceReport(ctx http.Context) http.Respon
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 	}
 	return ctx.Response().Success().Json(http.Json{"message": "performance report submitted"})
+}
+
+func (c *MobileController) SavePerformanceAppraisal(ctx http.Context) http.Response {
+	staffID, _ := staffIDFromContext(ctx)
+	if staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	var body services.AppraisalSaveInput
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	if body.ReportType == "" {
+		body.ReportType = "endterm"
+	}
+	bundle, err := c.performance.SaveAppraisalDraft(staffID, body)
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return jsonResponse(ctx, http.StatusOK, bundle)
+}
+
+func (c *MobileController) GetPerformanceAppraisal(ctx http.Context) http.Response {
+	staffID, _ := staffIDFromContext(ctx)
+	if staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	reportIDStr := ctx.Request().Query("report_id", "0")
+	reportID, _ := strconv.ParseUint(reportIDStr, 10, 64)
+	if reportID == 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "report_id is required"})
+	}
+	bundle, err := c.performance.GetAppraisalForReview(staffID, uint(reportID))
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return jsonResponse(ctx, http.StatusOK, bundle)
+}
+
+func (c *MobileController) ListPendingAppraisalReviews(ctx http.Context) http.Response {
+	staffID, _ := staffIDFromContext(ctx)
+	if staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	rows, err := c.performance.ListPendingAppraisalReviews(staffID)
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	if rows == nil {
+		rows = []services.PendingAppraisalReview{}
+	}
+	return jsonResponse(ctx, http.StatusOK, rows)
+}
+
+func (c *MobileController) ReviewPerformanceAppraisal(ctx http.Context) http.Response {
+	staffID, _ := staffIDFromContext(ctx)
+	if staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	var body services.AppraisalReviewInput
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	bundle, err := c.performance.ReviewAppraisal(staffID, body)
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return jsonResponse(ctx, http.StatusOK, bundle)
+}
+
+// PerformanceStatusReport godoc
+// @Summary      Scoped PPA + quarterly submission/approval status with scores
+// @Tags         mobile-performance
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200 {object} map[string]any
+// @Router       /api/v1/mobile/performance/status-report [get]
+func (c *MobileController) PerformanceStatusReport(ctx http.Context) http.Response {
+	principal, ok := authctx.PrincipalFrom(ctx)
+	if !ok {
+		return ctx.Response().Status(http.StatusUnauthorized).Json(http.Json{"message": "unauthenticated"})
+	}
+	report, err := c.performance.StatusReport(principal)
+	if err != nil {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": err.Error()})
+	}
+	return jsonResponse(ctx, http.StatusOK, report)
+}
+
+// PerformanceOverallRating godoc
+// @Summary      Overall performance rating for the authenticated staff member
+// @Tags         mobile-performance
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200 {object} map[string]any
+// @Router       /api/v1/mobile/performance/overall-rating [get]
+func (c *MobileController) PerformanceOverallRating(ctx http.Context) http.Response {
+	staffID, _ := staffIDFromContext(ctx)
+	if staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	rating, err := c.performance.OverallRatingForStaff(staffID)
+	if err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return jsonResponse(ctx, http.StatusOK, rating)
 }

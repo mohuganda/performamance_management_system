@@ -9,8 +9,7 @@ import {
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ChevronDown, LogOut } from 'lucide-react'
 import { BrandLogo } from '@/components/atoms/BrandLogo'
-import { UserAvatar } from '@/components/atoms/UserAvatar'
-import { NotificationBell } from '@/components/molecules/NotificationBell'
+import { UserAccountMenu } from '@/components/molecules/UserAccountMenu'
 import { useAuthStore } from '@/stores/appStore'
 import {
   isGroupActive,
@@ -122,17 +121,11 @@ export function AppLayout() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
           <BrandLogo size="md" />
           <div className="flex items-center gap-2">
-            <NotificationBell />
-            <NavLink
-              to="/profile"
-              className="flex items-center gap-3 rounded-sm p-1 transition-colors hover:bg-ui-subtle"
-            >
-              <UserAvatar name={displayName} photoUrl={profilePhoto} size="md" />
-              <div className="hidden text-right text-xs md:block">
-                <p className="font-semibold text-ui-text">{displayName}</p>
-                <p className="capitalize text-ui-muted">{roleLabel}</p>
-              </div>
-            </NavLink>
+            <UserAccountMenu
+              displayName={displayName}
+              roleLabel={roleLabel}
+              profilePhoto={profilePhoto}
+            />
           </div>
         </div>
       </header>

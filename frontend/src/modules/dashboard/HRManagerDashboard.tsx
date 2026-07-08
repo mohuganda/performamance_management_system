@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import Highcharts from 'highcharts'
 import { HighchartsReact } from 'highcharts-react-official'
@@ -13,15 +14,16 @@ import {
 import { dashboardService } from '@/api/services/pms'
 import { AttendanceIntegrationBanner } from '@/components/dashboard/AttendanceIntegrationBanner'
 import { AttendanceTrendChart } from '@/components/dashboard/AttendanceTrendChart'
+import { DashboardDrilldownPanel, useDashboardDrilldown } from '@/components/dashboard/DashboardDrilldownPanel'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { UgandaDistrictMap } from '@/components/dashboard/UgandaDistrictMap'
 import { DashboardErrorBoundary } from '@/components/organisms/DashboardErrorBoundary'
 import { DashboardHeader } from '@/components/organisms/DashboardHeader'
-import { DataTable } from '@/components/organisms/DataTable'
 import { ProgressBar } from '@/components/molecules/ProgressBar'
 import { Card } from '@/components/atoms/Card'
 import { QueryState } from '@/components/organisms/QueryState'
 import { useAuthStore } from '@/stores/appStore'
+import { buildHrManagerDrilldowns, type FacilityPerformanceRow } from '@/utils/dashboardDrilldown'
 import type {
   AttendanceIntegration,
   AttendancePerformance,
@@ -33,6 +35,8 @@ import type {
 
 export function HRManagerDashboard() {
   const { displayName, quarter, role } = useAuthStore()
+  const { activeId, openDrilldown, closeDrilldown, panelRef } = useDashboardDrilldown('all_facilities')
+  const [mapDistrict, setMapDistrict] = useState<DistrictCoverage | null>(null)
   const { data, isLoading, isError, error, refetch, isPending } = useQuery({
     queryKey: ['dashboard', 'hr-manager', quarter],
     queryFn: () => dashboardService.hrManager(quarter),
@@ -68,6 +72,39 @@ export function HRManagerDashboard() {
     avg_resolution_days?: number
   }
 
+  const facilities = useMemo(
+    () =>
+      ((data?.facility_performance as FacilityPerformanceRow[]) ??
+        (data?.institution_performance as FacilityPerformanceRow[]) ??
+        []) as FacilityPerformanceRow[],
+    [data],
+  )
+  const interventions = (data?.intervention_required ?? []) as Array<Record<string, string>>
+
+  const drilldowns = useMemo(() => {
+    const base = buildHrManagerDrilldowns(facilities, districts, interventions, performance?.target ?? 95)
+    if (mapDistrict) {
+      base.map_district = {
+        id: 'map_district',
+        title: `${mapDistrict.district} — district detail`,
+        description: `ISO ${mapDistrict.iso_code ?? '—'} · ${mapDistrict.region ?? '—'} region`,
+        columns: ['District', 'ISO', 'Region', 'Staff', 'OOS rate', 'HRM summary', 'Combined'],
+        rows: [
+          {
+            District: mapDistrict.district,
+            ISO: mapDistrict.iso_code ?? '—',
+            Region: mapDistrict.region ?? '—',
+            Staff: mapDistrict.staff_count,
+            'OOS rate': `${mapDistrict.oos_attendance_rate}%`,
+            'HRM summary': `${mapDistrict.hrm_summary_rate}%`,
+            Combined: `${mapDistrict.combined_rate}%`,
+          },
+        ],
+      }
+    }
+    return base
+  }, [facilities, districts, interventions, performance?.target, mapDistrict])
+
   const pipOptions: Highcharts.Options = {
     chart: { type: 'bar', backgroundColor: 'transparent', height: 240 },
     credits: { enabled: false },
@@ -94,6 +131,7 @@ export function HRManagerDashboard() {
       isError={isError}
       error={error}
       label="HR dashboard"
+      variant="dashboard"
       onRetry={() => refetch()}
     >
       {data ? (
@@ -121,6 +159,8 @@ export function HRManagerDashboard() {
                 hint={`Target ${performance.target}%`}
                 icon={Target}
                 accent={performance.overall_combined >= performance.target ? 'green' : 'amber'}
+                onClick={() => openDrilldown('combined_attendance')}
+                active={activeId === 'combined_attendance'}
               />
               <MetricCard
                 title="OOS GPS compliance"
@@ -128,6 +168,8 @@ export function HRManagerDashboard() {
                 hint="PMS out-of-station clocks"
                 icon={MapPinned}
                 accent="blue"
+                onClick={() => openDrilldown('oos_compliance')}
+                active={activeId === 'oos_compliance'}
               />
               <MetricCard
                 title="Districts on PMS"
@@ -135,6 +177,8 @@ export function HRManagerDashboard() {
                 hint="Active district coverage"
                 icon={Building2}
                 accent="purple"
+                onClick={() => openDrilldown('districts')}
+                active={activeId === 'districts'}
               />
               <MetricCard
                 title="Staff tracked"
@@ -142,6 +186,8 @@ export function HRManagerDashboard() {
                 hint="Across integrated records"
                 icon={Users}
                 accent="green"
+                onClick={() => openDrilldown('staff_tracked')}
+                active={activeId === 'staff_tracked'}
               />
             </div>
           ) : null}
@@ -151,6 +197,8 @@ export function HRManagerDashboard() {
               value={taskCompletion.percent ?? 0}
               label={taskLabel}
               sublabel={`${taskCompletion.on_track ?? 0} of ${taskCompletion.total ?? 0} facilities on track`}
+              onClick={() => openDrilldown('task_completion')}
+              active={activeId === 'task_completion'}
             />
           </Card>
 
@@ -160,24 +208,32 @@ export function HRManagerDashboard() {
               value={summaryCards.total_facilities ?? 0}
               hint={`${summaryCards.total_staff ?? 0} staff`}
               icon={Building2}
+              onClick={() => openDrilldown('all_facilities')}
+              active={activeId === 'all_facilities'}
             />
             <MetricCard
               title="On track"
               value={summaryCards.on_track ?? 0}
               icon={CheckCircle2}
               accent="green"
+              onClick={() => openDrilldown('on_track')}
+              active={activeId === 'on_track'}
             />
             <MetricCard
               title="At risk"
               value={summaryCards.at_risk ?? 0}
               icon={TrendingUp}
               accent="amber"
+              onClick={() => openDrilldown('at_risk')}
+              active={activeId === 'at_risk'}
             />
             <MetricCard
               title="Off track"
               value={summaryCards.off_track ?? 0}
               icon={AlertTriangle}
               accent="red"
+              onClick={() => openDrilldown('off_track')}
+              active={activeId === 'off_track'}
             />
           </div>
 
@@ -185,28 +241,34 @@ export function HRManagerDashboard() {
 
           {districts.length > 0 ? (
             <DashboardErrorBoundary label="District map">
-              <UgandaDistrictMap districts={districts} />
+              <UgandaDistrictMap
+                districts={districts}
+                onDistrictClick={(district) => {
+                  setMapDistrict(district)
+                  openDrilldown('map_district')
+                }}
+              />
             </DashboardErrorBoundary>
           ) : null}
 
-          <DataTable
-            title="Facility performance (iHRIS)"
-            columns={['Facility', 'Institution type', 'District', 'Staff', 'Depts', 'Task %', 'Attendance', 'PIPs']}
-            rows={(
-              (data.facility_performance as Array<Record<string, string | number>>) ??
-              (data.institution_performance as Array<Record<string, string | number>>) ??
-              []
-            ).map((row) => ({
-              Facility: row.facility ?? row.institution,
-              'Institution type': row.institution_type ?? '—',
-              District: row.district ?? '—',
-              Staff: row.staff,
-              Depts: row.departments ?? '—',
-              'Task %': `${row.avg_task_percent}%`,
-              Attendance: `${row.attendance}%`,
-              PIPs: row.active_pips,
-            }))}
+          <DashboardDrilldownPanel
+            drilldowns={drilldowns}
+            activeId={activeId}
+            onClose={closeDrilldown}
+            panelRef={panelRef}
           />
+
+          {interventions.length > 0 ? (
+            <Card className="p-4">
+              <button
+                type="button"
+                className="text-left text-sm font-bold uppercase text-moh-green hover:underline"
+                onClick={() => openDrilldown('interventions')}
+              >
+                {interventions.length} intervention(s) required — view detail →
+              </button>
+            </Card>
+          ) : null}
 
           <Card>
             <h2 className="mb-4 text-sm font-bold uppercase text-moh-green">National PIP dashboard</h2>

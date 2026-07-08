@@ -62,9 +62,10 @@ export const useAuthStore = create<AuthState>()(
       },
 
       hasPermission: (code) => {
-        const perms = get().permissions
+        const { permissions, roles } = get()
+        if (roles.includes('super_admin')) return true
         const codes = Array.isArray(code) ? code : [code]
-        return codes.some((c) => perms.includes(c))
+        return codes.some((c) => permissions.includes(c))
       },
 
       refreshProfile: async () => {

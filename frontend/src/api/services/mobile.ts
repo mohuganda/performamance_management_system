@@ -77,6 +77,42 @@ export const performanceService = {
     const { data } = await apiClient.post('/mobile/performance/reports', payload)
     return data
   },
+  saveAppraisal: async (payload: {
+    report_type: string
+    action_plans: Array<{ performance_gap: string; agreed_action: string; time_frame: string }>
+    appraisee_comments: string
+  }) => {
+    const { data } = await apiClient.post('/mobile/performance/appraisal', payload)
+    return data
+  },
+  getAppraisal: async (reportId: number) => {
+    const { data } = await apiClient.get('/mobile/performance/appraisal', {
+      params: { report_id: reportId },
+    })
+    return data
+  },
+  listPendingAppraisals: async () => {
+    const { data } = await apiClient.get('/mobile/performance/pending-appraisals')
+    return data
+  },
+  reviewAppraisal: async (payload: {
+    report_id: number
+    decision: 'approve' | 'return'
+    comments: string
+    job_title?: string
+    comment_role: string
+  }) => {
+    const { data } = await apiClient.post('/mobile/performance/appraisal/review', payload)
+    return data
+  },
+  statusReport: async () => {
+    const { data } = await apiClient.get('/mobile/performance/status-report')
+    return data
+  },
+  overallRating: async () => {
+    const { data } = await apiClient.get('/mobile/performance/overall-rating')
+    return data
+  },
 }
 
 export const oosService = {

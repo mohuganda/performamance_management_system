@@ -19,18 +19,24 @@ type Role struct {
 
 type Permission struct {
 	orm.Model
-	Code        string `gorm:"uniqueIndex"`
-	Module      string
-	Action      string
-	Name        string
-	Description *string
-	Guard       string `gorm:"default:api"`
+	Code        string  `gorm:"uniqueIndex" json:"code"`
+	Module      string  `json:"module"`
+	Action      string  `json:"action"`
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+	Guard       string  `gorm:"default:api" json:"guard"`
 }
 
 type RolePermission struct {
 	orm.Model
-	RoleID       uint
-	PermissionID uint
+	RoleID       uint `json:"role_id"`
+	PermissionID uint `json:"permission_id"`
+}
+
+type UserPermission struct {
+	orm.Model
+	UserID       uint `json:"user_id"`
+	PermissionID uint `json:"permission_id"`
 }
 
 type UserRole struct {

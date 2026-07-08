@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import Highcharts from 'highcharts'
 import { HighchartsReact } from 'highcharts-react-official'
@@ -5,17 +6,19 @@ import { AlertTriangle, CheckCircle2, TrendingUp, Users } from 'lucide-react'
 import { dashboardService } from '@/api/services/pms'
 import { AttendanceIntegrationBanner } from '@/components/dashboard/AttendanceIntegrationBanner'
 import { AttendanceTrendChart } from '@/components/dashboard/AttendanceTrendChart'
+import { DashboardDrilldownPanel, useDashboardDrilldown } from '@/components/dashboard/DashboardDrilldownPanel'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { DashboardHeader } from '@/components/organisms/DashboardHeader'
-import { DataTable } from '@/components/organisms/DataTable'
 import { ProgressBar } from '@/components/molecules/ProgressBar'
 import { Card } from '@/components/atoms/Card'
 import { QueryState } from '@/components/organisms/QueryState'
 import { useAuthStore } from '@/stores/appStore'
+import { buildDepartmentDrilldowns } from '@/utils/dashboardDrilldown'
 import type { AttendanceIntegration, AttendanceTrends, DashboardAnalytics, OrgContext } from '@/types/dashboard'
 
 export function DepartmentHeadDashboard() {
   const { displayName, quarter } = useAuthStore()
+  const { activeId, openDrilldown, closeDrilldown, panelRef } = useDashboardDrilldown('total_teams')
   const { data, isLoading, isError, error, refetch, isPending } = useQuery({
     queryKey: ['dashboard', 'department-head', quarter],
     queryFn: () => dashboardService.departmentHead(quarter),
@@ -33,10 +36,16 @@ export function DepartmentHeadDashboard() {
   }
   const summaryCards = (data?.summary_cards ?? {}) as Record<string, number>
   const teamPerformance = (data?.team_performance ?? []) as Array<Record<string, string | number>>
+  const interventions = (data?.intervention_required ?? []) as Array<Record<string, unknown>>
   const trendQuarters =
     (data?.trends as { quarters?: Array<{ label: string; value: number }> } | undefined)?.quarters ??
     []
   const trendMeta = (data?.trends ?? {}) as { target?: number; actual?: number }
+
+  const drilldowns = useMemo(
+    () => buildDepartmentDrilldowns(teamPerformance, interventions),
+    [teamPerformance, interventions],
+  )
 
   const trendOptions: Highcharts.Options = {
     chart: { type: 'column', backgroundColor: 'transparent', height: 280 },
@@ -64,6 +73,7 @@ export function DepartmentHeadDashboard() {
       isError={isError}
       error={error}
       label="department dashboard"
+      variant="dashboard"
       onRetry={() => refetch()}
     >
       {data ? (
@@ -88,6 +98,8 @@ export function DepartmentHeadDashboard() {
               value={taskCompletion.percent ?? 0}
               label={taskLabel}
               sublabel={`${taskCompletion.on_track ?? 0} of ${taskCompletion.total ?? 0} teams on track`}
+              onClick={() => openDrilldown('task_completion')}
+              active={activeId === 'task_completion'}
             />
           </Card>
 
@@ -97,10 +109,33 @@ export function DepartmentHeadDashboard() {
               value={summaryCards.total_teams ?? 0}
               hint={`${summaryCards.total_staff ?? 0} staff`}
               icon={Users}
+              onClick={() => openDrilldown('total_teams')}
+              active={activeId === 'total_teams'}
             />
-            <MetricCard title="On track" value={summaryCards.on_track ?? 0} icon={CheckCircle2} accent="green" />
-            <MetricCard title="At risk" value={summaryCards.at_risk ?? 0} icon={TrendingUp} accent="amber" />
-            <MetricCard title="Off track" value={summaryCards.off_track ?? 0} icon={AlertTriangle} accent="red" />
+            <MetricCard
+              title="On track"
+              value={summaryCards.on_track ?? 0}
+              icon={CheckCircle2}
+              accent="green"
+              onClick={() => openDrilldown('on_track')}
+              active={activeId === 'on_track'}
+            />
+            <MetricCard
+              title="At risk"
+              value={summaryCards.at_risk ?? 0}
+              icon={TrendingUp}
+              accent="amber"
+              onClick={() => openDrilldown('at_risk')}
+              active={activeId === 'at_risk'}
+            />
+            <MetricCard
+              title="Off track"
+              value={summaryCards.off_track ?? 0}
+              icon={AlertTriangle}
+              accent="red"
+              onClick={() => openDrilldown('off_track')}
+              active={activeId === 'off_track'}
+            />
           </div>
 
           {trends ? (
@@ -110,16 +145,23 @@ export function DepartmentHeadDashboard() {
             />
           ) : null}
 
-          <DataTable
-            title="Team Performance Summary"
-            columns={['Team/Supervisor', 'Staff', 'Avg Task %', 'Attendance', 'Status']}
-            rows={teamPerformance.map((row) => ({
-              'Team/Supervisor': row.team,
-              Staff: row.staff,
-              'Avg Task %': `${row.avg_task_percent}%`,
-              Attendance: `${row.attendance}%`,
-              Status: String(row.status).replace('_', ' '),
-            }))}
+          {interventions.length > 0 ? (
+            <Card className="p-4">
+              <button
+                type="button"
+                className="text-left text-sm font-bold uppercase text-moh-green hover:underline"
+                onClick={() => openDrilldown('interventions')}
+              >
+                {interventions.length} intervention(s) required — view detail →
+              </button>
+            </Card>
+          ) : null}
+
+          <DashboardDrilldownPanel
+            drilldowns={drilldowns}
+            activeId={activeId}
+            onClose={closeDrilldown}
+            panelRef={panelRef}
           />
 
           <Card>

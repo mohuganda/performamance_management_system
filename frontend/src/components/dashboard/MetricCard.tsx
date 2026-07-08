@@ -26,16 +26,40 @@ interface MetricCardProps {
   hint?: string
   icon: LucideIcon
   accent?: Accent
+  onClick?: () => void
+  active?: boolean
 }
 
-export function MetricCard({ title, value, hint, icon: Icon, accent = 'green' }: MetricCardProps) {
+export function MetricCard({ title, value, hint, icon: Icon, accent = 'green', onClick, active }: MetricCardProps) {
+  const clickable = Boolean(onClick)
   return (
-    <Card className={cn('min-w-[140px] flex-1 border-l-4 p-4', ACCENT_STYLES[accent])}>
+    <Card
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onClick?.()
+              }
+            }
+          : undefined
+      }
+      className={cn(
+        'min-w-[140px] flex-1 border-l-4 p-4 transition',
+        ACCENT_STYLES[accent],
+        clickable && 'cursor-pointer hover:shadow-md hover:ring-2 hover:ring-moh-green/25',
+        active && 'ring-2 ring-moh-green shadow-md',
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">{title}</p>
           <p className="mt-2 text-2xl font-bold text-ui-text">{value}</p>
           {hint ? <p className="mt-1 text-xs text-gray-500">{hint}</p> : null}
+          {clickable ? <p className="mt-2 text-[10px] font-medium text-moh-green">View details →</p> : null}
         </div>
         <div className={cn('rounded-sm p-2', ICON_STYLES[accent])}>
           <Icon className="h-5 w-5" />

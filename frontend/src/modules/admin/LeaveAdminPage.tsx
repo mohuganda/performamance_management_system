@@ -5,14 +5,13 @@ import {
   Card,
   Chip,
   Input,
-  Option,
-  Select,
   Switch,
   Tab,
   Tabs,
   TabsHeader,
   Typography,
 } from '@material-tailwind/react'
+import { Select, Option } from '@/components/molecules/MtSelect'
 import {
   AlertCircle,
   CalendarDays,
@@ -23,7 +22,6 @@ import {
   RefreshCw,
   Search,
   Settings,
-  Shield,
   Users,
   X,
 } from 'lucide-react'
@@ -35,9 +33,11 @@ import {
 } from '@/api/services/leaveAdmin'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { ProcessGuide } from '@/components/organisms/ProcessGuide'
+import { LeaveWorkflowPanel } from '@/modules/admin/LeaveWorkflowPanel'
 import { QueryState } from '@/components/organisms/QueryState'
 import { ServerPaginatedTable } from '@/components/organisms/ServerPaginatedTable'
 import { useAdminPageSize } from '@/hooks/useAdminPageSize'
+import { useAuthStore } from '@/stores/appStore'
 import { mt } from '@/utils/mt'
 
 const LEAVE_STEPS = [
@@ -47,9 +47,9 @@ const LEAVE_STEPS = [
     actor: 'Employee',
   },
   {
-    title: 'Supervisor chain approves',
-    description: 'Up to 3 supervisors review sequentially before HR recording.',
-    actor: 'Supervisor',
+    title: 'Configured approval chain',
+    description: 'Routes through Supervisor 1, then facility/district/ministry job holders (e.g. HR Manager) as defined in the workflow profile.',
+    actor: 'Approvers',
   },
   {
     title: 'HR records leave',
@@ -82,6 +82,7 @@ function apiErrorMessage(error: unknown, fallback: string) {
 export function LeaveAdminPage() {
   const queryClient = useQueryClient()
   const pageSize = useAdminPageSize()
+  const canManageWorkflow = useAuthStore((s) => s.hasPermission('leave.workflow.manage'))
   const [tab, setTab] = useState('overview')
   const [year, setYear] = useState(currentYear)
   const [balanceSearch, setBalanceSearch] = useState('')
@@ -156,9 +157,9 @@ export function LeaveAdminPage() {
     enabled: tab === 'configuration',
   })
 
-  const stagesQuery = useQuery({
-    queryKey: ['admin', 'leave', 'approval-stages'],
-    queryFn: () => leaveAdminService.listApprovalStages(),
+  const workflowProfilesQuery = useQuery({
+    queryKey: ['admin', 'leave', 'workflow-profiles'],
+    queryFn: () => leaveAdminService.listWorkflowProfiles(),
     enabled: tab === 'configuration',
   })
 
@@ -184,6 +185,12 @@ export function LeaveAdminPage() {
     onError: (error: unknown) => setSettingsError(apiErrorMessage(error, 'Could not save settings')),
   })
 
+  const updateTypeWorkflowMutation = useMutation({
+    mutationFn: ({ id, workflow_profile_code }: { id: number; workflow_profile_code: string }) =>
+      leaveAdminService.updateType(id, { workflow_profile_code }),
+    onSuccess: invalidateAll,
+  })
+
   const departments = departmentsQuery.data ?? []
   const overview = overviewQuery.data
   const balances = balancesQuery.data?.data ?? []
@@ -192,7 +199,7 @@ export function LeaveAdminPage() {
   const requestPagination = requestsQuery.data ?? { total: 0, page: 1, per_page: pageSize, total_pages: 1 }
   const types = typesQuery.data ?? []
   const entitlements = entitlementsQuery.data ?? []
-  const stages = stagesQuery.data ?? []
+  const workflowProfiles = workflowProfilesQuery.data ?? []
 
   const statementMatches = useMemo(() => {
     const needle = statementSearch.trim().toLowerCase()
@@ -275,6 +282,7 @@ export function LeaveAdminPage() {
           isError={overviewQuery.isError}
           error={overviewQuery.error}
           label="leave overview"
+          variant="dashboard"
           onRetry={() => overviewQuery.refetch()}
         >
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -386,6 +394,7 @@ export function LeaveAdminPage() {
             isError={balancesQuery.isError}
             error={balancesQuery.error}
             label="leave balances"
+            variant="table"
             onRetry={() => balancesQuery.refetch()}
           >
             <ServerPaginatedTable
@@ -485,6 +494,7 @@ export function LeaveAdminPage() {
             isError={requestsQuery.isError}
             error={requestsQuery.error}
             label="leave requests"
+            variant="table"
             onRetry={() => requestsQuery.refetch()}
           >
             <ServerPaginatedTable
@@ -612,6 +622,7 @@ export function LeaveAdminPage() {
           isError={settingsQuery.isError || typesQuery.isError}
           error={settingsQuery.error ?? typesQuery.error}
           label="leave configuration"
+          variant="form"
           onRetry={() => {
             settingsQuery.refetch()
             typesQuery.refetch()
@@ -714,7 +725,35 @@ export function LeaveAdminPage() {
                           <p className="mt-1 text-xs text-gray-600">{t.eligibility_notes}</p>
                         ) : null}
                       </div>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-col items-end gap-2">
+                        {canManageWorkflow ? (
+                          <Select
+                            {...mt}
+                            label="Workflow"
+                            value={t.workflow_profile_code ?? 'default'}
+                            onChange={(v) =>
+                              updateTypeWorkflowMutation.mutate({
+                                id: t.id,
+                                workflow_profile_code: (v as string) ?? 'default',
+                              })
+                            }
+                            className="min-w-[180px]"
+                          >
+                            {workflowProfiles.map((profile) => (
+                              <Option key={profile.code} value={profile.code}>
+                                {profile.name}
+                              </Option>
+                            ))}
+                          </Select>
+                        ) : (
+                          <Chip
+                            {...mt}
+                            size="sm"
+                            value={t.workflow_profile_code ?? 'default'}
+                            className="rounded-sm"
+                          />
+                        )}
+                        <div className="flex flex-wrap gap-1">
                         {t.max_days_per_year ? (
                           <Chip {...mt} size="sm" value={`Max ${t.max_days_per_year}d/yr`} className="rounded-sm" />
                         ) : null}
@@ -728,11 +767,14 @@ export function LeaveAdminPage() {
                           color={t.is_active ? 'green' : 'gray'}
                           className="rounded-sm"
                         />
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               </Card>
+
+              <LeaveWorkflowPanel />
 
               <div className="grid gap-6 lg:grid-cols-2">
                 <Card {...mt} className="rounded-sm border border-ui-border p-5">
@@ -756,28 +798,6 @@ export function LeaveAdminPage() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
-                </Card>
-
-                <Card {...mt} className="rounded-sm border border-ui-border p-5">
-                  <div className="mb-4 flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-moh-green" />
-                    <Typography {...mt} className="text-sm font-bold uppercase text-moh-green">
-                      Approval stages
-                    </Typography>
-                  </div>
-                  <div className="space-y-3">
-                    {stages.map((stage) => (
-                      <div key={stage.id} className="rounded-sm border border-gray-100 p-3">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-moh-green/10 text-xs font-bold text-moh-green">
-                            {stage.sequence}
-                          </span>
-                          <span className="font-medium">{stage.name}</span>
-                        </div>
-                        <p className="mt-1 text-xs text-gray-500">{stage.description || stage.approver_role}</p>
-                      </div>
-                    ))}
                   </div>
                 </Card>
               </div>
@@ -813,7 +833,7 @@ function StatementPanel({
   year: number
 }) {
   return (
-    <QueryState isLoading={isLoading} isError={isError} error={error} label="leave statement" onRetry={onRetry}>
+    <QueryState isLoading={isLoading} isError={isError} error={error} label="leave statement" variant="form" onRetry={onRetry}>
       {statement ? (
         <Card {...mt} className="rounded-sm border border-moh-green/15 p-5">
           <Typography {...mt} className="text-lg font-bold text-moh-green">

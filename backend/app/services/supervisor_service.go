@@ -72,6 +72,95 @@ func staffDisplayName(staff models.Staff) string {
 	return name
 }
 
+func (s *SupervisorService) SupervisionMapForStaffIDs(staffIDs []uint) (map[uint]StaffSupervisionRow, error) {
+	out := map[uint]StaffSupervisionRow{}
+	ids := idsByUint(staffIDs)
+	if len(ids) == 0 {
+		return out, nil
+	}
+
+	var contracts []models.StaffContract
+	if err := facades.Orm().Query().
+		Where("staff_id IN ?", ids).
+		Where("contract_status", "active").
+		Get(&contracts); err != nil {
+		return nil, err
+	}
+	if len(contracts) == 0 {
+		return out, nil
+	}
+
+	contractIDs := make([]uint, 0, len(contracts))
+	jobIDs := make([]uint, 0, len(contracts))
+	facilityIDs := make([]uint, 0, len(contracts))
+	contractByStaff := map[uint]models.StaffContract{}
+	for _, c := range contracts {
+		contractByStaff[c.StaffID] = c
+		contractIDs = append(contractIDs, c.ID)
+		jobIDs = append(jobIDs, c.JobID)
+		facilityIDs = append(facilityIDs, c.FacilityID)
+	}
+
+	staffMap := loadStaffByIDs(ids)
+	jobs := loadJobsByIDs(jobIDs)
+	facilities := loadFacilitiesByIDs(facilityIDs)
+
+	var sups []models.StaffSupervisor
+	_ = facades.Orm().Query().
+		Where("staff_contract_id IN ?", contractIDs).
+		Where("is_current", true).
+		Order("approval_sequence asc").
+		Get(&sups)
+
+	supervisorIDs := make([]uint, 0, len(sups))
+	supsByContract := map[uint][]models.StaffSupervisor{}
+	for _, sup := range sups {
+		supsByContract[sup.StaffContractID] = append(supsByContract[sup.StaffContractID], sup)
+		supervisorIDs = append(supervisorIDs, sup.SupervisorStaffID)
+	}
+	supervisorMap := loadStaffByIDs(supervisorIDs)
+
+	for _, staffID := range ids {
+		contract, ok := contractByStaff[staffID]
+		if !ok {
+			continue
+		}
+		staff, ok := staffMap[staffID]
+		if !ok {
+			continue
+		}
+		row := StaffSupervisionRow{
+			StaffID:      staffID,
+			StaffName:    staffDisplayName(staff),
+			JobTitle:     jobs[contract.JobID].JobTitle,
+			FacilityName: facilities[contract.FacilityID].Name,
+		}
+		for _, sup := range supsByContract[contract.ID] {
+			row.HasSupervisor = true
+			assignment := SupervisorAssignment{
+				Sequence:          sup.ApprovalSequence,
+				SupervisorStaffID: sup.SupervisorStaffID,
+			}
+			if supervisor, ok := supervisorMap[sup.SupervisorStaffID]; ok {
+				assignment.SupervisorName = staffDisplayName(supervisor)
+			}
+			row.Supervisors = append(row.Supervisors, assignment)
+		}
+		if len(row.Supervisors) > 0 {
+			row.SupervisorStaffID = &row.Supervisors[0].SupervisorStaffID
+			names := make([]string, 0, len(row.Supervisors))
+			for _, a := range row.Supervisors {
+				if a.SupervisorName != "" {
+					names = append(names, a.SupervisorName)
+				}
+			}
+			row.SupervisorName = strings.Join(names, ", ")
+		}
+		out[staffID] = row
+	}
+	return out, nil
+}
+
 func (s *SupervisorService) ListStaffSupervision() ([]StaffSupervisionRow, error) {
 	cacheKey := s.cache.key("supervision")
 	var cached []StaffSupervisionRow
@@ -170,36 +259,53 @@ func (s *SupervisorService) ListStaffSupervisionPaginated(
 }
 
 func (s *SupervisorService) ListSupervisorCandidates() ([]SupervisorCandidate, error) {
+	cacheKey := s.cache.key("supervisor-candidates")
+	var cached []SupervisorCandidate
+	if s.cache.Get(cacheKey, &cached) {
+		return cached, nil
+	}
+
 	var contracts []models.StaffContract
 	if err := facades.Orm().Query().
 		Where("contract_status", "active").
+		Order("staff_id asc").
 		Get(&contracts); err != nil {
 		return nil, err
 	}
 
-	rows := make([]SupervisorCandidate, 0)
 	seen := map[uint]bool{}
+	staffIDs := make([]uint, 0, len(contracts))
+	staffJobID := map[uint]uint{}
 	for _, contract := range contracts {
 		if seen[contract.StaffID] {
 			continue
 		}
 		seen[contract.StaffID] = true
+		staffIDs = append(staffIDs, contract.StaffID)
+		staffJobID[contract.StaffID] = contract.JobID
+	}
 
-		var staff models.Staff
-		if err := facades.Orm().Query().Where("id", contract.StaffID).First(&staff); err != nil || staff.ID == 0 {
+	staffMap := loadStaffByIDs(staffIDs)
+	jobIDs := make([]uint, 0, len(staffJobID))
+	for _, jobID := range staffJobID {
+		jobIDs = append(jobIDs, jobID)
+	}
+	jobs := loadJobsByIDs(jobIDs)
+
+	rows := make([]SupervisorCandidate, 0, len(staffIDs))
+	for _, staffID := range staffIDs {
+		staff, ok := staffMap[staffID]
+		if !ok {
 			continue
 		}
-
-		var job models.JobTitle
-		_ = facades.Orm().Query().Where("id", contract.JobID).First(&job)
-
 		rows = append(rows, SupervisorCandidate{
 			StaffID:  staff.ID,
 			Name:     staffDisplayName(staff),
-			JobTitle: job.JobTitle,
+			JobTitle: jobs[staffJobID[staffID]].JobTitle,
 		})
 	}
 
+	s.cache.Put(cacheKey, rows)
 	return rows, nil
 }
 

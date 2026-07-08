@@ -87,9 +87,10 @@ func (c *RbacAdminController) ListUsers(ctx http.Context) http.Response {
 type updateUserBody struct {
 	Name            *string `json:"name"`
 	IsActive        *bool   `json:"is_active"`
-	ScopeLevel      *string `json:"scope_level"`
-	ScopeDistrictID *string `json:"scope_district_id"`
-	ScopeFacilityID *uint   `json:"scope_facility_id"`
+	ScopeLevel         *string `json:"scope_level"`
+	ScopeDistrictID    *string `json:"scope_district_id"`
+	ScopeFacilityID    *uint   `json:"scope_facility_id"`
+	ScopeAssignments   *[]services.UserScopeAssignmentInput `json:"scope_assignments"`
 }
 
 // UpdateUser godoc
@@ -103,16 +104,17 @@ func (c *RbacAdminController) UpdateUser(ctx http.Context) http.Response {
 	if err := ctx.Request().Bind(&body); err != nil {
 		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
 	}
-	if body.Name == nil && body.IsActive == nil && body.ScopeLevel == nil && body.ScopeDistrictID == nil && body.ScopeFacilityID == nil {
+	if body.Name == nil && body.IsActive == nil && body.ScopeLevel == nil && body.ScopeDistrictID == nil && body.ScopeFacilityID == nil && body.ScopeAssignments == nil {
 		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "no fields to update"})
 	}
 
 	scopeInput := &services.UserScopeInput{
-		ScopeLevel:      body.ScopeLevel,
-		ScopeDistrictID: body.ScopeDistrictID,
-		ScopeFacilityID: body.ScopeFacilityID,
+		ScopeLevel:       body.ScopeLevel,
+		ScopeDistrictID:  body.ScopeDistrictID,
+		ScopeFacilityID:  body.ScopeFacilityID,
+		ScopeAssignments: body.ScopeAssignments,
 	}
-	hasScope := body.ScopeLevel != nil || body.ScopeDistrictID != nil || body.ScopeFacilityID != nil
+	hasScope := body.ScopeLevel != nil || body.ScopeDistrictID != nil || body.ScopeFacilityID != nil || body.ScopeAssignments != nil
 	var scopePtr *services.UserScopeInput
 	if hasScope {
 		scopePtr = scopeInput
@@ -201,9 +203,10 @@ type createUserBody struct {
 	Password        string   `json:"password"`
 	StaffID         *uint    `json:"staff_id"`
 	RoleCodes       []string `json:"role_codes"`
-	ScopeLevel      *string  `json:"scope_level"`
-	ScopeDistrictID *string  `json:"scope_district_id"`
-	ScopeFacilityID *uint    `json:"scope_facility_id"`
+	ScopeLevel         *string  `json:"scope_level"`
+	ScopeDistrictID    *string  `json:"scope_district_id"`
+	ScopeFacilityID    *uint    `json:"scope_facility_id"`
+	ScopeAssignments   *[]services.UserScopeAssignmentInput `json:"scope_assignments"`
 }
 
 // CreateUser godoc
@@ -227,11 +230,12 @@ func (c *RbacAdminController) CreateUser(ctx http.Context) http.Response {
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 	}
 
-	if body.ScopeLevel != nil || body.ScopeDistrictID != nil || body.ScopeFacilityID != nil {
+	if body.ScopeLevel != nil || body.ScopeDistrictID != nil || body.ScopeFacilityID != nil || body.ScopeAssignments != nil {
 		user, err = c.rbac.UpdateUser(user.ID, nil, nil, &services.UserScopeInput{
-			ScopeLevel:      body.ScopeLevel,
-			ScopeDistrictID: body.ScopeDistrictID,
-			ScopeFacilityID: body.ScopeFacilityID,
+			ScopeLevel:       body.ScopeLevel,
+			ScopeDistrictID:  body.ScopeDistrictID,
+			ScopeFacilityID:  body.ScopeFacilityID,
+			ScopeAssignments: body.ScopeAssignments,
 		})
 		if err != nil {
 			return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
@@ -291,6 +295,38 @@ func (c *RbacAdminController) SetRoleScope(ctx http.Context) http.Response {
 	return ctx.Response().Success().Json(http.Json{"message": "scope saved"})
 }
 
+// ListRolePermissions godoc
+// @Summary      List permissions granted to a role
+// @Tags         admin-rbac
+// @Security     BearerAuth
+// @Router       /api/v1/admin/rbac/roles/{code}/permissions [get]
+func (c *RbacAdminController) ListRolePermissions(ctx http.Context) http.Response {
+	code := ctx.Request().Route("code")
+	codes, err := c.rbac.ListRolePermissionCodes(code)
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{
+		"permissions": codes,
+	})
+}
+
+// ListUserPermissions godoc
+// @Summary      List direct permissions granted to a user
+// @Tags         admin-rbac
+// @Security     BearerAuth
+// @Router       /api/v1/admin/rbac/users/{id}/permissions [get]
+func (c *RbacAdminController) ListUserPermissions(ctx http.Context) http.Response {
+	userID, _ := strconv.ParseUint(ctx.Request().Route("id"), 10, 64)
+	codes, err := c.rbac.ListUserPermissionCodes(uint(userID))
+	if err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{
+		"permissions": codes,
+	})
+}
+
 type grantPermissionBody struct {
 	RoleCode       string `json:"role_code"`
 	PermissionCode string `json:"permission_code"`
@@ -324,6 +360,95 @@ func (c *RbacAdminController) GrantRolePermission(ctx http.Context) http.Respons
 		IsDangerous: true, IsRecoverable: true,
 	})
 	return ctx.Response().Success().Json(http.Json{"message": "permission granted"})
+}
+
+// RevokeRolePermission godoc
+// @Summary      Revoke permission from role
+// @Tags         admin-rbac
+// @Security     BearerAuth
+// @Router       /api/v1/admin/rbac/revoke-permission [post]
+func (c *RbacAdminController) RevokeRolePermission(ctx http.Context) http.Response {
+	var body grantPermissionBody
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	if body.RoleCode == "" || body.PermissionCode == "" {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "role_code and permission_code required"})
+	}
+	if err := c.rbac.RevokePermission(body.RoleCode, body.PermissionCode); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+
+	c.logAudit(ctx, services.AuditEntry{
+		Module: "rbac", Action: "permission.revoked", EntityType: "role",
+		Summary: "Revoked " + body.PermissionCode + " from role " + body.RoleCode,
+		Metadata: map[string]any{
+			"revert": map[string]any{
+				"role_code": body.RoleCode, "permission_code": body.PermissionCode, "action": "grant",
+			},
+		},
+		IsDangerous: true, IsRecoverable: true,
+	})
+	return ctx.Response().Success().Json(http.Json{"message": "permission revoked"})
+}
+
+type grantUserPermissionBody struct {
+	PermissionCode string `json:"permission_code"`
+}
+
+// GrantUserPermission godoc
+// @Summary      Grant permission directly to user
+// @Tags         admin-rbac
+// @Security     BearerAuth
+// @Router       /api/v1/admin/rbac/users/{id}/permissions [post]
+func (c *RbacAdminController) GrantUserPermission(ctx http.Context) http.Response {
+	userID, _ := strconv.ParseUint(ctx.Request().Route("id"), 10, 64)
+	var body grantUserPermissionBody
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	if body.PermissionCode == "" {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "permission_code required"})
+	}
+	if err := c.rbac.GrantUserPermission(uint(userID), body.PermissionCode); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+
+	c.logAudit(ctx, services.AuditEntry{
+		Module: "rbac", Action: "user.permission.granted", EntityType: "user", EntityID: ptrUint(uint(userID)),
+		Summary: "Granted " + body.PermissionCode + " directly to user #" + strconv.FormatUint(userID, 10),
+		Metadata: map[string]any{
+			"revert": map[string]any{"user_id": userID, "permission_code": body.PermissionCode},
+		},
+		IsDangerous: true, IsRecoverable: true,
+	})
+	return ctx.Response().Success().Json(http.Json{"message": "permission granted"})
+}
+
+// RevokeUserPermission godoc
+// @Summary      Revoke direct permission from user
+// @Tags         admin-rbac
+// @Security     BearerAuth
+// @Router       /api/v1/admin/rbac/users/{id}/permissions [delete]
+func (c *RbacAdminController) RevokeUserPermission(ctx http.Context) http.Response {
+	userID, _ := strconv.ParseUint(ctx.Request().Route("id"), 10, 64)
+	permissionCode := ctx.Request().Query("permission_code", "")
+	if permissionCode == "" {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "permission_code query required"})
+	}
+	if err := c.rbac.RevokeUserPermission(uint(userID), permissionCode); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+
+	c.logAudit(ctx, services.AuditEntry{
+		Module: "rbac", Action: "user.permission.revoked", EntityType: "user", EntityID: ptrUint(uint(userID)),
+		Summary: "Revoked direct permission " + permissionCode + " from user #" + strconv.FormatUint(userID, 10),
+		Metadata: map[string]any{
+			"revert": map[string]any{"user_id": userID, "permission_code": permissionCode, "action": "grant"},
+		},
+		IsDangerous: true, IsRecoverable: true,
+	})
+	return ctx.Response().Success().Json(http.Json{"message": "permission revoked"})
 }
 
 // ListAuditLogs godoc

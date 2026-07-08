@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Card, Chip, Input, Option, Select, Switch, Typography } from '@material-tailwind/react'
+import { Button, Card, Chip, Input, Typography } from '@material-tailwind/react'
+import { Select, Option } from '@/components/molecules/MtSelect'
 import { staffManagementService } from '@/api/services/admin'
 import type { StaffListRow } from '@/utils/normalizeApi'
+import { SearchableSelect } from '@/components/molecules/SearchableSelect'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
 import { ServerPaginatedTable } from '@/components/organisms/ServerPaginatedTable'
 import { useAdminPageSize } from '@/hooks/useAdminPageSize'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { mt } from '@/utils/mt'
 
 type SupervisorForm = {
@@ -42,11 +45,11 @@ export function StaffManagementPage() {
   const queryClient = useQueryClient()
   const pageSize = useAdminPageSize()
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search, 400)
   const [departmentFilter, setDepartmentFilter] = useState('')
   const [supervisorFilter, setSupervisorFilter] = useState('')
   const [page, setPage] = useState(1)
   const [activeStaff, setActiveStaff] = useState<StaffListRow | null>(null)
-  const [candidateSearch, setCandidateSearch] = useState('')
   const [supervisorForm, setSupervisorForm] = useState<SupervisorForm>(EMPTY_SUPERVISOR_FORM)
   const [supervisorFormReady, setSupervisorFormReady] = useState(false)
   const [formError, setFormError] = useState('')
@@ -55,16 +58,13 @@ export function StaffManagementPage() {
     hr_email: '',
     hr_mobile: '',
     notes: '',
-    lock_email: false,
-    lock_department: false,
-    lock_mobile: false,
   })
 
   const listQuery = useQuery({
-    queryKey: ['admin', 'staff', search, departmentFilter, supervisorFilter, page, pageSize],
+    queryKey: ['admin', 'staff', debouncedSearch, departmentFilter, supervisorFilter, page, pageSize],
     queryFn: () =>
       staffManagementService.list({
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         department_id: departmentFilter ? Number(departmentFilter) : undefined,
         has_supervisor: supervisorFilter || undefined,
         page,
@@ -80,6 +80,8 @@ export function StaffManagementPage() {
   const candidatesQuery = useQuery({
     queryKey: ['admin', 'supervisor-candidates'],
     queryFn: () => staffManagementService.listSupervisorCandidates(),
+    enabled: !!activeStaff,
+    staleTime: 60_000,
   })
 
   const supervisorsQuery = useQuery({
@@ -107,9 +109,6 @@ export function StaffManagementPage() {
         hr_email: hrForm.hr_email,
         hr_mobile: hrForm.hr_mobile,
         notes: hrForm.notes,
-        lock_email: hrForm.lock_email,
-        lock_department: hrForm.lock_department,
-        lock_mobile: hrForm.lock_mobile,
       })
       await staffManagementService.setSupervisors(staffId, slots)
     },
@@ -124,7 +123,6 @@ export function StaffManagementPage() {
 
   const openStaffModal = (row: StaffListRow) => {
     setActiveStaff(row)
-    setCandidateSearch('')
     setFormError('')
     setSupervisorForm(EMPTY_SUPERVISOR_FORM)
     setSupervisorFormReady(false)
@@ -133,9 +131,6 @@ export function StaffManagementPage() {
       hr_email: row.email ?? '',
       hr_mobile: row.mobile ?? '',
       notes: '',
-      lock_email: false,
-      lock_department: !!row.hr_department_id,
-      lock_mobile: false,
     })
   }
 
@@ -143,7 +138,6 @@ export function StaffManagementPage() {
     setActiveStaff(null)
     setSupervisorForm(EMPTY_SUPERVISOR_FORM)
     setSupervisorFormReady(false)
-    setCandidateSearch('')
     setFormError('')
   }
 
@@ -166,19 +160,35 @@ export function StaffManagementPage() {
   const candidates = candidatesQuery.data ?? []
   const unassignedOnPage = rows.filter((row) => !row.has_supervisor).length
 
-  const filteredCandidates = useMemo(() => {
-    const needle = candidateSearch.trim().toLowerCase()
-    return candidates.filter((candidate) => {
-      if (activeStaff && candidate.staff_id === activeStaff.staff_id) return false
-      if (!needle) return true
-      return `${candidate.name} ${candidate.job_title}`.toLowerCase().includes(needle)
-    })
-  }, [candidates, candidateSearch, activeStaff])
+  const departmentOptions = useMemo(
+    () =>
+      departments.map((d) => ({
+        value: String(d.id),
+        label: d.name,
+      })),
+    [departments],
+  )
+
+  const supervisorOptions = useMemo(
+    () =>
+      candidates
+        .filter((candidate) => !(activeStaff && candidate.staff_id === activeStaff.staff_id))
+        .map((candidate) => ({
+          value: String(candidate.staff_id),
+          label: candidate.name,
+          description: candidate.job_title,
+        })),
+    [candidates, activeStaff],
+  )
 
   const applyFilters = () => {
     setPage(1)
     listQuery.refetch()
   }
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, departmentFilter, supervisorFilter])
 
   const validateForm = () => {
     if (!supervisorForm.supervisor1) {
@@ -295,6 +305,7 @@ export function StaffManagementPage() {
         isError={listQuery.isError}
         error={listQuery.error}
         label="staff records"
+        variant="table"
         onRetry={() => listQuery.refetch()}
       >
         <ServerPaginatedTable
@@ -382,24 +393,19 @@ export function StaffManagementPage() {
                 HR profile enrichment
               </Typography>
               <Typography {...mt} className="mt-1 text-xs text-gray-500">
-                Override iHRIS data where needed. Locked fields are protected from the next sync.
+                Override iHRIS values where needed. Field protection during sync is controlled under{' '}
+                <strong>Administration → System configuration</strong> (overwrite disabled by default).
               </Typography>
 
               <div className="mt-5 grid gap-5 md:grid-cols-2">
-                <Select
-                  {...mt}
+                <SearchableSelect
                   label="HR department (if missing from iHRIS)"
                   value={hrForm.hr_department_id}
-                  onChange={(v) => setHrForm((f) => ({ ...f, hr_department_id: v ?? '' }))}
-                  className="min-w-0"
-                >
-                  <Option value="">— None —</Option>
-                  {departments.map((d) => (
-                    <Option key={d.id} value={String(d.id)}>
-                      {d.name}
-                    </Option>
-                  ))}
-                </Select>
+                  placeholder="Search departments…"
+                  emptyLabel="— None —"
+                  options={departmentOptions}
+                  onChange={(v) => setHrForm((f) => ({ ...f, hr_department_id: v }))}
+                />
                 <Input
                   {...mt}
                   label="HR email override"
@@ -419,33 +425,6 @@ export function StaffManagementPage() {
                   onChange={(e) => setHrForm((f) => ({ ...f, notes: e.target.value }))}
                 />
               </div>
-
-              <div className="mt-5 space-y-4 rounded-sm border border-gray-100 bg-gray-50/80 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm text-gray-700">Lock email from iHRIS overwrite</span>
-                  <Switch
-                    {...mt}
-                    checked={hrForm.lock_email}
-                    onChange={(e) => setHrForm((f) => ({ ...f, lock_email: e.target.checked }))}
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm text-gray-700">Lock department from iHRIS overwrite</span>
-                  <Switch
-                    {...mt}
-                    checked={hrForm.lock_department}
-                    onChange={(e) => setHrForm((f) => ({ ...f, lock_department: e.target.checked }))}
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm text-gray-700">Lock mobile from iHRIS overwrite</span>
-                  <Switch
-                    {...mt}
-                    checked={hrForm.lock_mobile}
-                    onChange={(e) => setHrForm((f) => ({ ...f, lock_mobile: e.target.checked }))}
-                  />
-                </div>
-              </div>
             </div>
 
             <div className="mt-8 border-t border-gray-200 pt-6">
@@ -453,17 +432,9 @@ export function StaffManagementPage() {
                 Supervisors
               </Typography>
               <Typography {...mt} className="mt-1 text-xs text-gray-500">
-                Supervisor 1 is required for leave and travel approvals. Add up to two more for sequential sign-off.
+                Supervisor 1 is required for leave and travel approvals. Add up to two more for sequential
+                sign-off. Type a name or job title to filter each list.
               </Typography>
-
-              <div className="mt-5">
-                <Input
-                  {...mt}
-                  label="Search supervisors"
-                  value={candidateSearch}
-                  onChange={(e) => setCandidateSearch(e.target.value)}
-                />
-              </div>
 
               <div className="mt-5 space-y-5">
                 {([1, 2, 3] as const).map((sequence) => {
@@ -474,25 +445,22 @@ export function StaffManagementPage() {
                     .filter(Boolean)
 
                   return (
-                    <Select
+                    <SearchableSelect
                       key={sequence}
-                      {...mt}
                       label={supervisorLabel(sequence)}
                       value={supervisorForm[field]}
+                      placeholder={
+                        sequence === 1 ? 'Search primary supervisor…' : 'Search supervisor…'
+                      }
+                      emptyLabel={sequence === 1 ? 'Select primary supervisor' : '— None —'}
+                      options={supervisorOptions.filter(
+                        (candidate) => !selectedOthers.includes(candidate.value),
+                      )}
                       onChange={(v) => {
-                        setSupervisorForm((prev) => ({ ...prev, [field]: v ?? '' }))
+                        setSupervisorForm((prev) => ({ ...prev, [field]: v }))
                         setFormError('')
                       }}
-                    >
-                      <Option value="">{sequence === 1 ? 'Select primary supervisor' : '— None —'}</Option>
-                      {filteredCandidates
-                        .filter((candidate) => !selectedOthers.includes(String(candidate.staff_id)))
-                        .map((candidate) => (
-                          <Option key={candidate.staff_id} value={String(candidate.staff_id)}>
-                            {candidate.name} — {candidate.job_title}
-                          </Option>
-                        ))}
-                    </Select>
+                    />
                   )
                 })}
               </div>

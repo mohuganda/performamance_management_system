@@ -22,6 +22,7 @@ func Api() {
 	rbacAdminController := controllers.NewRbacAdminController()
 	notificationController := controllers.NewNotificationController()
 	kpiAdminController := controllers.NewKpiAdminController()
+	listsAdminController := controllers.NewListsAdminController()
 
 	authenticate := &middleware.Authenticate{}
 
@@ -45,12 +46,19 @@ func Api() {
 			auth.Middleware(middleware.Permission("ihris.sync")).Post("/ihris/sync", ihrisController.Sync)
 			auth.Middleware(middleware.Permission("ihris.sync")).Get("/ihris/sync/status", ihrisController.Status)
 
-			auth.Middleware(middleware.Permission("settings.manage")).Get("admin/settings", settingsAdminController.Show)
-			auth.Prefix("admin/settings").Middleware(middleware.Permission("settings.manage")).Group(func(settings route.Router) {
+			settingsReadPerm := middleware.Permission(
+				"settings.manage",
+				"settings.preferences.manage",
+				"settings.data_sources.manage",
+				"settings.email.manage",
+				"settings.notifications.manage",
+			)
+			auth.Middleware(settingsReadPerm).Get("admin/settings", settingsAdminController.Show)
+			auth.Prefix("admin/settings").Middleware(settingsReadPerm).Group(func(settings route.Router) {
 				settings.Put("/", settingsAdminController.Update)
 			})
 
-			auth.Prefix("admin/notifications").Middleware(middleware.Permission("settings.manage")).Group(func(notifications route.Router) {
+			auth.Prefix("admin/notifications").Middleware(middleware.Permission("settings.manage", "settings.notifications.manage")).Group(func(notifications route.Router) {
 				notifications.Post("/send-reminders", notificationsAdminController.SendReminders)
 			})
 
@@ -81,28 +89,60 @@ func Api() {
 				admin.Put("/entitlements/{id}", leaveAdminController.UpdateEntitlement)
 				admin.Delete("/entitlements/{id}", leaveAdminController.DeleteEntitlement)
 				admin.Get("/approval-stages", leaveAdminController.ListApprovalStages)
-				admin.Post("/approval-stages", leaveAdminController.CreateApprovalStage)
-				admin.Put("/approval-stages/{id}", leaveAdminController.UpdateApprovalStage)
 			})
 
-			auth.Prefix("admin/performance").Middleware(middleware.Permission("settings.manage")).Group(func(admin route.Router) {
+			auth.Prefix("admin/leave").Middleware(middleware.Permission("leave.config.manage", "leave.workflow.manage")).Group(func(admin route.Router) {
+				admin.Get("/workflow-profiles", leaveAdminController.ListWorkflowProfiles)
+				admin.Get("/workflow-stages", leaveAdminController.ListWorkflowStages)
+			})
+
+			auth.Prefix("admin/leave").Middleware(middleware.Permission("leave.workflow.manage")).Group(func(admin route.Router) {
+				admin.Post("/approval-stages", leaveAdminController.CreateApprovalStage)
+				admin.Put("/approval-stages/{id}", leaveAdminController.UpdateApprovalStage)
+				admin.Delete("/approval-stages/{id}", leaveAdminController.DeleteApprovalStage)
+			})
+
+			auth.Prefix("admin/performance").Middleware(middleware.Permission("settings.manage", "settings.performance.manage")).Group(func(admin route.Router) {
 				admin.Get("/settings", performanceAdminController.ShowSettings)
 				admin.Put("/settings", performanceAdminController.UpdateSettings)
+			})
+
+			auth.Prefix("admin/lists").Middleware(middleware.Permission("settings.manage", "settings.lists.manage")).Group(func(lists route.Router) {
+				lists.Get("/summary", listsAdminController.Summary)
+				lists.Get("/regions", listsAdminController.ListRegions)
+				lists.Get("/districts", listsAdminController.ListDistricts)
+				lists.Get("/facilities", listsAdminController.ListFacilities)
+				lists.Get("/departments", listsAdminController.ListDepartments)
+				lists.Get("/job-titles", listsAdminController.ListJobTitles)
+				lists.Get("/region-options", listsAdminController.RegionOptions)
+				lists.Get("/district-options", listsAdminController.DistrictOptions)
+				lists.Put("/regions/{id}", listsAdminController.UpdateRegion)
+				lists.Put("/districts/{id}", listsAdminController.UpdateDistrict)
+				lists.Put("/facilities/{id}", listsAdminController.UpdateFacility)
+				lists.Put("/departments/{id}", listsAdminController.UpdateDepartment)
+				lists.Put("/job-titles/{id}", listsAdminController.UpdateJobTitle)
+				lists.Post("/departments", listsAdminController.CreateDepartment)
+				lists.Post("/job-titles", listsAdminController.CreateJobTitle)
 			})
 
 			auth.Prefix("admin/rbac").Middleware(middleware.Permission("auth.roles.manage")).Group(func(rbac route.Router) {
 				rbac.Get("/scope-options", rbacAdminController.ListScopeOptions)
 				rbac.Get("/roles", rbacAdminController.ListRoles)
+				rbac.Get("/roles/{code}/permissions", rbacAdminController.ListRolePermissions)
 				rbac.Get("/permissions", rbacAdminController.ListPermissions)
 				rbac.Get("/users", rbacAdminController.ListUsers)
 				rbac.Post("/users", rbacAdminController.CreateUser)
 				rbac.Patch("/users/{id}", rbacAdminController.UpdateUser)
+				rbac.Get("/users/{id}/permissions", rbacAdminController.ListUserPermissions)
+				rbac.Post("/users/{id}/permissions", rbacAdminController.GrantUserPermission)
+				rbac.Delete("/users/{id}/permissions", rbacAdminController.RevokeUserPermission)
 				rbac.Post("/users/{id}/roles", rbacAdminController.AssignUserRole)
 				rbac.Delete("/users/{id}/roles", rbacAdminController.RevokeUserRole)
 				rbac.Get("/audit-logs", rbacAdminController.ListAuditLogs)
 				rbac.Post("/audit-logs/{id}/recover", rbacAdminController.RecoverAuditLog)
 				rbac.Post("/roles/{id}/scopes", rbacAdminController.SetRoleScope)
 				rbac.Post("/grant-permission", rbacAdminController.GrantRolePermission)
+				rbac.Post("/revoke-permission", rbacAdminController.RevokeRolePermission)
 			})
 
 			auth.Prefix("admin/kpi").Group(func(kpi route.Router) {
@@ -148,6 +188,12 @@ func Api() {
 				mobile.Middleware(middleware.Permission("performance.view")).Post("/performance/ppa", mobileController.SavePerformancePlan)
 				mobile.Middleware(middleware.Permission("performance.view")).Post("/performance/ppa/submit", mobileController.SubmitPerformancePlan)
 				mobile.Middleware(middleware.Permission("performance.view")).Post("/performance/reports", mobileController.SubmitPerformanceReport)
+				mobile.Middleware(middleware.Permission("performance.view")).Post("/performance/appraisal", mobileController.SavePerformanceAppraisal)
+				mobile.Middleware(middleware.Permission("performance.view")).Get("/performance/appraisal", mobileController.GetPerformanceAppraisal)
+				mobile.Middleware(middleware.Permission("performance.view")).Get("/performance/pending-appraisals", mobileController.ListPendingAppraisalReviews)
+				mobile.Middleware(middleware.Permission("performance.view")).Post("/performance/appraisal/review", mobileController.ReviewPerformanceAppraisal)
+				mobile.Get("/performance/status-report", mobileController.PerformanceStatusReport)
+				mobile.Get("/performance/overall-rating", mobileController.PerformanceOverallRating)
 			})
 
 			staffAdminController := controllers.NewStaffAdminController()

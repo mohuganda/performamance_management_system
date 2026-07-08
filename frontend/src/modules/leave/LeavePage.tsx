@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Card, Option, Select, Textarea, Typography } from '@material-tailwind/react'
+import { Button, Card, Textarea, Typography } from '@material-tailwind/react'
+import { SearchableSelect } from '@/components/molecules/SearchableSelect'
 import { leaveService } from '@/api/services/mobile'
 import { DatePickerField } from '@/components/molecules/DatePickerField'
 import { PageHeader } from '@/components/organisms/PageHeader'
@@ -24,14 +25,14 @@ const LEAVE_STEPS = [
     actor: 'Employee',
   },
   {
-    title: 'Supervisor approval',
+    title: 'Approval chain',
     description:
-      'Your assigned supervisor reviews and approves or rejects. You must have a supervisor linked in iHRIS — contact HR if submission fails.',
-    actor: 'Supervisor',
+      'Your request routes through the configured workflow: typically your first supervisor, then facility HR (or district/ministry approvers when defined). Senior roles may require ministry HR and Permanent Secretary approval.',
+    actor: 'Approvers',
   },
   {
     title: 'HR records update',
-    description: 'After all supervisors approve, HR finalises the leave on your record.',
+    description: 'After all approval stages complete, HR finalises the leave on your record and updates balances.',
     actor: 'HR Officer',
   },
 ]
@@ -107,7 +108,7 @@ export function LeavePage() {
     <div>
       <PageHeader
         title="Leave Management"
-        subtitle="Apply for leave and track approvals through your supervisor"
+        subtitle="Apply for leave and track approvals through your configured workflow"
       />
 
       <ProcessGuide title="How leave application works" steps={LEAVE_STEPS} />
@@ -127,6 +128,7 @@ export function LeavePage() {
           isError={pendingQuery.isError}
           error={pendingQuery.error}
           label="pending leave approvals"
+          variant="cards"
           onRetry={() => pendingQuery.refetch()}
         >
           <Card {...mt} className="mb-6 rounded-sm border border-uganda-yellow/50 bg-uganda-yellow/5 p-4">
@@ -144,12 +146,19 @@ export function LeavePage() {
                     end_date: string
                     days_requested: number
                     reason: string
+                    stage_name?: string
+                    stage_code?: string
                   }) => (
                     <div
                       key={row.approval_id}
                       className="rounded-sm border border-ui-border bg-white p-3"
                     >
                       <p className="font-semibold">{row.staff_name}</p>
+                      {row.stage_name ? (
+                        <p className="text-xs font-medium uppercase tracking-wide text-moh-green">
+                          Your step: {row.stage_name}
+                        </p>
+                      ) : null}
                       <p className="text-sm text-ui-muted">
                         {row.leave_type_name} · {row.start_date} – {row.end_date} ({row.days_requested}{' '}
                         days)
@@ -208,6 +217,7 @@ export function LeavePage() {
           isError={balancesQuery.isError}
           error={balancesQuery.error}
           label="leave balances"
+          variant="cards"
           onRetry={() => balancesQuery.refetch()}
         >
           <Card {...mt} className="rounded-sm border border-moh-green/15 p-4 lg:col-span-1">
@@ -254,20 +264,19 @@ export function LeavePage() {
                 createMutation.mutate()
               }}
             >
-              <Select
-                {...mt}
+              <SearchableSelect
                 label="Leave type"
                 value={form.leave_type_id}
-                onChange={(v) => setForm((f) => ({ ...f, leave_type_id: v ?? '' }))}
-                className="rounded-sm"
-              >
-                <Option value="">Select leave type</Option>
-                {leaveTypes.map((t) => (
-                  <Option key={t.id} value={String(t.id)}>
-                    {t.name}
-                  </Option>
-                ))}
-              </Select>
+                placeholder="Search leave type…"
+                emptyLabel="Select leave type"
+                allowClear={false}
+                options={leaveTypes.map((t) => ({
+                  value: String(t.id),
+                  label: t.name,
+                  description: t.code,
+                }))}
+                onChange={(v) => setForm((f) => ({ ...f, leave_type_id: v }))}
+              />
               <DatePickerField
                 label="Start date"
                 value={form.start_date}
@@ -319,6 +328,7 @@ export function LeavePage() {
         isError={requestsQuery.isError}
         error={requestsQuery.error}
         label="leave requests"
+        variant="table"
         onRetry={() => requestsQuery.refetch()}
       >
         <Card {...mt} className="mt-6 rounded-sm border border-moh-green/15 p-4">

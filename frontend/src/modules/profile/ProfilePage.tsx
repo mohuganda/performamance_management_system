@@ -150,6 +150,7 @@ export function ProfilePage() {
         isError={meQuery.isError}
         error={meQuery.error}
         label="profile"
+        variant="profile"
         onRetry={() => meQuery.refetch()}
       >
         <div className="grid gap-6 lg:grid-cols-3">

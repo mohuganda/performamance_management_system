@@ -1,39 +1,128 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
+import {
+  BarChart3,
+  Bell,
+  Database,
+  Layers,
+  Mail,
+  SlidersHorizontal,
+  Target,
+} from 'lucide-react'
 import {
   Button,
   Card,
   Input,
-  Option,
-  Select,
   Switch,
-  Tab,
-  Tabs,
-  TabsHeader,
   Typography,
 } from '@material-tailwind/react'
+import { Select, Option } from '@/components/molecules/MtSelect'
 import { Link } from 'react-router-dom'
 import { adminSettingsService, ihrisAdminService, performanceAdminService } from '@/api/services/admin'
 import { kpiAdminService } from '@/api/services/kpiAdmin'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
+import { SettingsTabNav } from '@/components/molecules/SettingsTabNav'
+import {
+  canAccessSettingsTab,
+  canManagePreferencesAdmin,
+  hasAnyAdminSettingsPermission,
+} from '@/constants/settingsPermissions'
 import { useAuthStore } from '@/stores/appStore'
 import { mt } from '@/utils/mt'
+import { cn } from '@/utils/cn'
+import { ListsAdminPanel } from '@/modules/settings/ListsAdminPanel'
+
+/** Wrapper so Material Tailwind outlined labels don't collide with neighbours. */
+function Field({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn('min-w-0 pt-1', className)}>{children}</div>
+}
+
+function SettingsSection({
+  title,
+  description,
+  children,
+  accent = 'green',
+  className,
+}: {
+  title: string
+  description?: string
+  children: React.ReactNode
+  accent?: 'green' | 'blue'
+  className?: string
+}) {
+  return (
+    <Card
+      {...mt}
+      className={cn(
+        'rounded-sm border p-6 shadow-sm',
+        accent === 'blue' ? 'border-blue-200/70' : 'border-moh-green/15',
+        className,
+      )}
+    >
+      <Typography
+        {...mt}
+        className={cn(
+          'text-sm font-bold uppercase tracking-wide',
+          accent === 'blue' ? 'text-blue-900' : 'text-moh-green',
+        )}
+      >
+        {title}
+      </Typography>
+      {description ? <p className="mt-2 text-sm leading-relaxed text-gray-600">{description}</p> : null}
+      <div className="mt-6">{children}</div>
+    </Card>
+  )
+}
+
+function ToggleRow({
+  label,
+  hint,
+  checked,
+  onChange,
+  highlight,
+}: {
+  label: string
+  hint?: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+  highlight?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-between gap-4 rounded-sm border px-4 py-3',
+        highlight
+          ? 'border-uganda-yellow/50 bg-uganda-yellow/10'
+          : 'border-gray-100 bg-gray-50/80',
+      )}
+    >
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-ui-text">{label}</p>
+        {hint ? <p className="mt-0.5 text-xs text-gray-500">{hint}</p> : null}
+      </div>
+      <Switch {...mt} checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    </div>
+  )
+}
 
 export function SettingsPage() {
   const { quarter, setQuarter } = useAuthStore()
   const queryClient = useQueryClient()
   const { hasPermission } = useAuthStore()
-  const canManageSettings = hasPermission('settings.manage')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const canPrefsAdmin = canManagePreferencesAdmin(hasPermission)
+  const canLists = canAccessSettingsTab(hasPermission, 'lists')
+  const canDataSources = canAccessSettingsTab(hasPermission, 'data-sources')
+  const canEmail = canAccessSettingsTab(hasPermission, 'email')
+  const canNotifications = canAccessSettingsTab(hasPermission, 'notifications')
+  const canPerformance = canAccessSettingsTab(hasPermission, 'performance')
+  const canKpiSettings = canAccessSettingsTab(hasPermission, 'kpi')
+  const canLoadSettings = hasAnyAdminSettingsPermission(hasPermission)
   const canSyncIhris = hasPermission('ihris.sync')
-  const canAccessKpi = hasPermission([
-    'kpi.catalog.view',
-    'kpi.catalog.manage',
-    'kpi.assignments.view',
-    'kpi.assignments.manage',
-  ])
 
-  const [activeTab, setActiveTab] = useState('preferences')
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'preferences')
   const [pageSizeSetting, setPageSizeSetting] = useState('20')
   const [ihrisForm, setIhrisForm] = useState({
     api_url: '',
@@ -60,7 +149,7 @@ export function SettingsPage() {
   const settingsQuery = useQuery({
     queryKey: ['admin', 'settings'],
     queryFn: () => adminSettingsService.get(),
-    enabled: canManageSettings,
+    enabled: canLoadSettings,
   })
 
   const syncStatusQuery = useQuery({
@@ -148,19 +237,60 @@ export function SettingsPage() {
   const kpiPermissionsQuery = useQuery({
     queryKey: ['admin', 'kpi', 'permissions'],
     queryFn: () => kpiAdminService.permissions(),
-    enabled: canAccessKpi,
+    enabled: canKpiSettings,
   })
 
   const performanceSettingsQuery = useQuery({
     queryKey: ['admin', 'performance', 'settings'],
     queryFn: () => performanceAdminService.getSettings(),
-    enabled: canManageSettings,
+    enabled: canPerformance,
   })
 
   useEffect(() => {
     if (!performanceSettingsQuery.data?.settings) return
     setPerformanceForm(performanceSettingsQuery.data.settings)
   }, [performanceSettingsQuery.data])
+
+  const settingsTabs = useMemo(
+    () =>
+      [
+        { id: 'preferences' as const, label: 'Preferences', icon: SlidersHorizontal, visible: true },
+        { id: 'lists' as const, label: 'Lists', icon: Layers, visible: canLists },
+        { id: 'kpi' as const, label: 'KPI', icon: Target, visible: canKpiSettings },
+        { id: 'data-sources' as const, label: 'Data sources', icon: Database, visible: canDataSources },
+        { id: 'email' as const, label: 'Email', icon: Mail, visible: canEmail },
+        { id: 'notifications' as const, label: 'Notifications', icon: Bell, visible: canNotifications },
+        { id: 'performance' as const, label: 'Performance', icon: BarChart3, visible: canPerformance },
+      ].filter((tab) => tab.visible),
+    [canLists, canKpiSettings, canDataSources, canEmail, canNotifications, canPerformance],
+  )
+
+  const selectTab = (tab: string) => {
+    setActiveTab(tab)
+    if (tab === 'preferences') {
+      searchParams.delete('tab')
+    } else {
+      searchParams.set('tab', tab)
+    }
+    setSearchParams(searchParams, { replace: true })
+  }
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync URL → tab once on navigation
+  }, [searchParams])
+
+  useEffect(() => {
+    if (settingsTabs.length === 0) return
+    const allowed = settingsTabs.some((tab) => tab.id === activeTab)
+    if (!allowed) {
+      selectTab(settingsTabs[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- redirect when permissions change
+  }, [settingsTabs, activeTab])
 
   const quarters = [
     'Q1 (July - September 2026)',
@@ -176,317 +306,461 @@ export function SettingsPage() {
       : 0
 
   return (
-    <div>
-      <PageHeader title="Settings" subtitle="Preferences, data sources, email, and notifications" />
+    <div className="pb-10">
+      <PageHeader
+        title="Settings"
+        subtitle="Preferences, reference lists, data sources, email, and notifications"
+      />
 
-      <Tabs value={activeTab} className="mb-6">
-        <TabsHeader {...mt} className="rounded-sm bg-moh-background">
-          <Tab {...mt} value="preferences" onClick={() => setActiveTab('preferences')}>
-            Preferences
-          </Tab>
-          {canAccessKpi ? (
-            <Tab {...mt} value="kpi" onClick={() => setActiveTab('kpi')}>
-              KPI Management
-            </Tab>
-          ) : null}
-          {canManageSettings ? (
-            <>
-              <Tab {...mt} value="data-sources" onClick={() => setActiveTab('data-sources')}>
-                Data Sources
-              </Tab>
-              <Tab {...mt} value="email" onClick={() => setActiveTab('email')}>
-                Email
-              </Tab>
-              <Tab {...mt} value="notifications" onClick={() => setActiveTab('notifications')}>
-                Notifications
-              </Tab>
-              <Tab {...mt} value="performance" onClick={() => setActiveTab('performance')}>
-                Performance reporting
-              </Tab>
-            </>
-          ) : null}
-        </TabsHeader>
-      </Tabs>
+      <SettingsTabNav tabs={settingsTabs} value={activeTab} onChange={selectTab} />
 
       {activeTab === 'preferences' ? (
-        <div className="grid max-w-xl gap-4">
-          <Card {...mt} className="rounded-sm border border-moh-green/15 p-4">
-            <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
-              User Preferences
-            </Typography>
-            <Select
-              {...mt}
-              label="Active reporting quarter"
-              value={quarter}
-              onChange={(v) => v && setQuarter(v)}
-            >
-              {quarters.map((q) => (
-                <Option key={q} value={q}>
-                  {q}
-                </Option>
-              ))}
-            </Select>
-          </Card>
-          {canManageSettings ? (
-            <Card {...mt} className="rounded-sm border border-moh-green/15 p-4">
-              <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
-                Admin table pagination
-              </Typography>
-              <p className="mb-3 text-sm text-gray-600">
-                Default rows per page for Staff Management, KPI catalog, and supervision tables.
-              </p>
+        <div className="grid max-w-xl gap-6">
+          <SettingsSection title="User preferences" description="Controls your active reporting period across dashboards and performance pages.">
+            <Field>
               <Select
                 {...mt}
-                label="Records per page"
-                value={pageSizeSetting}
-                onChange={(v) => v && setPageSizeSetting(v)}
+                label="Active reporting quarter"
+                value={quarter}
+                onChange={(v) => v && setQuarter(v)}
               >
-                {['10', '20', '50', '100'].map((n) => (
-                  <Option key={n} value={n}>
-                    {n} records
+                {quarters.map((q) => (
+                  <Option key={q} value={q}>
+                    {q}
                   </Option>
                 ))}
               </Select>
+            </Field>
+          </SettingsSection>
+
+          {canPrefsAdmin ? (
+            <SettingsSection
+              title="Admin table pagination"
+              description="Default rows per page for Staff Management, KPI catalog, and related admin tables."
+            >
+              <Field>
+                <Select
+                  {...mt}
+                  label="Records per page"
+                  value={pageSizeSetting}
+                  onChange={(v) => v && setPageSizeSetting(v)}
+                >
+                  {['10', '20', '50', '100'].map((n) => (
+                    <Option key={n} value={n}>
+                      {n} records
+                    </Option>
+                  ))}
+                </Select>
+              </Field>
               <Button
                 {...mt}
                 size="sm"
-                className="mt-4 rounded-sm bg-moh-green"
+                className="mt-6 rounded-sm bg-moh-green normal-case"
                 onClick={() => saveUi.mutate()}
                 loading={saveUi.isPending}
               >
                 Save pagination setting
               </Button>
-            </Card>
+            </SettingsSection>
           ) : null}
         </div>
       ) : null}
 
-      {activeTab === 'data-sources' && canManageSettings ? (
+      {activeTab === 'lists' && canLists ? <ListsAdminPanel /> : null}
+
+      {activeTab === 'data-sources' && canDataSources ? (
         <QueryState
           isLoading={settingsQuery.isLoading}
           isError={settingsQuery.isError}
           error={settingsQuery.error}
           label="data source settings"
+          variant="form"
           onRetry={() => settingsQuery.refetch()}
         >
           <div className="grid gap-6 lg:grid-cols-2">
-            <Card {...mt} className="rounded-sm border border-moh-green/15 p-4">
-              <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
-                iHRIS API
-              </Typography>
-              <div className="space-y-4">
-                <Input
-                  {...mt}
-                  label="API URL (token is the last path segment)"
-                  value={ihrisForm.api_url}
-                  onChange={(e) => setIhrisForm((f) => ({ ...f, api_url: e.target.value }))}
-                />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Require email to import staff</span>
-                  <Switch
-                    {...mt}
+            <SettingsSection
+              title="iHRIS API"
+              description="Connection and import rules for staff sync from iHRIS."
+            >
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field>
+                    <Input
+                      {...mt}
+                      label="API URL (token is the last path segment)"
+                      value={ihrisForm.api_url}
+                      onChange={(e) => setIhrisForm((f) => ({ ...f, api_url: e.target.value }))}
+                    />
+                  </Field>
+                  <Field>
+                    <div className="rounded-sm border border-gray-100 bg-gray-50/80 p-3 text-xs text-gray-600">
+                      <p className="font-semibold text-gray-800">Sync payload fields</p>
+                      <p className="mt-1">
+                        Each iHRIS row maps <code className="text-[11px]">district_id</code> → district
+                        catalog, <code className="text-[11px]">facility_id</code> → facility, and{' '}
+                        <code className="text-[11px]">region</code> → macro-region. Facilities store{' '}
+                        <code className="text-[11px]">district_ref_id</code> linking to{' '}
+                        <code className="text-[11px]">districts.id</code>.
+                      </p>
+                    </div>
+                  </Field>
+                </div>
+                <div className="space-y-3">
+                  <ToggleRow
+                    label="Require email to import staff"
+                    hint="Staff without email are skipped during sync"
                     checked={ihrisForm.require_email}
-                    onChange={(e) => setIhrisForm((f) => ({ ...f, require_email: e.target.checked }))}
+                    onChange={(checked) => setIhrisForm((f) => ({ ...f, require_email: checked }))}
                   />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Require mobile number</span>
-                  <Switch
-                    {...mt}
+                  <ToggleRow
+                    label="Require mobile number"
                     checked={ihrisForm.require_mobile}
-                    onChange={(e) => setIhrisForm((f) => ({ ...f, require_mobile: e.target.checked }))}
+                    onChange={(checked) => setIhrisForm((f) => ({ ...f, require_mobile: checked }))}
                   />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Use local demo table instead of live API</span>
-                  <Switch
-                    {...mt}
+                  <ToggleRow
+                    label="Use local demo table instead of live API"
                     checked={ihrisForm.use_demo_data}
-                    onChange={(e) => setIhrisForm((f) => ({ ...f, use_demo_data: e.target.checked }))}
+                    onChange={(checked) => setIhrisForm((f) => ({ ...f, use_demo_data: checked }))}
                   />
                 </div>
                 <Button
                   {...mt}
                   size="sm"
-                  className="rounded-sm bg-moh-green"
+                  className="rounded-sm bg-moh-green normal-case"
                   onClick={() => saveDataSources.mutate()}
                   loading={saveDataSources.isPending}
                 >
                   Save data source settings
                 </Button>
               </div>
-            </Card>
+            </SettingsSection>
 
-            <Card {...mt} className="rounded-sm border border-blue-200/60 p-4">
-              <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-blue-900">
-                HRM Attend integration
-              </Typography>
-              <p className="mb-4 text-xs text-gray-600">
-                PMS exports out-of-station clock logs and approved leave to HRM Attend. Daily duty-station
-                attendance summaries are pulled from HRM Attend for unified dashboard reporting.
-              </p>
-              <div className="space-y-4">
-                <Input
-                  {...mt}
-                  label="HRM Attend base URL"
-                  value={hrmAttendForm.api_url}
-                  onChange={(e) => setHrmAttendForm((f) => ({ ...f, api_url: e.target.value }))}
-                />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Enable HRM Attend data exchange</span>
-                  <Switch
+            <SettingsSection
+              title="HRM Attend integration"
+              description="PMS exports out-of-station clocks and approved leave to HRM Attend, and pulls daily duty-station summaries for dashboards."
+              accent="blue"
+            >
+              <div className="space-y-6">
+                <Field>
+                  <Input
                     {...mt}
-                    checked={hrmAttendForm.enabled}
-                    onChange={(e) => setHrmAttendForm((f) => ({ ...f, enabled: e.target.checked }))}
+                    label="HRM Attend base URL"
+                    value={hrmAttendForm.api_url}
+                    onChange={(e) => setHrmAttendForm((f) => ({ ...f, api_url: e.target.value }))}
                   />
-                </div>
+                </Field>
+                <ToggleRow
+                  label="Enable HRM Attend data exchange"
+                  checked={hrmAttendForm.enabled}
+                  onChange={(checked) => setHrmAttendForm((f) => ({ ...f, enabled: checked }))}
+                />
                 {settingsQuery.data?.data_sources.hrm_attend?.last_sync_at ? (
                   <p className="text-xs text-gray-500">
                     Last summary sync: {settingsQuery.data.data_sources.hrm_attend.last_sync_at}
                   </p>
                 ) : null}
               </div>
-            </Card>
+            </SettingsSection>
 
             {canSyncIhris ? (
-              <Card {...mt} className="rounded-sm border border-moh-green/15 p-4">
-                <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
-                  Sync Status
-                </Typography>
-                <dl className="mb-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <dt className="text-gray-500">Status</dt>
-                    <dd className="font-medium capitalize">{sync?.status ?? 'idle'}</dd>
+              <SettingsSection
+                title="Sync status"
+                description="Run a batched iHRIS import. HR-enriched fields are not overwritten by empty iHRIS values."
+                className="lg:col-span-2"
+              >
+                <dl className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-sm border border-gray-100 bg-gray-50/80 px-4 py-3">
+                    <dt className="text-xs uppercase tracking-wide text-gray-500">Status</dt>
+                    <dd className="mt-1 font-semibold capitalize text-ui-text">{sync?.status ?? 'idle'}</dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-gray-500">Progress</dt>
-                    <dd>
+                  <div className="rounded-sm border border-gray-100 bg-gray-50/80 px-4 py-3">
+                    <dt className="text-xs uppercase tracking-wide text-gray-500">Progress</dt>
+                    <dd className="mt-1 font-semibold text-ui-text">
                       Page {sync?.current_page ?? 0} / {sync?.total_pages ?? '—'} ({progress}%)
                     </dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-gray-500">Imported</dt>
-                    <dd>{sync?.imported_records ?? 0}</dd>
+                  <div className="rounded-sm border border-gray-100 bg-gray-50/80 px-4 py-3">
+                    <dt className="text-xs uppercase tracking-wide text-gray-500">Imported</dt>
+                    <dd className="mt-1 font-semibold text-ui-text">{sync?.imported_records ?? 0}</dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-gray-500">Skipped (no email / filters)</dt>
-                    <dd>{sync?.skipped_records ?? 0}</dd>
+                  <div className="rounded-sm border border-gray-100 bg-gray-50/80 px-4 py-3">
+                    <dt className="text-xs uppercase tracking-wide text-gray-500">Skipped</dt>
+                    <dd className="mt-1 font-semibold text-ui-text">{sync?.skipped_records ?? 0}</dd>
                   </div>
-                  {sync?.last_error ? (
-                    <div className="rounded-sm bg-red-50 p-2 text-xs text-red-700">{sync.last_error}</div>
-                  ) : null}
                 </dl>
-                <div className="mb-4 h-2 w-full rounded-full bg-gray-100">
+                {sync?.last_error ? (
+                  <div className="mb-4 rounded-sm bg-red-50 p-3 text-xs text-red-700">{sync.last_error}</div>
+                ) : null}
+                <div className="mb-6 h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
                   <div
-                    className="h-2 rounded-full bg-moh-green transition-all"
+                    className="h-full rounded-full bg-moh-green transition-all"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
                 <Button
                   {...mt}
                   size="sm"
-                  className="rounded-sm bg-uganda-black"
+                  className="rounded-sm bg-uganda-black normal-case"
                   onClick={() => syncMutation.mutate()}
                   loading={syncMutation.isPending || sync?.status === 'running'}
                   disabled={sync?.status === 'running'}
                 >
                   {sync?.status === 'running' ? 'Sync in progress…' : 'Start iHRIS sync'}
                 </Button>
-                <p className="mt-2 text-xs text-gray-500">
-                  Staff without email are skipped. HR-enriched fields are not overwritten by empty iHRIS values.
-                </p>
-              </Card>
+              </SettingsSection>
             ) : null}
           </div>
         </QueryState>
       ) : null}
 
-      {activeTab === 'email' && canManageSettings ? (
-        <Card {...mt} className="max-w-2xl rounded-sm border border-moh-green/15 p-4">
-          <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
-            Email Configuration
-          </Typography>
-          <Select
-            {...mt}
-            label="Mail driver"
-            value={emailForm.driver}
-            onChange={(v) => v && setEmailForm((f) => ({ ...f, driver: v }))}
-            className="mb-4"
-          >
-            <Option value="smtp">SMTP (default)</Option>
-            <Option value="exchange">Microsoft Exchange</Option>
-          </Select>
+      {activeTab === 'email' && canEmail ? (
+        <SettingsSection
+          title="Email configuration"
+          description="SMTP or Microsoft Exchange for system notifications and reminders."
+          className="max-w-3xl"
+        >
+          <div className="space-y-6">
+            <Field>
+              <Select
+                {...mt}
+                label="Mail driver"
+                value={emailForm.driver}
+                onChange={(v) => v && setEmailForm((f) => ({ ...f, driver: v }))}
+              >
+                <Option value="smtp">SMTP (default)</Option>
+                <Option value="exchange">Microsoft Exchange</Option>
+              </Select>
+            </Field>
 
-          {emailForm.driver === 'smtp' ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              <Input {...mt} label="SMTP host" value={emailForm.smtp.host} onChange={(e) => setEmailForm((f) => ({ ...f, smtp: { ...f.smtp, host: e.target.value } }))} />
-              <Input {...mt} label="Port" value={emailForm.smtp.port} onChange={(e) => setEmailForm((f) => ({ ...f, smtp: { ...f.smtp, port: e.target.value } }))} />
-              <Input {...mt} label="Username" value={emailForm.smtp.username} onChange={(e) => setEmailForm((f) => ({ ...f, smtp: { ...f.smtp, username: e.target.value } }))} />
-              <Input {...mt} label="Password" type="password" value={emailForm.smtp.password} onChange={(e) => setEmailForm((f) => ({ ...f, smtp: { ...f.smtp, password: e.target.value } }))} />
-              <Input {...mt} label="From address" value={emailForm.smtp.from_address} onChange={(e) => setEmailForm((f) => ({ ...f, smtp: { ...f.smtp, from_address: e.target.value } }))} />
-              <Input {...mt} label="From name" value={emailForm.smtp.from_name} onChange={(e) => setEmailForm((f) => ({ ...f, smtp: { ...f.smtp, from_name: e.target.value } }))} />
-            </div>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              <Input {...mt} label="Exchange host" value={emailForm.exchange.host} onChange={(e) => setEmailForm((f) => ({ ...f, exchange: { ...f.exchange, host: e.target.value } }))} />
-              <Input {...mt} label="Username" value={emailForm.exchange.username} onChange={(e) => setEmailForm((f) => ({ ...f, exchange: { ...f.exchange, username: e.target.value } }))} />
-              <Input {...mt} label="Password" type="password" value={emailForm.exchange.password} onChange={(e) => setEmailForm((f) => ({ ...f, exchange: { ...f.exchange, password: e.target.value } }))} />
-              <Input {...mt} label="From address" value={emailForm.exchange.from_address} onChange={(e) => setEmailForm((f) => ({ ...f, exchange: { ...f.exchange, from_address: e.target.value } }))} />
-              <Input {...mt} label="From name" value={emailForm.exchange.from_name} onChange={(e) => setEmailForm((f) => ({ ...f, exchange: { ...f.exchange, from_name: e.target.value } }))} />
-            </div>
-          )}
+            {emailForm.driver === 'smtp' ? (
+              <div className="grid gap-x-6 gap-y-8 md:grid-cols-2">
+                <Field>
+                  <Input
+                    {...mt}
+                    label="SMTP host"
+                    value={emailForm.smtp.host}
+                    onChange={(e) =>
+                      setEmailForm((f) => ({ ...f, smtp: { ...f.smtp, host: e.target.value } }))
+                    }
+                  />
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    label="Port"
+                    value={emailForm.smtp.port}
+                    onChange={(e) =>
+                      setEmailForm((f) => ({ ...f, smtp: { ...f.smtp, port: e.target.value } }))
+                    }
+                  />
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    label="Username"
+                    value={emailForm.smtp.username}
+                    onChange={(e) =>
+                      setEmailForm((f) => ({ ...f, smtp: { ...f.smtp, username: e.target.value } }))
+                    }
+                  />
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    label="Password"
+                    type="password"
+                    value={emailForm.smtp.password}
+                    onChange={(e) =>
+                      setEmailForm((f) => ({ ...f, smtp: { ...f.smtp, password: e.target.value } }))
+                    }
+                  />
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    label="From address"
+                    value={emailForm.smtp.from_address}
+                    onChange={(e) =>
+                      setEmailForm((f) => ({
+                        ...f,
+                        smtp: { ...f.smtp, from_address: e.target.value },
+                      }))
+                    }
+                  />
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    label="From name"
+                    value={emailForm.smtp.from_name}
+                    onChange={(e) =>
+                      setEmailForm((f) => ({
+                        ...f,
+                        smtp: { ...f.smtp, from_name: e.target.value },
+                      }))
+                    }
+                  />
+                </Field>
+                <Field>
+                  <Select
+                    {...mt}
+                    label="Encryption"
+                    value={emailForm.smtp.encryption || 'tls'}
+                    onChange={(v) =>
+                      v && setEmailForm((f) => ({ ...f, smtp: { ...f.smtp, encryption: v } }))
+                    }
+                  >
+                    <Option value="tls">TLS</Option>
+                    <Option value="ssl">SSL</Option>
+                    <Option value="none">None</Option>
+                  </Select>
+                </Field>
+              </div>
+            ) : (
+              <div className="grid gap-x-6 gap-y-8 md:grid-cols-2">
+                <Field>
+                  <Input
+                    {...mt}
+                    label="Exchange host"
+                    value={emailForm.exchange.host}
+                    onChange={(e) =>
+                      setEmailForm((f) => ({
+                        ...f,
+                        exchange: { ...f.exchange, host: e.target.value },
+                      }))
+                    }
+                  />
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    label="Username"
+                    value={emailForm.exchange.username}
+                    onChange={(e) =>
+                      setEmailForm((f) => ({
+                        ...f,
+                        exchange: { ...f.exchange, username: e.target.value },
+                      }))
+                    }
+                  />
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    label="Password"
+                    type="password"
+                    value={emailForm.exchange.password}
+                    onChange={(e) =>
+                      setEmailForm((f) => ({
+                        ...f,
+                        exchange: { ...f.exchange, password: e.target.value },
+                      }))
+                    }
+                  />
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    label="From address"
+                    value={emailForm.exchange.from_address}
+                    onChange={(e) =>
+                      setEmailForm((f) => ({
+                        ...f,
+                        exchange: { ...f.exchange, from_address: e.target.value },
+                      }))
+                    }
+                  />
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    label="From name"
+                    value={emailForm.exchange.from_name}
+                    onChange={(e) =>
+                      setEmailForm((f) => ({
+                        ...f,
+                        exchange: { ...f.exchange, from_name: e.target.value },
+                      }))
+                    }
+                  />
+                </Field>
+              </div>
+            )}
 
-          <Button
-            {...mt}
-            size="sm"
-            className="mt-4 rounded-sm bg-moh-green"
-            onClick={() => saveEmail.mutate()}
-            loading={saveEmail.isPending}
-          >
-            Save email settings
-          </Button>
-        </Card>
+            <Button
+              {...mt}
+              size="sm"
+              className="rounded-sm bg-moh-green normal-case"
+              onClick={() => saveEmail.mutate()}
+              loading={saveEmail.isPending}
+            >
+              Save email settings
+            </Button>
+          </div>
+        </SettingsSection>
       ) : null}
 
-      {activeTab === 'notifications' && canManageSettings ? (
+      {activeTab === 'notifications' && canNotifications ? (
         <QueryState
           isLoading={settingsQuery.isLoading}
           isError={settingsQuery.isError}
           error={settingsQuery.error}
           label="notification settings"
+          variant="form"
           onRetry={() => settingsQuery.refetch()}
         >
-          <div className="space-y-4">
+          <div className="max-w-3xl space-y-5">
+            <p className="text-sm text-gray-600">
+              Reminder types configured for leave, performance plans, and approvals. Use the test action
+              below to trigger a send cycle without waiting for the scheduler.
+            </p>
             {settingsQuery.data?.notifications
               ? Object.entries(settingsQuery.data.notifications).map(([key, cfg]) => (
-                  <Card key={key} {...mt} className="rounded-sm border border-moh-green/15 p-4">
+                  <Card
+                    key={key}
+                    {...mt}
+                    className="rounded-sm border border-moh-green/15 p-5 shadow-sm"
+                  >
                     <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <Typography {...mt} className="text-sm font-bold capitalize text-moh-green">
                           {key.replace(/_/g, ' ')}
                         </Typography>
-                        <p className="mt-1 text-sm text-gray-600">{cfg.description}</p>
-                        <p className="mt-1 text-xs text-gray-500">
-                          Remind {cfg.days_before} day(s) before deadline ·{' '}
-                          {cfg.enabled ? 'Enabled' : 'Disabled'}
-                        </p>
+                        <p className="mt-2 text-sm leading-relaxed text-gray-600">{cfg.description}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700">
+                            Remind {cfg.days_before} day(s) before deadline
+                          </span>
+                          <span
+                            className={cn(
+                              'rounded-full px-2.5 py-1 text-xs font-medium',
+                              cfg.enabled
+                                ? 'bg-moh-green/10 text-moh-green'
+                                : 'bg-gray-100 text-gray-500',
+                            )}
+                          >
+                            {cfg.enabled ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </Card>
                 ))
               : null}
-            <Button
-              {...mt}
-              size="sm"
-              variant="outlined"
-              className="rounded-sm border-moh-green text-moh-green"
-              onClick={() => sendReminders.mutate()}
-              loading={sendReminders.isPending}
-            >
-              Send reminders now (test)
-            </Button>
+            <div className="pt-2">
+              <Button
+                {...mt}
+                size="sm"
+                variant="outlined"
+                className="rounded-sm border-moh-green normal-case text-moh-green"
+                onClick={() => sendReminders.mutate()}
+                loading={sendReminders.isPending}
+              >
+                Send reminders now (test)
+              </Button>
+            </div>
             {sendReminders.data ? (
-              <pre className="rounded-sm bg-moh-background p-3 text-xs">
+              <pre className="overflow-x-auto rounded-sm border border-gray-200 bg-moh-background p-4 text-xs">
                 {JSON.stringify(sendReminders.data, null, 2)}
               </pre>
             ) : null}
@@ -494,100 +768,91 @@ export function SettingsPage() {
         </QueryState>
       ) : null}
 
-      {activeTab === 'performance' && canManageSettings ? (
+      {activeTab === 'performance' && canPerformance ? (
         <QueryState
           isLoading={performanceSettingsQuery.isLoading}
           isError={performanceSettingsQuery.isError}
           error={performanceSettingsQuery.error}
           label="performance reporting settings"
+          variant="form"
           onRetry={() => performanceSettingsQuery.refetch()}
         >
-          <div className="grid max-w-3xl gap-4">
-            <Card {...mt} className="rounded-sm border border-moh-green/15 p-4">
-              <Typography {...mt} className="mb-2 text-sm font-bold uppercase text-moh-green">
-                Reporting windows
-              </Typography>
-              <p className="mb-4 text-sm text-gray-600">
-                MoH practice: each quarterly report opens in the first weeks of the following quarter
-                (e.g. Q1 report in Q2). Use test override to open all periods while testing.
-              </p>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium">Enforce submission windows</p>
-                    <p className="text-xs text-gray-500">When off, staff can report any time</p>
-                  </div>
-                  <Switch
-                    {...mt}
-                    checked={performanceForm.enforce_windows}
-                    onChange={(e) =>
-                      setPerformanceForm((f) => ({ ...f, enforce_windows: e.target.checked }))
-                    }
-                  />
+          <div className="grid max-w-3xl gap-6">
+            <SettingsSection
+              title="Reporting windows"
+              description="MoH practice: each quarterly report opens in the first weeks of the following quarter (e.g. Q1 report in Q2). Use test override to open all periods while testing."
+            >
+              <div className="space-y-6">
+                <ToggleRow
+                  label="Enforce submission windows"
+                  hint="When off, staff can report any time"
+                  checked={performanceForm.enforce_windows}
+                  onChange={(checked) =>
+                    setPerformanceForm((f) => ({ ...f, enforce_windows: checked }))
+                  }
+                />
+                <ToggleRow
+                  label="Test override (open all periods)"
+                  hint="Recommended on while testing the system"
+                  checked={performanceForm.test_override}
+                  onChange={(checked) =>
+                    setPerformanceForm((f) => ({ ...f, test_override: checked }))
+                  }
+                  highlight
+                />
+                <div className="grid gap-x-6 gap-y-8 md:grid-cols-2">
+                  <Field>
+                    <Input
+                      {...mt}
+                      type="number"
+                      label="Window length (weeks)"
+                      value={String(performanceForm.window_weeks)}
+                      onChange={(e) =>
+                        setPerformanceForm((f) => ({
+                          ...f,
+                          window_weeks: Math.max(1, Number(e.target.value) || 3),
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <Input
+                      {...mt}
+                      type="number"
+                      label="Shift all windows (days)"
+                      value={String(performanceForm.window_shift_days)}
+                      onChange={(e) =>
+                        setPerformanceForm((f) => ({
+                          ...f,
+                          window_shift_days: Number(e.target.value) || 0,
+                        }))
+                      }
+                    />
+                  </Field>
                 </div>
-                <div className="flex items-center justify-between gap-4 rounded-sm border border-uganda-yellow/40 bg-uganda-yellow/10 p-3">
-                  <div>
-                    <p className="text-sm font-medium">Test override (open all periods)</p>
-                    <p className="text-xs text-gray-600">Recommended on while testing the system</p>
-                  </div>
-                  <Switch
-                    {...mt}
-                    checked={performanceForm.test_override}
-                    onChange={(e) =>
-                      setPerformanceForm((f) => ({ ...f, test_override: e.target.checked }))
-                    }
-                  />
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Input
-                    {...mt}
-                    type="number"
-                    label="Window length (weeks)"
-                    value={String(performanceForm.window_weeks)}
-                    onChange={(e) =>
-                      setPerformanceForm((f) => ({
-                        ...f,
-                        window_weeks: Math.max(1, Number(e.target.value) || 3),
-                      }))
-                    }
-                  />
-                  <Input
-                    {...mt}
-                    type="number"
-                    label="Shift all windows (days)"
-                    value={String(performanceForm.window_shift_days)}
-                    onChange={(e) =>
-                      setPerformanceForm((f) => ({
-                        ...f,
-                        window_shift_days: Number(e.target.value) || 0,
-                      }))
-                    }
-                  />
-                </div>
+                <Button
+                  {...mt}
+                  size="sm"
+                  className="rounded-sm bg-moh-green normal-case"
+                  onClick={() => savePerformanceSettings.mutate()}
+                  loading={savePerformanceSettings.isPending}
+                >
+                  Save reporting configuration
+                </Button>
               </div>
-              <Button
-                {...mt}
-                size="sm"
-                className="mt-4 rounded-sm bg-moh-green"
-                onClick={() => savePerformanceSettings.mutate()}
-                loading={savePerformanceSettings.isPending}
-              >
-                Save reporting configuration
-              </Button>
-            </Card>
+            </SettingsSection>
 
-            <Card {...mt} className="rounded-sm border border-moh-green/15 p-4">
-              <Typography {...mt} className="mb-3 text-sm font-bold uppercase text-moh-green">
-                Computed windows · {performanceSettingsQuery.data?.financial_year ?? 'current FY'}
-              </Typography>
+            <SettingsSection
+              title={`Computed windows · ${performanceSettingsQuery.data?.financial_year ?? 'current FY'}`}
+            >
               <div className="space-y-3">
                 {(performanceSettingsQuery.data?.windows ?? []).map((w) => (
                   <div
                     key={w.phase}
-                    className="rounded-sm border border-gray-100 bg-moh-background/50 p-3 text-sm"
+                    className="rounded-sm border border-gray-100 bg-moh-background/50 px-4 py-3.5 text-sm"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-semibold">{w.label}</span>
+                      <span className="font-semibold text-ui-text">{w.label}</span>
                       <span
                         className={
                           w.is_open
@@ -600,38 +865,35 @@ export function SettingsPage() {
                         {w.is_open ? 'Open' : w.status}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-gray-600">Coverage: {w.coverage_period}</p>
+                    <p className="mt-1.5 text-xs text-gray-600">Coverage: {w.coverage_period}</p>
                     <p className="mt-1 text-xs text-gray-500">{w.reporting_window}</p>
                   </div>
                 ))}
               </div>
-            </Card>
+            </SettingsSection>
           </div>
         </QueryState>
       ) : null}
 
-      {activeTab === 'kpi' && canAccessKpi ? (
+      {activeTab === 'kpi' && canKpiSettings ? (
         <QueryState
           isLoading={kpiPermissionsQuery.isLoading}
           isError={kpiPermissionsQuery.isError}
           error={kpiPermissionsQuery.error}
           label="KPI permissions"
+          variant="table"
           onRetry={() => kpiPermissionsQuery.refetch()}
         >
-          <Card {...mt} className="rounded-sm border border-moh-green/15 p-4">
-            <Typography {...mt} className="mb-2 text-sm font-bold uppercase text-moh-green">
-              KPI Management
-            </Typography>
-            <p className="mb-4 text-sm text-gray-600">
-              Configure the national KPI catalog and assign indicators to jobs, departments, and
-              individual staff. Administrators have full access; HR officers receive these
-              permissions by default and can be adjusted in Access Control.
-            </p>
-            <div className="mb-4 space-y-2">
+          <SettingsSection
+            title="KPI Management"
+            description="Configure the national KPI catalog and assign indicators to jobs, departments, and individual staff. Administrators have full access; HR officers receive these permissions by default and can be adjusted in Access Control."
+            className="max-w-3xl"
+          >
+            <div className="mb-6 space-y-2">
               {(kpiPermissionsQuery.data?.permissions ?? []).map((p) => (
                 <div
                   key={p.code}
-                  className="flex items-center justify-between border-b border-gray-100 py-2 text-sm"
+                  className="flex items-center justify-between border-b border-gray-100 py-3 text-sm"
                 >
                   <span>{p.name}</span>
                   <span className={hasPermission(p.code) ? 'text-moh-green' : 'text-gray-400'}>
@@ -641,11 +903,11 @@ export function SettingsPage() {
               ))}
             </div>
             <Link to="/admin/kpi">
-              <Button {...mt} size="sm" className="rounded-sm bg-moh-green">
+              <Button {...mt} size="sm" className="rounded-sm bg-moh-green normal-case">
                 Open KPI Management
               </Button>
             </Link>
-          </Card>
+          </SettingsSection>
         </QueryState>
       ) : null}
     </div>

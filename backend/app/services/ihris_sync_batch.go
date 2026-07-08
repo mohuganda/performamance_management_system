@@ -175,6 +175,10 @@ func (s *IhrisSyncService) SyncFromAPI(opts SyncBatchOptions) (SyncBatchResult, 
 	if run.Status == "completed" || run.Status == "failed" {
 		NewStaffCacheService().Invalidate()
 	}
+	if run.Status == "completed" {
+		_, _ = NewGeographyService().BackfillFacilityDistrictLinks()
+		_, _ = BackfillDepartmentFacilityLinks()
+	}
 
 	totalPages := uint(0)
 	if run.TotalPages != nil {
@@ -220,7 +224,7 @@ func (s *IhrisSyncService) importAPIRecord(rec IhrisAPIRecord, result *SyncResul
 	}
 	result.FacilitiesUpserted++
 
-	deptID, err := s.upsertDepartment(row)
+	deptID, err := s.upsertDepartment(row, facilityID)
 	if err != nil {
 		return err
 	}
@@ -277,7 +281,7 @@ func (s *IhrisSyncService) upsertStaffFromAPI(rec IhrisAPIRecord) (uint, error) 
 
 	var profile models.StaffHrProfile
 	_ = facades.Orm().Query().Where("staff_id", staff.ID).First(&profile)
-	locked := lockedFieldsSet(&profile)
+	locked := effectiveIhrisLocks(&profile)
 
 	now := time.Now()
 	payload := models.Staff{
@@ -377,8 +381,9 @@ type StaffListFilter struct {
 
 func (s *StaffAdminService) ListStaffPaginated(filter StaffListFilter) (PaginatedResult[StaffListRow], error) {
 	page, perPage := ResolvePage(filter.Page, filter.PerPage)
+	filter.Search = strings.TrimSpace(filter.Search)
 	cacheKey := s.cache.key(
-		"list-paged",
+		"list-paged-v2",
 		normalizeStaffSearch(filter.Search),
 		fmt.Sprintf("%d_%d_%d_%s", page, perPage, filter.DepartmentID, filter.HasSupervisor),
 	)
@@ -387,46 +392,27 @@ func (s *StaffAdminService) ListStaffPaginated(filter StaffListFilter) (Paginate
 		return cached, nil
 	}
 
-	query := facades.Orm().Query().Order("id desc")
-	if filter.Search != "" {
-		like := "%" + strings.TrimSpace(filter.Search) + "%"
-		query = query.Where(
-			"surname LIKE ? OR firstname LIKE ? OR email LIKE ? OR ihris_pid LIKE ?",
-			like, like, like, like,
-		)
-	}
-	if filter.DepartmentID > 0 {
-		query = query.Where(
-			"id IN (SELECT staff_id FROM staff_contracts WHERE contract_status = ? AND department_id = ?)",
-			"active", filter.DepartmentID,
-		)
-	}
+	baseQuery := staffListQuery(filter)
 
-	var staffRows []models.Staff
-	if err := query.Get(&staffRows); err != nil {
+	total, err := baseQuery.Count()
+	if err != nil {
 		return PaginatedResult[StaffListRow]{}, err
 	}
 
-	supervisionMap := map[uint]StaffSupervisionRow{}
-	if supervision, err := s.supervisors.ListStaffSupervision(); err == nil {
-		for _, sup := range supervision {
-			supervisionMap[sup.StaffID] = sup
-		}
+	var staffRows []models.Staff
+	offset := OffsetFor(page, perPage)
+	if err := staffListQuery(filter).Offset(offset).Limit(perPage).Get(&staffRows); err != nil {
+		return PaginatedResult[StaffListRow]{}, err
 	}
 
-	allRows := make([]StaffListRow, 0, len(staffRows))
+	staffIDs := make([]uint, 0, len(staffRows))
 	for _, st := range staffRows {
-		row := s.buildStaffListRow(st, supervisionMap)
-		if filter.HasSupervisor == "true" && !row.HasSupervisor {
-			continue
-		}
-		if filter.HasSupervisor == "false" && row.HasSupervisor {
-			continue
-		}
-		allRows = append(allRows, row)
+		staffIDs = append(staffIDs, st.ID)
 	}
+	supervisionMap, _ := s.supervisors.SupervisionMapForStaffIDs(staffIDs)
+	rows := s.buildStaffListRowsBatch(staffRows, supervisionMap)
 
-	result := PaginateSlice(allRows, page, perPage)
+	result := BuildPaginatedResult(rows, int(total), page, perPage)
 	s.cache.Put(cacheKey, result)
 	return result, nil
 }
@@ -590,15 +576,6 @@ func (s *StaffAdminService) UpdateHrProfile(staffID uint, userID uint, input Sta
 	}
 
 	locks := []string{}
-	if input.LockEmail {
-		locks = append(locks, "email")
-	}
-	if input.LockDepartment {
-		locks = append(locks, "department_id")
-	}
-	if input.LockMobile {
-		locks = append(locks, "mobile")
-	}
 	encoded, _ := json.Marshal(locks)
 
 	profile.HrDepartmentID = input.HrDepartmentID

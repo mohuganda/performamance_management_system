@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Button } from '@/components/atoms/Button'
+import { DashboardPageSkeleton } from '@/components/molecules/PageSkeletons'
 
 interface DashboardQueryStateProps {
   isLoading: boolean
@@ -19,7 +20,7 @@ export function DashboardQueryState({
   children,
 }: DashboardQueryStateProps) {
   if (isLoading) {
-    return <p className="p-6 text-sm text-gray-600">Loading {label}...</p>
+    return <DashboardPageSkeleton />
   }
 
   if (isError) {

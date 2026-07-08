@@ -122,6 +122,7 @@ export function AttendancePage() {
         isError={clocksQuery.isError}
         error={clocksQuery.error}
         label="attendance history"
+        variant="table"
         onRetry={() => clocksQuery.refetch()}
       >
         <Card {...mt} className="mt-6 rounded-sm border border-moh-green/15 p-4">

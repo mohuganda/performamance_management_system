@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Card, Input, Option, Select, Typography } from '@material-tailwind/react'
+import { Button, Card, Input, Typography } from '@material-tailwind/react'
+import { Select, Option } from '@/components/molecules/MtSelect'
 import { staffAdminService } from '@/api/services/mobile'
 import {
   normalizeSupervision,
@@ -129,6 +130,7 @@ export function SupervisionAdminPage() {
         isError={listQuery.isError}
         error={listQuery.error}
         label="staff supervision"
+        variant="table"
         onRetry={() => listQuery.refetch()}
       >
         <ServerPaginatedTable

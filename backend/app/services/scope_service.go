@@ -20,15 +20,18 @@ func NewScopeService() *ScopeService {
 }
 
 type StaffScopeContext struct {
-	StaffID      *uint
-	DistrictID   *string
-	FacilityID   *uint
-	DepartmentID *uint
-	JobID        *uint
-	Division     *string
-	Section      *string
-	Unit         *string
-	SalaryGrade  *string
+	StaffID       *uint
+	RegionID      *uint
+	RegionCode    *string
+	DistrictID    *string
+	DistrictRefID *uint
+	FacilityID    *uint
+	DepartmentID  *uint
+	JobID         *uint
+	Division      *string
+	Section       *string
+	Unit          *string
+	SalaryGrade   *string
 }
 
 func (s *ScopeService) LoadStaffScope(staffID uint) (*StaffScopeContext, error) {
@@ -40,7 +43,7 @@ func (s *ScopeService) LoadStaffScope(staffID uint) (*StaffScopeContext, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &StaffScopeContext{
+	ctx := &StaffScopeContext{
 		StaffID:      &staffID,
 		DistrictID:   contract.DistrictID,
 		FacilityID:   &contract.FacilityID,
@@ -50,7 +53,25 @@ func (s *ScopeService) LoadStaffScope(staffID uint) (*StaffScopeContext, error) 
 		Section:      contract.Section,
 		Unit:         contract.Unit,
 		SalaryGrade:  contract.SalaryGrade,
-	}, nil
+	}
+	s.enrichScopeFromFacility(ctx, contract.FacilityID)
+	return ctx, nil
+}
+
+func (s *ScopeService) enrichScopeFromFacility(ctx *StaffScopeContext, facilityID uint) {
+	if facilityID == 0 {
+		return
+	}
+	var facility models.Facility
+	if err := facades.Orm().Query().Where("id", facilityID).First(&facility); err != nil || facility.ID == 0 {
+		return
+	}
+	ctx.DistrictRefID = facility.DistrictRefID
+	ctx.RegionID = facility.RegionID
+	ctx.RegionCode = facility.RegionCode
+	if ctx.DistrictID == nil && facility.DistrictID != nil {
+		ctx.DistrictID = facility.DistrictID
+	}
 }
 
 func (s *ScopeService) LoadActorScope(principal authctx.Principal) (*StaffScopeContext, error) {
@@ -72,7 +93,45 @@ func (s *ScopeService) applyUserScopeOverrides(user *models.User, ctx *StaffScop
 	}
 	if user.ScopeFacilityID != nil && *user.ScopeFacilityID > 0 {
 		ctx.FacilityID = user.ScopeFacilityID
+		s.enrichScopeFromFacility(ctx, *user.ScopeFacilityID)
 	}
+}
+
+func (s *ScopeService) LoadUserScopeAssignments(userID uint) []models.UserScopeAssignment {
+	var rows []models.UserScopeAssignment
+	_ = facades.Orm().Query().Where("user_id", userID).Order("id asc").Get(&rows)
+	return rows
+}
+
+func (s *ScopeService) TargetMatchesAssignments(target *StaffScopeContext, assignments []models.UserScopeAssignment) bool {
+	if len(assignments) == 0 || target == nil {
+		return false
+	}
+	for _, item := range assignments {
+		switch strings.ToLower(strings.TrimSpace(item.ScopeType)) {
+		case "region":
+			if item.RefID != nil && target.RegionID != nil && *item.RefID == *target.RegionID {
+				return true
+			}
+			if item.RefCode != nil && target.RegionCode != nil &&
+				strings.EqualFold(strings.TrimSpace(*item.RefCode), strings.TrimSpace(*target.RegionCode)) {
+				return true
+			}
+		case "district":
+			if item.RefID != nil && target.DistrictRefID != nil && *item.RefID == *target.DistrictRefID {
+				return true
+			}
+			if item.RefCode != nil && target.DistrictID != nil &&
+				strings.EqualFold(strings.TrimSpace(*item.RefCode), strings.TrimSpace(*target.DistrictID)) {
+				return true
+			}
+		case "facility":
+			if item.RefID != nil && target.FacilityID != nil && *item.RefID == *target.FacilityID {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *ScopeService) HasNationalScope(user models.User) bool {
@@ -98,6 +157,11 @@ func (s *ScopeService) CanAccessStaff(principal authctx.Principal, targetStaffID
 	target, err := s.LoadStaffScope(targetStaffID)
 	if err != nil {
 		return false
+	}
+
+	assignments := s.LoadUserScopeAssignments(principal.User.ID)
+	if len(assignments) > 0 && s.TargetMatchesAssignments(target, assignments) {
+		return true
 	}
 
 	rbac := NewRbacService()
@@ -126,8 +190,8 @@ func (s *ScopeService) ruleMatches(rule RoleScope, actor *StaffScopeContext, tar
 		}
 		return s.isSupervisorOf(*actor.StaffID, *target.StaffID)
 	case "eq":
-		actorVal := s.fieldValue(rule.Field, actor)
-		targetVal := s.fieldValue(rule.Field, target)
+		actorVal := strings.ToUpper(strings.TrimSpace(s.fieldValue(rule.Field, actor)))
+		targetVal := strings.ToUpper(strings.TrimSpace(s.fieldValue(rule.Field, target)))
 		if len(rule.Values) > 0 {
 			for _, v := range rule.Values {
 				if targetVal == v {
@@ -166,6 +230,18 @@ func (s *ScopeService) fieldValue(field string, scope *StaffScopeContext) string
 	case "district_id":
 		if scope.DistrictID != nil {
 			return *scope.DistrictID
+		}
+	case "district_ref_id":
+		if scope.DistrictRefID != nil {
+			return strconv.FormatUint(uint64(*scope.DistrictRefID), 10)
+		}
+	case "region_id":
+		if scope.RegionID != nil {
+			return strconv.FormatUint(uint64(*scope.RegionID), 10)
+		}
+	case "region_code":
+		if scope.RegionCode != nil {
+			return *scope.RegionCode
 		}
 	case "facility_id":
 		if scope.FacilityID != nil {
@@ -221,24 +297,26 @@ func (s *ScopeService) SetRoleScope(roleID uint, field, operator string, values 
 	payload, _ := json.Marshal(values)
 	val := string(payload)
 	desc := description
+
 	var existing models.RoleDataScope
 	err := facades.Orm().Query().
 		Where("role_id", roleID).
 		Where("scope_field", field).
 		Where("scope_operator", operator).
 		First(&existing)
-	if err != nil {
-		return facades.Orm().Query().Create(&models.RoleDataScope{
-			RoleID:        roleID,
-			ScopeField:    field,
-			ScopeOperator: operator,
-			ScopeValues:   &val,
-			Description:   &desc,
-		})
+	if err == nil && existing.ID > 0 {
+		existing.ScopeValues = &val
+		existing.Description = &desc
+		return facades.Orm().Query().Save(&existing)
 	}
-	existing.ScopeValues = &val
-	existing.Description = &desc
-	return facades.Orm().Query().Save(&existing)
+
+	return facades.Orm().Query().Table("role_data_scopes").Create(map[string]any{
+		"role_id":         roleID,
+		"scope_field":     field,
+		"scope_operator":  operator,
+		"scope_values":    val,
+		"description":     desc,
+	})
 }
 
 func (s *ScopeService) AuthorizeStaffAccess(ctx http.Context, principal authctx.Principal, targetStaffID uint) error {

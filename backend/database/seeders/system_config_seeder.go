@@ -26,6 +26,7 @@ func (s *SystemConfigSeeder) Run() error {
 		},
 		"ihris.sync_enabled":   {group: "data_sources", value: true, public: true},
 		"ihris.use_demo_data":    {group: "data_sources", value: false, public: false},
+		"ihris.overwrite_enabled": {group: "data_sources", value: false, public: true},
 		"ihris.require_email":    {group: "data_sources", value: true, public: true},
 		"ihris.require_mobile":   {group: "data_sources", value: false, public: true},
 		"hrm_attend.api_url":     {group: "data_sources", value: "http://localhost/attend", public: false},

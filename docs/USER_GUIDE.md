@@ -9,14 +9,15 @@ This guide explains how to use the web application for day-to-day performance ma
 3. [Navigation and roles](#3-navigation-and-roles)
 4. [Dashboard](#4-dashboard)
 5. [Performance management](#5-performance-management)
-6. [Leave](#6-leave)
-7. [Out of station](#7-out-of-station)
-8. [Attendance](#8-attendance)
-9. [Notifications](#9-notifications)
-10. [Profile and settings](#10-profile-and-settings)
-11. [Administration (HR and system admins)](#11-administration-hr-and-system-admins)
-12. [Troubleshooting](#12-troubleshooting)
-13. [Accessing a deployed server](#13-accessing-a-deployed-server)
+6. [Performance reports and scores](#6-performance-reports-and-scores)
+7. [Leave](#7-leave)
+8. [Out of station](#8-out-of-station)
+9. [Attendance](#9-attendance)
+10. [Notifications](#10-notifications)
+11. [Profile and settings](#11-profile-and-settings)
+12. [Administration (HR and system admins)](#12-administration-hr-and-system-admins)
+13. [Troubleshooting](#13-troubleshooting)
+14. [Accessing a deployed server](#14-accessing-a-deployed-server)
 
 ---
 
@@ -186,41 +187,29 @@ flowchart TD
 
 ### 2.5 Leave and approval data flow
 
+Leave requests use **configurable workflow profiles** — not a fixed supervisor count.
+
 ```mermaid
-flowchart LR
-  subgraph employee [Employee]
-    E1[Submit leave request]
-  end
-
-  subgraph workflow [Approval chain]
-    S[Supervisor]
-    RO[Responsible officer]
-    HR[HR finalization]
-  end
-
-  subgraph records [Records updated]
-    LR[Leave request]
-    LB[Leave balance]
-    N[Notification]
-  end
-
-  E1 --> LR
-  LR --> S
-  S -->|approve| RO
-  S -->|reject| N
-  RO -->|approve| HR
-  HR --> LB
-  HR --> N
+flowchart TD
+  E1[Employee submits leave request]
+  WT[Load workflow profile from leave type]
+  ST[Build stages: supervisor / job_holder / hr_finalize]
+  AP[Create pending approval rows]
+  SV[Approvers act in sequence]
+  HR[HR finalise and update balance]
+  E1 --> WT --> ST --> AP --> SV --> HR
 ```
 
 | Stage | What happens to data |
 |-------|----------------------|
 | Submit | Request saved; days calculated; balance checked against policy |
-| Supervisor / officer | Approval status and comments updated |
+| Supervisor / job holder | Approval status, stage name, and comments updated per workflow stage |
 | HR finalize | Request marked complete; **used days** added to balance |
 | Notifications | You and approvers get in-app alerts |
 
-Leave rules (types, entitlements by salary grade, advance notice) come from **HR configuration** in the database — not hardcoded — so policy changes flow to new requests automatically.
+Leave rules (types, entitlements by salary grade, advance notice, **workflow profiles and stages**) come from **HR configuration** in the database — not hardcoded — so policy and routing changes apply to new requests automatically.
+
+See [leave.md](../leave.md) for the full workflow configuration guide.
 
 ### 2.6 Out of station and attendance
 
@@ -272,7 +261,7 @@ The sidebar shows only the sections your account is allowed to access. Menu grou
 | Group | Items | Who typically sees it |
 |-------|-------|------------------------|
 | **Dashboard** | Overview | All roles with dashboard permission |
-| **Performance** | PPA and quarterly reporting | Staff with `performance.view` |
+| **Performance** | PPA, quarterly reporting, **Performance reports** | Staff with `performance.view` |
 | **Time & Attendance** | Leave, Out of station, Attendance | Staff and supervisors |
 | **Notifications** | Alerts and updates | Everyone |
 | **My Account** | Profile, Settings | Everyone |
@@ -295,10 +284,39 @@ The sidebar shows only the sections your account is allowed to access. Menu grou
 
 After sign-in you land on **Dashboard**. The view adapts to your role:
 
-- **Health worker** — personal KPIs, leave balance snapshot, attendance summary, quick links
+- **Health worker** — personal KPIs, **overall performance score**, leave balance snapshot, attendance summary, quick links
 - **Supervisor** — team leave/performance pending items, supervision metrics
 - **Department head** — department coverage and performance indicators
 - **HR / Director / Executive** — facility and district charts, org-wide KPI and attendance trends
+
+### Interactive cards and drilldown tables
+
+On HR and other management dashboards, **metric cards** and the **progress bar** are clickable. Selecting a card scrolls to a **drilldown table** below the charts with filtered data (e.g. facilities on track, at risk, or off track; district coverage; staff by facility).
+
+- The active card is highlighted with a green ring.
+- Use **Close** on the drilldown panel to return to the default view.
+
+### Uganda district map (HR / national dashboards)
+
+When district coverage data is available, a **choropleth map** of Uganda shows PMS activity by district boundary (not just map pins).
+
+| Control | Purpose |
+|---------|---------|
+| **Metric** dropdown | Colour districts by staff on PMS, combined attendance, OOS GPS compliance, or HRM duty summary |
+| **Show district names** | Toggle labels on the map |
+| **Click a district** | Open a drilldown table with that district’s detail (ISO code, region, staff, rates) |
+
+Districts without PMS staff appear pale green. Districts are matched to map boundaries using **ISO / map keys** stored in the districts reference table.
+
+### Overall performance score (health worker dashboard)
+
+Staff dashboards show an **Overall performance** card when quarterly report data exists. It displays:
+
+- **Normalised score** (0–100%) — primary figure
+- **Raw weighted average** — before normalisation
+- **PPA status** — whether your plan is draft, in review, or approved
+
+See [§6 Performance reports and scores](#6-performance-reports-and-scores) for how scores are calculated.
 
 Use dashboard cards and charts to drill into areas that need action (e.g. pending approvals).
 
@@ -360,35 +378,106 @@ Shows PPA status, total weight, current workflow stage, and reporting window sta
 
 ---
 
-## 6. Leave
+## 6. Performance reports and scores
+
+Go to **Performance → Performance reports** (`/performance/reports`) for a consolidated view of PPA submission, quarterly reporting status, and **Overall Performance Rating** scores.
+
+### Who sees what
+
+| Role | Report scope |
+|------|----------------|
+| **Staff** | Own record only |
+| **Supervisor** | Self plus supervised staff |
+| **Department head / HR / Director** | Staff in your organisational scope (district, facility, or department per RBAC) |
+| **National / super admin** | All staff with performance records |
+
+The page header shows your **scope note** (e.g. “Employee scope — own record only”).
+
+### What the report shows
+
+For each staff member in scope:
+
+| Column / area | Meaning |
+|---------------|---------|
+| **PPA** | Plan status (draft, supervisor review, approved, etc.) and total weight % |
+| **Q1 / Midterm / Q3 / Endterm** | Submission status, approval status, and period score |
+| **Overall** | Average normalised and raw scores across periods that have entries |
+
+Status labels include **Not submitted**, **Submitted**, **Approved**, and **Rejected**.
+
+### How scores are calculated (Overall Performance Rating)
+
+Scores follow the same weighted approach used in iHRIS end-of-year review:
+
+1. **Per KPI contribution** = `(actual ÷ target) × weight`
+2. **Raw period score** = sum of all KPI contributions for that reporting period
+3. **Normalised period score** = `raw × (100 ÷ total weight used)` when weights do not total 100%
+4. **Overall score** = average of normalised (and raw) scores for periods that have report entries
+
+Both **raw** and **normalised** values are shown so you can reconcile with iHRIS-style calculations. If weights exceed 100%, normalisation scales the result to a 100% scale for comparison.
+
+### Exporting reports
+
+Use the buttons at the top of the report page:
+
+| Format | Contents |
+|--------|----------|
+| **Export Excel** | Full table: staff, PPA, all periods, raw and normalised scores per period |
+| **Export PDF** | Formatted report with **Ministry of Health coat of arms**, financial year, scope note, and score footnote |
+
+Exports respect your current access scope — you cannot export staff outside your permissions.
+
+### API reference (for integrators)
+
+| Method | Endpoint |
+|--------|----------|
+| GET | `/api/v1/mobile/performance/status-report` | Scoped status report (JSON) |
+| GET | `/api/v1/mobile/performance/overall-rating` | Overall rating for signed-in staff |
+
+---
+
+## 7. Leave
 
 Go to **Leave** under **Time & Attendance**.
+
+### How approval works
+
+Most staff follow the **default** workflow:
+
+1. **You submit** the request.
+2. Your **first supervisor** approves or rejects.
+3. **Facility HR Manager** approves (if someone with a matching job title exists at your facility; this step is skipped when no HR Manager is deployed there).
+4. **HR** records the leave and updates your balance.
+
+Senior or ministry-level leave types (e.g. **study leave**) may use the **ministry_senior** profile: first supervisor → ministry HR → Permanent Secretary → HR records. HR configures which leave type uses which profile.
 
 ### Apply for leave
 
 1. Click **New request** (or equivalent).
-2. Choose **leave type** (annual, sick, maternity, etc.).
+2. Choose **leave type** — use the searchable field: type part of the name (e.g. “annual”, “sick”) to filter options; the selected type stays visible after you choose it.
 3. Select **start and end dates**.
 4. Add remarks and attachments if required (e.g. medical report for extended sick leave).
-5. Submit — the request routes to your supervisor(s) per the configured approval chain.
+5. Submit — the request routes through the workflow assigned to that leave type.
 
 ### Track requests
 
 - View status: draft, pending, approved, rejected, completed.
-- See which **approval stage** the request is at.
+- See which **approval stage** the request is at (supervisor, facility HR, ministry HR, etc.).
 - Cancel or amend only while policy allows (before final HR processing).
 
 ### Balances
 
 Your entitlement and **used / remaining** days appear on the leave page. Balances depend on salary grade and leave type configured by HR.
 
-### Supervisors
+### Supervisors and other approvers
 
-Supervisors see team requests on their dashboard and can **approve** or **reject** with comments at their stage in the workflow.
+Users with `leave.requests.approve` see requests waiting at **their** stage. The pending card shows **Your step:** with the stage name (e.g. “First supervisor”, “Facility HR Manager”). Approve or reject with an optional comment.
+
+If submission fails because an approver cannot be resolved, contact HR — they may add district/ministry stages or adjust job title matching in the workflow.
 
 ---
 
-## 7. Out of station
+## 8. Out of station
 
 Go to **Out of station** when you need approval to work away from your duty station.
 
@@ -401,7 +490,7 @@ After approval, attendance clocking at that location can be verified against the
 
 ---
 
-## 8. Attendance
+## 9. Attendance
 
 Go to **Attendance** to **clock in** or **clock out**.
 
@@ -413,7 +502,7 @@ Work hours and clock windows follow MoH policy configured in the system.
 
 ---
 
-## 9. Notifications
+## 10. Notifications
 
 Go to **Notifications** for in-app alerts:
 
@@ -425,7 +514,7 @@ The bell icon in the header shows unread count. Open a notification to see detai
 
 ---
 
-## 10. Profile and settings
+## 11. Profile and settings
 
 ### Profile
 
@@ -434,14 +523,45 @@ The bell icon in the header shows unread count. Open a notification to see detai
 
 ### Settings
 
-- Language and display preferences (where enabled)
-- Notification preferences
+Go to **Settings** in the sidebar. Tabs depend on your role.
 
-Administrators may configure additional system settings via admin APIs; most staff only change personal preferences here.
+#### Preferences (all users)
+
+- **Active reporting quarter** — controls the quarter label used across dashboards and performance screens
+- **Admin table pagination** (admins) — default rows per page for Staff Management, KPI catalog, and similar tables
+
+#### Data sources (administrators)
+
+| Section | Purpose |
+|---------|---------|
+| **iHRIS API** | Connection URL, import rules (require email/mobile, demo table toggle) |
+| **HRM Attend integration** | Base URL and enable/disable data exchange with HRM Attend |
+| **Sync status** | Run batched iHRIS import; view progress and skipped records |
+
+#### Email configuration (administrators)
+
+Configure **SMTP** or **Microsoft Exchange** for system notifications and reminders. Fields are laid out in a spaced grid (host, port, credentials, from address/name, encryption). Save with **Save email settings**.
+
+#### Notifications (administrators)
+
+View reminder types (performance, leave, approvals) with enabled/disabled status and days-before-deadline. Use **Send reminders now (test)** to trigger a test cycle.
+
+#### Performance reporting (administrators)
+
+- Enforce or relax submission windows
+- **Test override** — open all reporting periods while testing
+- Window length and shift settings
+- Computed windows for the current financial year
+
+#### System configuration
+
+**Administration → System configuration** (`/admin/system`) holds global policies such as whether iHRIS sync may overwrite HR-enriched fields (disabled by default).
+
+Administrators may configure additional system settings via admin APIs; most staff only change personal preferences under **Preferences**.
 
 ---
 
-## 11. Administration (HR and system admins)
+## 12. Administration (HR and system admins)
 
 Visible under **Administration** when you have the right permissions.
 
@@ -455,16 +575,42 @@ HR officers manage the full leave lifecycle:
 | **Balances** | Staff leave balances; initialize year |
 | **Requests** | All requests; HR finalization |
 | **Statements** | Individual staff leave statements |
-| **Configuration** | Types, entitlements, approval stages, global settings |
+| **Configuration** | Policy settings, leave types, **workflow profiles and stages**, grade entitlements |
+
+#### Configuring approval workflows
+
+Under **Configuration**:
+
+1. **Leave types** — assign each type to a workflow profile (e.g. `default` or `ministry_senior`).
+2. **Approval workflows** — select a profile and add, edit, disable, or reorder stages:
+   - **Supervisor** stages use supervisor sequence 1–3 from iHRIS.
+   - **Job holder** stages resolve approvers by job title at **facility**, **district**, or **ministry** scope.
+   - **HR records** (`hr_finalize`) is where HR finalises approved requests on the **Requests** tab.
+3. Use **Skip if no approver found** for optional levels (e.g. facility HR when the facility has no HR Manager).
 
 Leave rules (advance notice, carry-over, work hours) are stored in the database — not hardcoded — so HR can adjust policy without code changes.
 
+Detailed reference: [leave.md](../leave.md).
+
 ### Staff management (`/admin/staff`)
 
-- Browse and search the staff directory
-- Enrich HR profile fields
+- Browse and search the staff directory (debounced search, department and supervisor filters)
+- Enrich HR profile fields in the **Manage** modal
 - Assign up to **three supervisors** per staff member (Supervisor 1 is required)
 - Supervision is managed in the same **Manage** modal as HR details
+
+**Searchable fields** (type to filter options):
+
+| Field | Location |
+|-------|----------|
+| Department filter | Staff list toolbar |
+| HR department | Manage modal → HR profile enrichment |
+| Supervisor 1 / 2 / 3 | Manage modal → Supervisors (search by name or job title) |
+
+### System configuration (`/admin/system`)
+
+- Global **iHRIS overwrite** policy (whether sync may replace HR-enriched fields)
+- Other integration defaults managed by system administrators
 
 ### KPI management (`/admin/kpi`)
 
@@ -489,7 +635,7 @@ System administrators:
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 | Issue | What to try |
 |-------|-------------|
@@ -498,14 +644,18 @@ System administrators:
 | **Cannot submit PPA** | Ensure weights total 100%; check PPA window is open |
 | **Cannot file report** | Submit and get PPA approved first; confirm reporting window is open |
 | **Leave request rejected** | Read supervisor/HR comments; check balance and advance-notice rules |
+| **Leave type not showing after select** | Pick a type from the dropdown list (click an option); do not submit with only typed text |
 | **Clock verification failed** | Ensure OOS is approved for today and you are within the geofence |
+| **Performance report empty** | Submit PPA and at least one quarterly report first; check you are viewing the correct financial year |
+| **Cannot export PDF/Excel** | Allow downloads in your browser; try again after the report table has loaded |
+| **District map all pale** | Districts without PMS staff show as pale green; only districts with active contracts are coloured |
 | **Dashboard error** | Refresh the page; sign out and back in; report persistent errors to IT |
 
 For technical support, contact your facility or national PMS support desk with your email, role, and a screenshot of any error message.
 
 ---
 
-## 13. Accessing a deployed server
+## 14. Accessing a deployed server
 
 When IT deploys PMS on a server using the project **`setup.sh`** script, you typically access it by IP or hostname in the browser — no port number needed when using the default configuration.
 

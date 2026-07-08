@@ -7,6 +7,7 @@ export interface DemoAccount {
 }
 
 export const DEMO_PASSWORD = 'Demo@Moh2026!'
+export const SUPER_ADMIN_PASSWORD = 'SuperAdmin@Moh2026!'
 
 export const demoAccounts: DemoAccount[] = [
   {
@@ -57,5 +58,12 @@ export const demoAccounts: DemoAccount[] = [
     role: 'Administrator',
     label: 'Administrator',
     description: 'Full system access, settings & access control',
+  },
+  {
+    email: 'super@moh.go.ug',
+    password: SUPER_ADMIN_PASSWORD,
+    role: 'Super Administrator',
+    label: 'Super Admin',
+    description: 'Env-managed super account — bypasses all permission checks',
   },
 ]

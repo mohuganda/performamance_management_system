@@ -105,7 +105,7 @@ func (s *LeaveService) Submit(requestID uint, staffID uint) error {
 		return err
 	}
 
-	return s.approval.SeedLeaveApprovals(req.ID, staffID)
+	return s.approval.SeedLeaveApprovals(req.ID, staffID, leaveType)
 }
 
 func (s *LeaveService) ListForStaff(staffID uint) ([]models.LeaveRequest, error) {

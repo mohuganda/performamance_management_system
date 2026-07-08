@@ -1,7 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   BarChart3,
-  Bell,
   CalendarDays,
   ClipboardList,
   LayoutDashboard,
@@ -9,11 +8,10 @@ import {
   Settings,
   Shield,
   Target,
-  User,
   Users,
   Clock,
-  UserCircle,
   Briefcase,
+  Cog,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -74,6 +72,20 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
+    id: 'performance-reports',
+    label: 'Reports',
+    icon: ClipboardList,
+    items: [
+      {
+        id: 'performance-reports',
+        label: 'Reports',
+        path: '/performance/reports',
+        icon: ClipboardList,
+        description: 'PPA and quarterly status with scores — scoped to your access level',
+      },
+    ],
+  },
+  {
     id: 'time-attendance',
     label: 'Time & Attendance',
     icon: Clock,
@@ -106,37 +118,16 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    id: 'notifications',
-    label: 'Notifications',
-    icon: Bell,
-    items: [
-      {
-        id: 'notifications',
-        label: 'Notifications',
-        path: '/notifications',
-        icon: Bell,
-        description: 'System alerts and approval updates',
-      },
-    ],
-  },
-  {
     id: 'account',
-    label: 'My Account',
-    icon: UserCircle,
+    label: 'Settings',
+    icon: Settings,
     items: [
-      {
-        id: 'profile',
-        label: 'Profile',
-        path: '/profile',
-        icon: User,
-        description: 'Photo, signature, and account details',
-      },
       {
         id: 'settings',
         label: 'Settings',
         path: '/settings',
         icon: Settings,
-        description: 'Preferences and system configuration',
+        description: 'Preferences, reference lists, and system configuration',
       },
     ],
   },
@@ -172,6 +163,24 @@ export const navGroups: NavGroup[] = [
           'kpi.catalog.manage',
           'kpi.assignments.view',
           'kpi.assignments.manage',
+        ],
+        anyPermission: true,
+      },
+      {
+        id: 'system-config',
+        label: 'System configuration',
+        path: '/admin/system',
+        icon: Cog,
+        description: 'iHRIS overwrite policy and integration defaults',
+        permission: [
+          'settings.manage',
+          'settings.lists.manage',
+          'settings.data_sources.manage',
+          'settings.email.manage',
+          'settings.notifications.manage',
+          'settings.performance.manage',
+          'settings.kpi.manage',
+          'settings.preferences.manage',
         ],
         anyPermission: true,
       },

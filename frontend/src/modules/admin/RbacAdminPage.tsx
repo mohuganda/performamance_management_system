@@ -1,15 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Button,
   Card,
   Chip,
   Input,
-  Option,
-  Select,
   Switch,
   Typography,
 } from '@material-tailwind/react'
+import { Select, Option } from '@/components/molecules/MtSelect'
 import {
   AlertTriangle,
   Crown,
@@ -26,12 +25,16 @@ import {
   type RbacRole,
   type RbacUserRow,
   type RoleCategory,
+  type ScopeAssignmentInput,
+  type ScopeOptions,
 } from '@/api/services/rbacAdmin'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
 import { ServerPaginatedTable } from '@/components/organisms/ServerPaginatedTable'
+import { RolePermissionsPanel, UserPermissionsPanel } from '@/modules/admin/RbacPermissionsPanel'
 import { SegmentedTabs } from '@/components/molecules/SegmentedTabs'
 import { useAdminPageSize } from '@/hooks/useAdminPageSize'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { mt } from '@/utils/mt'
 import { cn } from '@/utils/cn'
 
@@ -59,6 +62,22 @@ function CategoryBadge({ category }: { category: RoleCategory }) {
 
 function formatScopeLabel(row: RbacUserRow) {
   if (row.scope_level === 'national') return 'National (MoH)'
+  const parts: string[] = []
+  const assignments = row.scope_assignments ?? []
+  const regions = assignments.filter((a) => a.scope_type === 'region')
+  const districts = assignments.filter((a) => a.scope_type === 'district')
+  const facilities = assignments.filter((a) => a.scope_type === 'facility')
+  if (regions.length) {
+    parts.push(`Region · ${regions.map((a) => a.label ?? a.ref_code ?? a.ref_id).join(', ')}`)
+  }
+  if (districts.length) {
+    parts.push(`District · ${districts.map((a) => a.label ?? a.ref_code ?? a.ref_id).join(', ')}`)
+  }
+  if (facilities.length) {
+    parts.push(`Facility · ${facilities.map((a) => a.label ?? a.ref_id).join(', ')}`)
+  }
+  if (parts.length) return parts.join(' · ')
+  if (row.scope_level === 'region') return 'Region scope'
   if (row.scope_level === 'district' && row.scope_district_name) {
     return `District · ${row.scope_district_name}`
   }
@@ -68,6 +87,62 @@ function formatScopeLabel(row: RbacUserRow) {
   if (row.scope_district_name) return `District · ${row.scope_district_name}`
   if (row.scope_facility_name) return `Facility · ${row.scope_facility_name}`
   return 'Staff-linked'
+}
+
+type ScopeFormState = {
+  scope_level: string
+  region_ids: number[]
+  district_ref_ids: number[]
+  facility_ids: number[]
+}
+
+const emptyScopeForm = (): ScopeFormState => ({
+  scope_level: 'staff',
+  region_ids: [],
+  district_ref_ids: [],
+  facility_ids: [],
+})
+
+function scopeFormFromUser(row: RbacUserRow): ScopeFormState {
+  const form = emptyScopeForm()
+  form.scope_level = row.scope_level || 'staff'
+  for (const item of row.scope_assignments ?? []) {
+    if (item.scope_type === 'region' && item.ref_id) form.region_ids.push(item.ref_id)
+    if (item.scope_type === 'district' && item.ref_id) form.district_ref_ids.push(item.ref_id)
+    if (item.scope_type === 'facility' && item.ref_id) form.facility_ids.push(item.ref_id)
+  }
+  return form
+}
+
+function buildScopeAssignments(form: ScopeFormState, options?: ScopeOptions): ScopeAssignmentInput[] {
+  const out: ScopeAssignmentInput[] = []
+  for (const id of form.region_ids) {
+    const region = options?.regions.find((r) => r.id === id)
+    out.push({
+      scope_type: 'region',
+      ref_id: id,
+      ref_code: region?.code,
+      label: region?.name,
+    })
+  }
+  for (const id of form.district_ref_ids) {
+    const district = options?.districts.find((d) => d.ref_id === id)
+    out.push({
+      scope_type: 'district',
+      ref_id: id,
+      ref_code: district?.id ?? district?.code,
+      label: district?.name,
+    })
+  }
+  for (const id of form.facility_ids) {
+    const facility = options?.facilities.find((f) => f.id === id)
+    out.push({
+      scope_type: 'facility',
+      ref_id: id,
+      label: facility?.name,
+    })
+  }
+  return out
 }
 
 function formatDate(value?: string) {
@@ -82,11 +157,13 @@ export function RbacAdminPage() {
   const pageSize = useAdminPageSize()
   const [tab, setTab] = useState<TabKey>('users')
   const [userSearch, setUserSearch] = useState('')
+  const debouncedUserSearch = useDebouncedValue(userSearch, 400)
   const [userRoleFilter, setUserRoleFilter] = useState('')
   const [userScopeFilter, setUserScopeFilter] = useState('')
   const [userActiveFilter, setUserActiveFilter] = useState('')
   const [userPage, setUserPage] = useState(1)
   const [auditSearch, setAuditSearch] = useState('')
+  const debouncedAuditSearch = useDebouncedValue(auditSearch, 400)
   const [auditDangerous, setAuditDangerous] = useState('')
   const [auditRecovered, setAuditRecovered] = useState('false')
   const [auditPage, setAuditPage] = useState(1)
@@ -98,34 +175,37 @@ export function RbacAdminPage() {
     email: '',
     password: '',
     role_codes: 'staff',
-    scope_level: 'staff',
-    scope_district_id: '',
-    scope_facility_id: '',
+    ...emptyScopeForm(),
   })
-  const [manageScope, setManageScope] = useState({
-    scope_level: 'staff',
-    scope_district_id: '',
-    scope_facility_id: '',
-  })
+  const [manageScope, setManageScope] = useState<ScopeFormState>(emptyScopeForm())
+  const [selectedRoleCode, setSelectedRoleCode] = useState('admin')
 
   const rolesQuery = useQuery({
     queryKey: ['admin', 'rbac', 'roles'],
     queryFn: () => rbacAdminService.listRoles(),
+    enabled: tab === 'users' || tab === 'executive' || tab === 'roles' || createOpen || !!manageUser,
+    staleTime: 60_000,
   })
 
   const executiveRolesQuery = useQuery({
     queryKey: ['admin', 'rbac', 'roles', 'executive'],
     queryFn: () => rbacAdminService.listRoles('executive'),
+    enabled: tab === 'executive',
+    staleTime: 60_000,
   })
 
   const permsQuery = useQuery({
     queryKey: ['admin', 'rbac', 'permissions'],
     queryFn: () => rbacAdminService.listPermissions(),
+    enabled: tab === 'roles' || !!manageUser,
+    staleTime: 120_000,
   })
 
   const scopeOptionsQuery = useQuery({
     queryKey: ['admin', 'rbac', 'scope-options'],
     queryFn: () => rbacAdminService.listScopeOptions(),
+    enabled: tab === 'users' || tab === 'executive' || createOpen || !!manageUser,
+    staleTime: 120_000,
   })
 
   const usersQuery = useQuery({
@@ -134,7 +214,7 @@ export function RbacAdminPage() {
       'rbac',
       'users',
       tab,
-      userSearch,
+      debouncedUserSearch,
       userRoleFilter,
       userActiveFilter,
       userScopeFilter,
@@ -143,7 +223,7 @@ export function RbacAdminPage() {
     ],
     queryFn: () =>
       rbacAdminService.listUsers({
-        search: userSearch || undefined,
+        search: debouncedUserSearch || undefined,
         role_code: userRoleFilter || undefined,
         category: tab === 'executive' ? 'executive' : undefined,
         is_active: userActiveFilter || undefined,
@@ -155,10 +235,10 @@ export function RbacAdminPage() {
   })
 
   const auditQuery = useQuery({
-    queryKey: ['admin', 'rbac', 'audit', auditSearch, auditDangerous, auditRecovered, auditPage, pageSize],
+    queryKey: ['admin', 'rbac', 'audit', debouncedAuditSearch, auditDangerous, auditRecovered, auditPage, pageSize],
     queryFn: () =>
       rbacAdminService.listAuditLogs({
-        search: auditSearch || undefined,
+        search: debouncedAuditSearch || undefined,
         module: 'rbac',
         dangerous: auditDangerous || undefined,
         recovered: auditRecovered || undefined,
@@ -166,6 +246,18 @@ export function RbacAdminPage() {
         per_page: pageSize,
       }),
     enabled: tab === 'audit',
+  })
+
+  const manageRolePermsQuery = useQuery({
+    queryKey: ['admin', 'rbac', 'manage-role-perms', manageUser?.id, manageUser?.roles],
+    queryFn: async () => {
+      if (!manageUser?.roles?.length) return []
+      const sets = await Promise.all(
+        manageUser.roles.map((roleCode) => rbacAdminService.listRolePermissions(roleCode)),
+      )
+      return [...new Set(sets.flat())]
+    },
+    enabled: !!manageUser,
   })
 
   const invalidateUsers = () => {
@@ -181,10 +273,7 @@ export function RbacAdminPage() {
         password: createForm.password,
         role_codes: createForm.role_codes.split(',').map((r) => r.trim()).filter(Boolean),
         scope_level: createForm.scope_level || undefined,
-        scope_district_id: createForm.scope_district_id || undefined,
-        scope_facility_id: createForm.scope_facility_id
-          ? Number(createForm.scope_facility_id)
-          : undefined,
+        scope_assignments: buildScopeAssignments(createForm, scopeOptionsQuery.data),
       }),
     onSuccess: () => {
       invalidateUsers()
@@ -194,9 +283,7 @@ export function RbacAdminPage() {
         email: '',
         password: '',
         role_codes: 'staff',
-        scope_level: 'staff',
-        scope_district_id: '',
-        scope_facility_id: '',
+        ...emptyScopeForm(),
       })
     },
   })
@@ -205,10 +292,7 @@ export function RbacAdminPage() {
     mutationFn: () =>
       rbacAdminService.updateUser(manageUser!.id, {
         scope_level: manageScope.scope_level,
-        scope_district_id: manageScope.scope_district_id || '',
-        scope_facility_id: manageScope.scope_facility_id
-          ? Number(manageScope.scope_facility_id)
-          : 0,
+        scope_assignments: buildScopeAssignments(manageScope, scopeOptionsQuery.data),
       }),
     onSuccess: () => {
       invalidateUsers()
@@ -247,8 +331,24 @@ export function RbacAdminPage() {
     },
   })
 
+  useEffect(() => {
+    setUserPage(1)
+  }, [debouncedUserSearch, userRoleFilter, userActiveFilter, userScopeFilter, tab])
+
+  useEffect(() => {
+    setAuditPage(1)
+  }, [debouncedAuditSearch, auditDangerous, auditRecovered])
+
   const scopeOptions = scopeOptionsQuery.data
   const roles = rolesQuery.data ?? []
+  const permissions = permsQuery.data ?? []
+
+  useEffect(() => {
+    if (roles.length > 0 && !roles.some((r) => r.code === selectedRoleCode)) {
+      setSelectedRoleCode(roles.find((r) => r.code === 'admin')?.code ?? roles[0].code)
+    }
+  }, [roles, selectedRoleCode])
+
   const executiveRoles = executiveRolesQuery.data ?? []
   const users = usersQuery.data?.data ?? []
   const userPagination = usersQuery.data ?? { total: 0, page: 1, per_page: pageSize, total_pages: 1 }
@@ -323,11 +423,7 @@ export function RbacAdminPage() {
               className="rounded-sm border-moh-green/30 normal-case text-moh-green hover:bg-moh-green/5"
               onClick={() => {
                 setManageUser(row)
-                setManageScope({
-                  scope_level: row.scope_level || 'staff',
-                  scope_district_id: row.scope_district_id || '',
-                  scope_facility_id: row.scope_facility_id ? String(row.scope_facility_id) : '',
-                })
+                setManageScope(scopeFormFromUser(row))
               }}
             >
               Manage
@@ -410,6 +506,7 @@ export function RbacAdminPage() {
           isError={usersQuery.isError}
           error={usersQuery.error}
           label="users"
+          variant="table"
           onRetry={() => usersQuery.refetch()}
         >
           {tab === 'executive' && (
@@ -534,42 +631,18 @@ export function RbacAdminPage() {
           isError={rolesQuery.isError || permsQuery.isError}
           error={rolesQuery.error ?? permsQuery.error}
           label="RBAC configuration"
+          variant="form"
           onRetry={() => {
             rolesQuery.refetch()
             permsQuery.refetch()
           }}
         >
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card {...mt} className="rounded-sm border border-moh-green/15 p-4">
-              <Typography {...mt} className="mb-3 text-sm font-bold uppercase text-moh-green">
-                Roles by category
-              </Typography>
-              <ul className="space-y-2 text-sm">
-                {roles.map((r) => (
-                  <li key={r.id} className="flex items-center justify-between border-b border-gray-100 py-2">
-                    <div>
-                      <span className="font-medium">{r.name}</span>
-                      <span className="ml-2 text-xs text-gray-500">{r.code}</span>
-                    </div>
-                    <CategoryBadge category={(r.category as RoleCategory) || 'operational'} />
-                  </li>
-                ))}
-              </ul>
-            </Card>
-            <Card {...mt} className="rounded-sm border border-moh-green/15 p-4">
-              <Typography {...mt} className="mb-3 text-sm font-bold uppercase text-moh-green">
-                Permissions
-              </Typography>
-              <div className="max-h-96 overflow-y-auto text-xs">
-                {(permsQuery.data ?? []).map((p) => (
-                  <div key={p.id} className="border-b border-gray-50 py-1.5">
-                    <span className="font-medium">{p.code}</span>
-                    <span className="ml-2 text-gray-500">{p.name}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
+          <RolePermissionsPanel
+            roles={roles}
+            permissions={permissions}
+            selectedRoleCode={selectedRoleCode}
+            onSelectRole={setSelectedRoleCode}
+          />
         </QueryState>
       )}
 
@@ -579,6 +652,7 @@ export function RbacAdminPage() {
           isError={auditQuery.isError}
           error={auditQuery.error}
           label="audit log"
+          variant="table"
           onRetry={() => auditQuery.refetch()}
         >
           <Card {...mt} className="space-y-4 rounded-sm border border-moh-green/15 p-4">
@@ -658,49 +732,51 @@ export function RbacAdminPage() {
 
       {createOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <Card {...mt} className="w-full max-w-md space-y-4 rounded-sm p-6">
+          <Card {...mt} className="max-h-[90vh] w-full max-w-xl overflow-y-auto space-y-4 rounded-sm p-6">
             <Typography {...mt} className="text-lg font-bold text-moh-green">
               Create application user
             </Typography>
-            <Input
-              {...mt}
-              label="Full name"
-              value={createForm.name}
-              onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
-              crossOrigin=""
-            />
-            <Input
-              {...mt}
-              label="Email"
-              type="email"
-              value={createForm.email}
-              onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
-              crossOrigin=""
-            />
-            <Input
-              {...mt}
-              label="Password (min 10 chars)"
-              type="password"
-              value={createForm.password}
-              onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
-              crossOrigin=""
-            />
-            <Select
-              {...mt}
-              label="Primary role"
-              value={createForm.role_codes}
-              onChange={(v) => setCreateForm((f) => ({ ...f, role_codes: (v as string) ?? 'staff' }))}
-            >
-              {roles.map((r) => (
-                <Option key={r.id} value={r.code}>
-                  {r.name}
-                </Option>
-              ))}
-            </Select>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Input
+                {...mt}
+                label="Full name"
+                value={createForm.name}
+                onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
+                crossOrigin=""
+              />
+              <Input
+                {...mt}
+                label="Email"
+                type="email"
+                value={createForm.email}
+                onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+                crossOrigin=""
+              />
+              <Input
+                {...mt}
+                label="Password (min 10 chars)"
+                type="password"
+                value={createForm.password}
+                onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+                crossOrigin=""
+                containerProps={{ className: 'sm:col-span-2' }}
+              />
+              <Select
+                {...mt}
+                label="Primary role"
+                value={createForm.role_codes}
+                onChange={(v) => setCreateForm((f) => ({ ...f, role_codes: (v as string) ?? 'staff' }))}
+                containerProps={{ className: 'sm:col-span-2' }}
+              >
+                {roles.map((r) => (
+                  <Option key={r.id} value={r.code}>
+                    {r.name}
+                  </Option>
+                ))}
+              </Select>
+            </div>
             <ScopeFieldsForm
-              scopeLevel={createForm.scope_level}
-              scopeDistrictId={createForm.scope_district_id}
-              scopeFacilityId={createForm.scope_facility_id}
+              value={createForm}
               options={scopeOptions}
               onChange={(patch) => setCreateForm((f) => ({ ...f, ...patch }))}
             />
@@ -723,7 +799,7 @@ export function RbacAdminPage() {
 
       {manageUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <Card {...mt} className="w-full max-w-lg space-y-4 rounded-sm p-6">
+          <Card {...mt} className="max-h-[90vh] w-full max-w-xl overflow-y-auto space-y-4 rounded-sm p-6">
             <Typography {...mt} className="text-lg font-bold text-moh-green">
               Manage {manageUser.name}
             </Typography>
@@ -731,9 +807,7 @@ export function RbacAdminPage() {
             <CategoryBadge category={manageUser.account_category} />
 
             <ScopeFieldsForm
-              scopeLevel={manageScope.scope_level}
-              scopeDistrictId={manageScope.scope_district_id}
-              scopeFacilityId={manageScope.scope_facility_id}
+              value={manageScope}
               options={scopeOptions}
               onChange={(patch) => setManageScope((s) => ({ ...s, ...patch }))}
             />
@@ -794,6 +868,14 @@ export function RbacAdminPage() {
               </Button>
             </div>
 
+            {permissions.length > 0 ? (
+              <UserPermissionsPanel
+                userId={manageUser.id}
+                permissions={permissions}
+                rolePermissionCodes={manageRolePermsQuery.data ?? []}
+              />
+            ) : null}
+
             <div className="flex justify-end">
               <Button {...mt} variant="text" onClick={() => setManageUser(null)}>
                 Close
@@ -807,35 +889,50 @@ export function RbacAdminPage() {
 }
 
 function ScopeFieldsForm({
-  scopeLevel,
-  scopeDistrictId,
-  scopeFacilityId,
+  value,
   options,
   onChange,
 }: {
-  scopeLevel: string
-  scopeDistrictId: string
-  scopeFacilityId: string
-  options?: import('@/api/services/rbacAdmin').ScopeOptions
-  onChange: (patch: {
-    scope_level?: string
-    scope_district_id?: string
-    scope_facility_id?: string
-  }) => void
+  value: ScopeFormState
+  options?: ScopeOptions
+  onChange: (patch: Partial<ScopeFormState>) => void
 }) {
+  const selectedRegionSet = useMemo(() => new Set(value.region_ids), [value.region_ids])
+  const selectedDistrictSet = useMemo(() => new Set(value.district_ref_ids), [value.district_ref_ids])
+
+  const visibleDistricts = useMemo(() => {
+    const districts = options?.districts ?? []
+    if (selectedRegionSet.size === 0) return districts
+    return districts.filter((d) => d.region_id && selectedRegionSet.has(d.region_id))
+  }, [options?.districts, selectedRegionSet])
+
+  const visibleFacilities = useMemo(() => {
+    const facilities = options?.facilities ?? []
+    if (selectedDistrictSet.size > 0) {
+      return facilities.filter((f) => f.district_ref_id && selectedDistrictSet.has(f.district_ref_id))
+    }
+    if (selectedRegionSet.size > 0) {
+      return facilities.filter((f) => f.region_id && selectedRegionSet.has(f.region_id))
+    }
+    return facilities
+  }, [options?.facilities, selectedDistrictSet, selectedRegionSet])
+
+  const toggleId = (ids: number[], id: number) =>
+    ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
+
   return (
     <div className="space-y-3 rounded-sm border border-gray-100 bg-gray-50/80 p-3">
       <Typography {...mt} className="text-xs font-bold uppercase text-gray-500">
         Data access scope
       </Typography>
       <p className="text-xs text-gray-500">
-        MoH oversees nationally; HR Officers and Directors are typically scoped to a district.
-        Facility accounts are limited to one site. National scope is for MoH HQ overseers only.
+        Geography flows Region → District → Facility. Assign one or more areas; national scope
+        overrides geographic limits.
       </p>
       <Select
         {...mt}
         label="Scope level"
-        value={scopeLevel}
+        value={value.scope_level}
         onChange={(v) => onChange({ scope_level: (v as string) ?? 'staff' })}
       >
         {(options?.levels ?? []).map((level) => (
@@ -844,36 +941,104 @@ function ScopeFieldsForm({
           </Option>
         ))}
       </Select>
-      {(scopeLevel === 'district' || scopeLevel === 'facility') && (
-        <Select
-          {...mt}
-          label="District"
-          value={scopeDistrictId}
-          onChange={(v) => onChange({ scope_district_id: (v as string) ?? '' })}
-        >
-          <Option value="">Select district</Option>
-          {(options?.districts ?? []).map((d) => (
-            <Option key={d.id} value={d.id}>
-              {d.name}
-            </Option>
-          ))}
-        </Select>
+
+      {value.scope_level !== 'national' && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <ScopeMultiPicker
+            title="Regions"
+            items={(options?.regions ?? []).map((r) => ({
+              id: r.id,
+              label: r.name,
+              hint: r.code,
+            }))}
+            selected={value.region_ids}
+            onToggle={(id) => onChange({ region_ids: toggleId(value.region_ids, id) })}
+          />
+          <ScopeMultiPicker
+            title="Districts"
+            items={visibleDistricts.map((d) => ({
+              id: d.ref_id,
+              label: d.name,
+              hint: d.code,
+            }))}
+            selected={value.district_ref_ids}
+            onToggle={(id) => onChange({ district_ref_ids: toggleId(value.district_ref_ids, id) })}
+          />
+          <div className="md:col-span-2">
+            <ScopeMultiPicker
+              title="Facilities"
+              items={visibleFacilities.map((f) => ({
+                id: f.id,
+                label: f.name,
+                hint: f.district_name ? `${f.district_name}${f.district_id ? ` · ${f.district_id}` : ''}` : f.district_id,
+              }))}
+              selected={value.facility_ids}
+              onToggle={(id) => onChange({ facility_ids: toggleId(value.facility_ids, id) })}
+            />
+          </div>
+        </div>
       )}
-      {scopeLevel === 'facility' && (
-        <Select
-          {...mt}
-          label="Facility"
-          value={scopeFacilityId}
-          onChange={(v) => onChange({ scope_facility_id: (v as string) ?? '' })}
-        >
-          <Option value="">Select facility</Option>
-          {(options?.facilities ?? []).map((f) => (
-            <Option key={f.id} value={String(f.id)}>
-              {f.name}
-            </Option>
-          ))}
-        </Select>
-      )}
+    </div>
+  )
+}
+
+function ScopeMultiPicker({
+  title,
+  items,
+  selected,
+  onToggle,
+}: {
+  title: string
+  items: Array<{ id: number; label: string; hint?: string }>
+  selected: number[]
+  onToggle: (id: number) => void
+}) {
+  const [query, setQuery] = useState('')
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    if (!needle) return items
+    return items.filter((item) => `${item.label} ${item.hint ?? ''}`.toLowerCase().includes(needle))
+  }, [items, query])
+
+  return (
+    <div>
+      <Typography {...mt} className="mb-1 text-xs font-semibold text-gray-700">
+        {title}
+        {selected.length > 0 ? ` (${selected.length} selected)` : ''}
+      </Typography>
+      <Input
+        {...mt}
+        crossOrigin=""
+        placeholder={`Search ${title.toLowerCase()}…`}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        className="!min-h-9"
+      />
+      <div className="mt-2 max-h-36 space-y-1 overflow-y-auto rounded-sm border border-gray-200 bg-white p-2">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-gray-400">No matches</p>
+        ) : (
+          filtered.map((item) => (
+            <label
+              key={item.id}
+              className="flex cursor-pointer items-start gap-2 rounded-sm px-1 py-0.5 text-sm hover:bg-gray-50"
+            >
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={selected.includes(item.id)}
+                onChange={() => onToggle(item.id)}
+              />
+              <span>
+                {item.label}
+                {item.hint ? (
+                  <span className="ml-1 text-xs text-gray-400">({item.hint})</span>
+                ) : null}
+              </span>
+            </label>
+          ))
+        )}
+      </div>
     </div>
   )
 }

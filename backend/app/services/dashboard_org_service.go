@@ -179,7 +179,8 @@ func (s *DashboardOrgService) TaskCompletionLabel(ctx OrgContext) string {
 }
 
 func (s *DashboardOrgService) ListFacilityPerformance(limit int) []FacilityPerformanceRow {
-	if limit <= 0 {
+	unlimited := limit <= 0
+	if !unlimited && limit < 1 {
 		limit = 15
 	}
 
@@ -263,7 +264,7 @@ func (s *DashboardOrgService) ListFacilityPerformance(limit int) []FacilityPerfo
 			}
 		}
 	}
-	if len(rows) > limit {
+	if !unlimited && len(rows) > limit {
 		rows = rows[:limit]
 	}
 	if len(rows) == 0 {

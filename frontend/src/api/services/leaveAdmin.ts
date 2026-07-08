@@ -28,15 +28,16 @@ export type LeaveTypeAdmin = {
   eligibility_notes?: string
   requires_supervisor_approval: boolean
   requires_hr_approval: boolean
+  workflow_profile_code?: string
 }
 
-export type LeaveEntitlement = {
+export type LeaveWorkflowProfile = {
   id: number
-  salary_grade: string
-  leave_type_id: number
-  days_per_year: number
-  medical_report_after_days?: number
-  requires_hr_finalization: boolean
+  code: string
+  name: string
+  description?: string
+  is_default: boolean
+  is_active: boolean
 }
 
 export type LeaveApprovalStage = {
@@ -47,6 +48,23 @@ export type LeaveApprovalStage = {
   approver_role: string
   description?: string
   is_active: boolean
+  workflow_profile_code?: string
+  stage_type?: string
+  scope?: string
+  job_title_id?: number | null
+  job_title_match?: string | null
+  supervisor_sequence?: number | null
+  is_required?: boolean
+  skip_if_unresolved?: boolean
+}
+
+export type LeaveGradeEntitlement = {
+  id: number
+  salary_grade: string
+  leave_type_id: number
+  days_per_year: number
+  medical_report_after_days?: number
+  requires_hr_finalization: boolean
 }
 
 export type LeaveBalanceRow = {
@@ -59,6 +77,8 @@ export type LeaveBalanceRow = {
   carried_over_days: number
   remaining_days: number
 }
+
+export type LeaveEntitlement = LeaveGradeEntitlement
 
 export type StaffLeaveSummary = {
   staff_id: number
@@ -191,6 +211,10 @@ export const leaveAdminService = {
     const { data } = await apiClient.get('/admin/leave/types')
     return asArray<LeaveTypeAdmin>(data)
   },
+  updateType: async (id: number, payload: Partial<LeaveTypeAdmin>) => {
+    const { data } = await apiClient.put(`/admin/leave/types/${id}`, payload)
+    return data as LeaveTypeAdmin
+  },
   listEntitlements: async (): Promise<LeaveEntitlement[]> => {
     const { data } = await apiClient.get('/admin/leave/entitlements')
     return asArray<LeaveEntitlement>(data)
@@ -198,6 +222,26 @@ export const leaveAdminService = {
   listApprovalStages: async (): Promise<LeaveApprovalStage[]> => {
     const { data } = await apiClient.get('/admin/leave/approval-stages')
     return asArray<LeaveApprovalStage>(data)
+  },
+  listWorkflowProfiles: async (): Promise<LeaveWorkflowProfile[]> => {
+    const { data } = await apiClient.get('/admin/leave/workflow-profiles')
+    return asArray<LeaveWorkflowProfile>(data)
+  },
+  listWorkflowStages: async (profile = 'default'): Promise<LeaveApprovalStage[]> => {
+    const { data } = await apiClient.get('/admin/leave/workflow-stages', { params: { profile } })
+    return asArray<LeaveApprovalStage>(data)
+  },
+  createApprovalStage: async (payload: Partial<LeaveApprovalStage>) => {
+    const { data } = await apiClient.post('/admin/leave/approval-stages', payload)
+    return data as LeaveApprovalStage
+  },
+  updateApprovalStage: async (id: number, payload: Partial<LeaveApprovalStage>) => {
+    const { data } = await apiClient.put(`/admin/leave/approval-stages/${id}`, payload)
+    return data as LeaveApprovalStage
+  },
+  deleteApprovalStage: async (id: number) => {
+    const { data } = await apiClient.delete(`/admin/leave/approval-stages/${id}`)
+    return data
   },
   listDepartments: async () => {
     const { data } = await apiClient.get('/admin/leave/departments')

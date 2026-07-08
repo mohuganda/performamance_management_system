@@ -16,6 +16,8 @@ export type DistrictCoverage = {
   district_id: string
   district: string
   region?: string
+  map_key?: string
+  iso_code?: string
   staff_count: number
   oos_attendance_rate: number
   hrm_summary_rate: number
@@ -23,6 +25,8 @@ export type DistrictCoverage = {
   lat: number
   lon: number
 }
+
+export type UgandaMapMetric = 'staff_count' | 'combined_rate' | 'oos_attendance_rate' | 'hrm_summary_rate'
 
 export type AttendancePerformance = {
   target: number

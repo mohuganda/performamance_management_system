@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Button, Card, Input, Typography } from '@material-tailwind/react'
 import { BrandLogo } from '@/components/atoms/BrandLogo'
+import { getApiErrorMessage } from '@/api/client'
 import { useAuthStore } from '@/stores/appStore'
 import { demoAccounts, DEMO_PASSWORD } from '@/constants/demoAccounts'
 import { mt } from '@/utils/mt'
@@ -19,15 +20,7 @@ export function LoginPage() {
     try {
       await login(email.trim(), password)
     } catch (err: unknown) {
-      const axiosMsg =
-        typeof err === 'object' &&
-        err !== null &&
-        'response' in err &&
-        typeof (err as { response?: { data?: { message?: string } } }).response?.data?.message ===
-          'string'
-          ? (err as { response: { data: { message: string } } }).response.data.message
-          : null
-      setError(axiosMsg ?? (err instanceof Error ? err.message : 'Login failed'))
+      setError(getApiErrorMessage(err, 'Login failed'))
     } finally {
       setLoading(false)
     }

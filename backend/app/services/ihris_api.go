@@ -117,10 +117,12 @@ func (c *IhrisAPIClient) FetchPage(apiURL string, page int) (IhrisAPIResponse, e
 }
 
 func (r IhrisAPIRecord) ToIhrisData() models.IhrisData {
+	districtID := normalizeIhrisDistrictID(r.DistrictID)
 	return models.IhrisData{
 		IhrisPID:            r.IhrisPID,
-		DistrictID:          r.DistrictID,
+		DistrictID:          districtID,
 		District:            r.District,
+		DhisDistrictID:      normalizeIhrisDistrictID(r.DhisDistrictID),
 		DhisFacilityID:      r.DhisFacilityID,
 		Nin:                 r.Nin,
 		FacilityTypeID:      r.FacilityTypeID,
@@ -140,7 +142,19 @@ func (r IhrisAPIRecord) ToIhrisData() models.IhrisData {
 		InstitutionTypeID:   r.InstitutionTypeID,
 		InstitutionTypeName: r.InstitutionTypeName,
 		Gender:              r.Gender,
+		Region:              r.Region,
 	}
+}
+
+func normalizeIhrisDistrictID(id *string) *string {
+	if id == nil {
+		return nil
+	}
+	v := strings.ToUpper(strings.TrimSpace(*id))
+	if v == "" || v == "DHIS_DISTRICT_ID" {
+		return nil
+	}
+	return &v
 }
 
 func ihrisAPIURL() string {

@@ -26,14 +26,13 @@ import {
   Card,
   Chip,
   Input,
-  Option,
-  Select,
   Switch,
   Tab,
   Tabs,
   TabsHeader,
   Typography,
 } from '@material-tailwind/react'
+import { Select, Option } from '@/components/molecules/MtSelect'
 import { kpiAdminService, type KpiAssignmentRow, type KpiRow } from '@/api/services/kpiAdmin'
 import { kpiCategoryLabel } from '@/utils/normalizeApi'
 import { PageHeader } from '@/components/organisms/PageHeader'
@@ -455,6 +454,7 @@ export function KpiAdminPage() {
             isError={kpisQuery.isError}
             error={kpisQuery.error}
             label="KPI catalog"
+            variant="table"
             onRetry={() => kpisQuery.refetch()}
           >
             <ServerPaginatedTable
@@ -912,6 +912,7 @@ export function KpiAdminPage() {
             isError={assignmentsQuery.isError}
             error={assignmentsQuery.error}
             label="KPI assignments"
+            variant="table"
             onRetry={() => assignmentsQuery.refetch()}
           >
             <ServerPaginatedTable

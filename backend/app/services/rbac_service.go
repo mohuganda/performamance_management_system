@@ -37,28 +37,58 @@ type RbacUserRow struct {
 	ScopeFacilityID *uint      `json:"scope_facility_id,omitempty"`
 	ScopeFacility   string     `json:"scope_facility_name,omitempty"`
 	ScopeDistrict   string     `json:"scope_district_name,omitempty"`
+	ScopeAssignments []UserScopeAssignmentRow `json:"scope_assignments,omitempty"`
+}
+
+type UserScopeAssignmentRow struct {
+	ScopeType string  `json:"scope_type"`
+	RefID     *uint   `json:"ref_id,omitempty"`
+	RefCode   *string `json:"ref_code,omitempty"`
+	Label     *string `json:"label,omitempty"`
+}
+
+type UserScopeAssignmentInput struct {
+	ScopeType string  `json:"scope_type"`
+	RefID     *uint   `json:"ref_id"`
+	RefCode   *string `json:"ref_code"`
+	Label     *string `json:"label"`
 }
 
 type UserScopeInput struct {
-	ScopeLevel      *string
-	ScopeDistrictID *string
-	ScopeFacilityID *uint
+	ScopeLevel       *string
+	ScopeDistrictID  *string
+	ScopeFacilityID  *uint
+	ScopeAssignments *[]UserScopeAssignmentInput
 }
 
 type ScopeOptionRow struct {
+	Regions    []ScopeRegionOption    `json:"regions"`
 	Districts  []ScopeDistrictOption  `json:"districts"`
 	Facilities []ScopeFacilityOption  `json:"facilities"`
 	Levels     []ScopeLevelOption     `json:"levels"`
 }
 
-type ScopeDistrictOption struct {
-	ID   string `json:"id"`
+type ScopeRegionOption struct {
+	ID   uint   `json:"id"`
+	Code string `json:"code"`
 	Name string `json:"name"`
 }
 
+type ScopeDistrictOption struct {
+	ID       string `json:"id"`
+	RefID    uint   `json:"ref_id"`
+	Code     string `json:"code"`
+	Name     string `json:"name"`
+	RegionID *uint  `json:"region_id,omitempty"`
+}
+
 type ScopeFacilityOption struct {
-	ID   uint   `json:"id"`
-	Name string `json:"name"`
+	ID            uint   `json:"id"`
+	Name          string `json:"name"`
+	DistrictRefID *uint  `json:"district_ref_id,omitempty"`
+	DistrictName  string `json:"district_name,omitempty"`
+	DistrictID    string `json:"district_id,omitempty"`
+	RegionID      *uint  `json:"region_id,omitempty"`
 }
 
 type ScopeLevelOption struct {
@@ -157,6 +187,20 @@ func (s *RbacService) LoadPrincipal(user models.User) (authctx.Principal, error)
 		principal.Permissions[perm.Code] = true
 	}
 
+	var userPerms []models.UserPermission
+	if err := facades.Orm().Query().Where("user_id", user.ID).Get(&userPerms); err == nil && len(userPerms) > 0 {
+		directIDs := make([]uint, 0, len(userPerms))
+		for _, up := range userPerms {
+			directIDs = append(directIDs, up.PermissionID)
+		}
+		var directPerms []models.Permission
+		if err := facades.Orm().Query().Where("id", directIDs).Get(&directPerms); err == nil {
+			for _, perm := range directPerms {
+				principal.Permissions[perm.Code] = true
+			}
+		}
+	}
+
 	ttl := facades.Config().GetInt("security.auth.permission_cache_ttl", 300)
 	if encoded, err := json.Marshal(principal); err == nil {
 		_ = facades.Cache().Put(cacheKey, string(encoded), time.Duration(ttl)*time.Second)
@@ -196,7 +240,7 @@ func (s *RbacService) RoleScopes(roleCodes []string) ([]RoleScope, error) {
 		return nil, nil
 	}
 	var roles []models.Role
-	if err := facades.Orm().Query().Where("code", roleCodes).Get(&roles); err != nil {
+	if err := facades.Orm().Query().WhereIn("code", stringSliceToAny(roleCodes)).Get(&roles); err != nil {
 		return nil, err
 	}
 	roleIDs := make([]uint, 0, len(roles))
@@ -204,7 +248,7 @@ func (s *RbacService) RoleScopes(roleCodes []string) ([]RoleScope, error) {
 		roleIDs = append(roleIDs, role.ID)
 	}
 	var scopes []models.RoleDataScope
-	if err := facades.Orm().Query().Where("role_id", roleIDs).Get(&scopes); err != nil {
+	if err := facades.Orm().Query().WhereIn("role_id", toAnySlice(roleIDs)).Get(&scopes); err != nil {
 		return nil, err
 	}
 
@@ -276,6 +320,94 @@ func (s *RbacService) ListPermissions() ([]models.Permission, error) {
 	return rows, err
 }
 
+func (s *RbacService) ListRolePermissionCodes(roleCode string) ([]string, error) {
+	var role models.Role
+	if err := facades.Orm().Query().Where("code", roleCode).First(&role); err != nil || role.ID == 0 {
+		return nil, fmt.Errorf("role not found")
+	}
+	var rolePerms []models.RolePermission
+	if err := facades.Orm().Query().Where("role_id", role.ID).Get(&rolePerms); err != nil {
+		return nil, err
+	}
+	if len(rolePerms) == 0 {
+		return []string{}, nil
+	}
+	permIDs := make([]uint, 0, len(rolePerms))
+	for _, rp := range rolePerms {
+		permIDs = append(permIDs, rp.PermissionID)
+	}
+	var permissions []models.Permission
+	if err := facades.Orm().Query().Where("id", permIDs).Order("module asc, code asc").Get(&permissions); err != nil {
+		return nil, err
+	}
+	codes := make([]string, 0, len(permissions))
+	for _, perm := range permissions {
+		codes = append(codes, perm.Code)
+	}
+	return codes, nil
+}
+
+func (s *RbacService) ListUserPermissionCodes(userID uint) ([]string, error) {
+	var userPerms []models.UserPermission
+	if err := facades.Orm().Query().Where("user_id", userID).Get(&userPerms); err != nil {
+		return nil, err
+	}
+	if len(userPerms) == 0 {
+		return []string{}, nil
+	}
+	permIDs := make([]uint, 0, len(userPerms))
+	for _, up := range userPerms {
+		permIDs = append(permIDs, up.PermissionID)
+	}
+	var permissions []models.Permission
+	if err := facades.Orm().Query().Where("id", permIDs).Order("module asc, code asc").Get(&permissions); err != nil {
+		return nil, err
+	}
+	codes := make([]string, 0, len(permissions))
+	for _, perm := range permissions {
+		codes = append(codes, perm.Code)
+	}
+	return codes, nil
+}
+
+func (s *RbacService) GrantUserPermission(userID uint, permissionCode string) error {
+	var permission models.Permission
+	if err := facades.Orm().Query().Where("code", permissionCode).First(&permission); err != nil || permission.ID == 0 {
+		return fmt.Errorf("permission not found")
+	}
+	var existing models.UserPermission
+	if err := facades.Orm().Query().
+		Where("user_id", userID).
+		Where("permission_id", permission.ID).
+		First(&existing); err == nil && existing.ID > 0 {
+		return nil
+	}
+	if err := facades.Orm().Query().Create(&models.UserPermission{
+		UserID:       userID,
+		PermissionID: permission.ID,
+	}); err != nil {
+		return err
+	}
+	s.InvalidateUserCache(userID)
+	return nil
+}
+
+func (s *RbacService) RevokeUserPermission(userID uint, permissionCode string) error {
+	var permission models.Permission
+	if err := facades.Orm().Query().Where("code", permissionCode).First(&permission); err != nil || permission.ID == 0 {
+		return fmt.Errorf("permission not found")
+	}
+	_, err := facades.Orm().Query().
+		Where("user_id", userID).
+		Where("permission_id", permission.ID).
+		Delete(&models.UserPermission{})
+	if err != nil {
+		return err
+	}
+	s.InvalidateUserCache(userID)
+	return nil
+}
+
 func (s *RbacService) GrantPermission(roleCode string, permissionCode string) error {
 	var role models.Role
 	if err := facades.Orm().Query().Where("code", roleCode).First(&role); err != nil {
@@ -298,10 +430,14 @@ func (s *RbacService) GrantPermission(roleCode string, permissionCode string) er
 		First(&existing); err == nil && existing.ID > 0 {
 		return nil
 	}
-	return facades.Orm().Query().Create(&models.RolePermission{
+	if err := facades.Orm().Query().Create(&models.RolePermission{
 		RoleID:       role.ID,
 		PermissionID: permission.ID,
-	})
+	}); err != nil {
+		return err
+	}
+	s.invalidateRoleUsers(role.ID)
+	return nil
 }
 
 func (s *RbacService) RevokePermission(roleCode string, permissionCode string) error {
@@ -323,7 +459,21 @@ func (s *RbacService) RevokePermission(roleCode string, permissionCode string) e
 		Where("role_id", role.ID).
 		Where("permission_id", permission.ID).
 		Delete(&models.RolePermission{})
-	return err
+	if err != nil {
+		return err
+	}
+	s.invalidateRoleUsers(role.ID)
+	return nil
+}
+
+func (s *RbacService) invalidateRoleUsers(roleID uint) {
+	var userRoles []models.UserRole
+	if err := facades.Orm().Query().Where("role_id", roleID).Get(&userRoles); err != nil {
+		return
+	}
+	for _, ur := range userRoles {
+		s.InvalidateUserCache(ur.UserID)
+	}
 }
 
 func (s *RbacService) SetUserActive(userID uint, active bool) error {
@@ -359,6 +509,11 @@ func (s *RbacService) UpdateUser(userID uint, name *string, isActive *bool, scop
 	if scope != nil {
 		if err := s.applyUserScope(&user, scope); err != nil {
 			return models.User{}, err
+		}
+		if scope.ScopeAssignments != nil {
+			if err := s.replaceUserScopeAssignments(user.ID, *scope.ScopeAssignments); err != nil {
+				return models.User{}, err
+			}
 		}
 	}
 	if err := facades.Orm().Query().Save(&user); err != nil {
@@ -404,37 +559,131 @@ func (s *RbacService) applyUserScope(user *models.User, scope *UserScopeInput) e
 	return nil
 }
 
-func (s *ScopeService) ListScopeOptions() ScopeOptionRow {
-	levels := []ScopeLevelOption{
-		{Value: "staff", Label: "Staff-linked", Description: "Scope follows the linked iHRIS staff placement"},
-		{Value: "facility", Label: "Facility", Description: "Access limited to one health facility"},
-		{Value: "district", Label: "District", Description: "Access across all facilities in a district (HR, Directors)"},
-		{Value: "national", Label: "National (MoH)", Description: "Organization-wide visibility for MoH overseers"},
-	}
-
-	var facilities []models.Facility
-	_ = facades.Orm().Query().Where("is_active", true).Order("name asc").Limit(500).Get(&facilities)
-	facilityOpts := make([]ScopeFacilityOption, 0, len(facilities))
-	districtSet := map[string]string{}
-	for _, f := range facilities {
-		facilityOpts = append(facilityOpts, ScopeFacilityOption{ID: f.ID, Name: f.Name})
-		if f.DistrictID != nil && strings.TrimSpace(*f.DistrictID) != "" {
-			id := strings.ToUpper(strings.TrimSpace(*f.DistrictID))
-			name := id
-			if f.DistrictName != nil && strings.TrimSpace(*f.DistrictName) != "" {
-				name = strings.TrimSpace(*f.DistrictName)
-			}
-			districtSet[id] = name
+func (s *RbacService) replaceUserScopeAssignments(userID uint, assignments []UserScopeAssignmentInput) error {
+	_, _ = facades.Orm().Query().Where("user_id", userID).Delete(&models.UserScopeAssignment{})
+	for _, item := range assignments {
+		scopeType := strings.ToLower(strings.TrimSpace(item.ScopeType))
+		if scopeType == "" {
+			continue
+		}
+		row := models.UserScopeAssignment{
+			UserID:    userID,
+			ScopeType: scopeType,
+			RefID:     item.RefID,
+			RefCode:   item.RefCode,
+			Label:     item.Label,
+		}
+		if err := facades.Orm().Query().Create(&row); err != nil {
+			return err
 		}
 	}
 
-	districts := make([]ScopeDistrictOption, 0, len(districtSet))
-	for id, name := range districtSet {
-		districts = append(districts, ScopeDistrictOption{ID: id, Name: name})
+	// Keep legacy single-value columns aligned with the first assignment of each type.
+	var user models.User
+	if err := facades.Orm().Query().Where("id", userID).First(&user); err != nil || user.ID == 0 {
+		return nil
+	}
+	updated := false
+	for _, item := range assignments {
+		switch strings.ToLower(strings.TrimSpace(item.ScopeType)) {
+		case "district":
+			if item.RefID != nil && *item.RefID > 0 {
+				var district models.District
+				if err := facades.Orm().Query().Where("id", *item.RefID).First(&district); err == nil && district.ID > 0 {
+					user.ScopeDistrictID = &district.Code
+					updated = true
+				}
+			}
+		case "facility":
+			if item.RefID != nil && *item.RefID > 0 {
+				user.ScopeFacilityID = item.RefID
+				updated = true
+			}
+		}
+	}
+	if updated {
+		_ = facades.Orm().Query().Save(&user)
+	}
+	return nil
+}
+
+func (s *RbacService) ListUserScopeAssignments(userID uint) []UserScopeAssignmentRow {
+	var rows []models.UserScopeAssignment
+	_ = facades.Orm().Query().Where("user_id", userID).Order("id asc").Get(&rows)
+	out := make([]UserScopeAssignmentRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, UserScopeAssignmentRow{
+			ScopeType: row.ScopeType,
+			RefID:     row.RefID,
+			RefCode:   row.RefCode,
+			Label:     row.Label,
+		})
+	}
+	return out
+}
+
+func (s *ScopeService) ListScopeOptions() ScopeOptionRow {
+	levels := []ScopeLevelOption{
+		{Value: "staff", Label: "Staff-linked", Description: "Scope follows the linked iHRIS staff placement"},
+		{Value: "facility", Label: "Facility", Description: "Access limited to one or more health facilities"},
+		{Value: "district", Label: "District", Description: "Access across facilities in assigned district(s)"},
+		{Value: "region", Label: "Region", Description: "Access across all districts in an assigned region(s)"},
+		{Value: "national", Label: "National (MoH)", Description: "Organization-wide visibility for MoH overseers"},
+	}
+
+	var regions []models.Region
+	_ = facades.Orm().Query().Where("is_active", true).Order("name asc").Get(&regions)
+	regionOpts := make([]ScopeRegionOption, 0, len(regions))
+	for _, r := range regions {
+		regionOpts = append(regionOpts, ScopeRegionOption{ID: r.ID, Code: r.Code, Name: r.Name})
+	}
+
+	var districts []models.District
+	_ = facades.Orm().Query().Where("is_active", true).Order("name asc").Get(&districts)
+	districtOpts := make([]ScopeDistrictOption, 0, len(districts))
+	for _, d := range districts {
+		ihrisID := d.Code
+		if d.IhrisDistrictID != nil && strings.TrimSpace(*d.IhrisDistrictID) != "" {
+			ihrisID = strings.ToUpper(strings.TrimSpace(*d.IhrisDistrictID))
+		}
+		districtOpts = append(districtOpts, ScopeDistrictOption{
+			ID:       ihrisID,
+			RefID:    d.ID,
+			Code:     d.Code,
+			Name:     d.Name,
+			RegionID: d.RegionID,
+		})
+	}
+
+	var facilities []models.Facility
+	_ = facades.Orm().Query().Where("is_active", true).Order("name asc").Limit(2000).Get(&facilities)
+	districtNameByID := map[uint]string{}
+	for _, d := range districts {
+		districtNameByID[d.ID] = d.Name
+	}
+	facilityOpts := make([]ScopeFacilityOption, 0, len(facilities))
+	for _, f := range facilities {
+		opt := ScopeFacilityOption{
+			ID:            f.ID,
+			Name:          f.Name,
+			DistrictRefID: f.DistrictRefID,
+			RegionID:      f.RegionID,
+		}
+		if f.DistrictID != nil {
+			opt.DistrictID = strings.ToUpper(strings.TrimSpace(*f.DistrictID))
+		}
+		if f.DistrictRefID != nil {
+			opt.DistrictName = districtNameByID[*f.DistrictRefID]
+		}
+		if opt.DistrictName == "" && f.DistrictName != nil {
+			opt.DistrictName = strings.TrimSpace(*f.DistrictName)
+		}
+		facilityOpts = append(facilityOpts, opt)
 	}
 
 	return ScopeOptionRow{
-		Districts:  districts,
+		Regions:    regionOpts,
+		Districts:  districtOpts,
 		Facilities: facilityOpts,
 		Levels:     levels,
 	}
@@ -467,12 +716,13 @@ func (s *RbacService) buildUserRow(user models.User, roles []string, category st
 			row.ScopeFacility = facility.Name
 		}
 	}
+	row.ScopeAssignments = s.ListUserScopeAssignments(user.ID)
 	return row
 }
 
 func (s *RbacService) ListUsersPaginated(filter UserListFilter) (PaginatedResult[RbacUserRow], error) {
 	page, perPage := ResolvePage(filter.Page, filter.PerPage)
-	query := facades.Orm().Query().Order("id desc")
+	query := facades.Orm().Query().Model(&models.User{}).Order("id desc")
 	if search := strings.TrimSpace(filter.Search); search != "" {
 		like := "%" + search + "%"
 		query = query.Where("name LIKE ? OR email LIKE ?", like, like)
@@ -482,10 +732,22 @@ func (s *RbacService) ListUsersPaginated(filter UserListFilter) (PaginatedResult
 	} else if filter.IsActive == "false" {
 		query = query.Where("is_active", false)
 	}
-
-	var users []models.User
-	if err := query.Get(&users); err != nil {
-		return PaginatedResult[RbacUserRow]{}, err
+	if filter.ScopeDistrict != "" {
+		district := strings.ToUpper(strings.TrimSpace(filter.ScopeDistrict))
+		query = query.Where(
+			"(scope_district_id = ? OR scope_level = ?)",
+			district, "national",
+		)
+	}
+	if filter.RoleCode != "" {
+		query = query.Where(
+			`id IN (
+				SELECT ur.user_id FROM user_roles ur
+				INNER JOIN roles r ON r.id = ur.role_id
+				WHERE r.code = ?
+			) OR role = ? OR (is_super_admin = ? AND ? = 'super_admin')`,
+			filter.RoleCode, filter.RoleCode, true, filter.RoleCode,
+		)
 	}
 
 	roleByID := map[uint]models.Role{}
@@ -504,6 +766,75 @@ func (s *RbacService) ListUsersPaginated(filter UserListFilter) (PaginatedResult
 		}
 	}
 
+	// Category filter still needs in-memory pass — load matching users then filter
+	if filter.Category != "" {
+		var users []models.User
+		if err := query.Get(&users); err != nil {
+			return PaginatedResult[RbacUserRow]{}, err
+		}
+		filtered := make([]models.User, 0, len(users))
+		for _, user := range users {
+			roles := userRolesMap[user.ID]
+			if len(roles) == 0 && user.Role != "" {
+				roles = []string{user.Role}
+			}
+			if user.IsSuperAdmin {
+				roles = appendUnique(roles, "super_admin")
+			}
+			if accountCategoryForRoles(roles, roleByID) == filter.Category {
+				filtered = append(filtered, user)
+			}
+		}
+		return s.paginateUserRows(filtered, userRolesMap, roleByID, page, perPage), nil
+	}
+
+	total, err := query.Count()
+	if err != nil {
+		return PaginatedResult[RbacUserRow]{}, err
+	}
+
+	var users []models.User
+	if err := query.Offset(OffsetFor(page, perPage)).Limit(perPage).Get(&users); err != nil {
+		return PaginatedResult[RbacUserRow]{}, err
+	}
+
+	rows := s.buildUserRows(users, userRolesMap, roleByID)
+	return BuildPaginatedResult(rows, int(total), page, perPage), nil
+}
+
+func (s *RbacService) paginateUserRows(
+	users []models.User,
+	userRolesMap map[uint][]string,
+	roleByID map[uint]models.Role,
+	page, perPage int,
+) PaginatedResult[RbacUserRow] {
+	page, perPage = ResolvePage(page, perPage)
+	total := len(users)
+	start := OffsetFor(page, perPage)
+	if start >= total {
+		return BuildPaginatedResult([]RbacUserRow{}, total, page, perPage)
+	}
+	end := start + perPage
+	if end > total {
+		end = total
+	}
+	rows := s.buildUserRows(users[start:end], userRolesMap, roleByID)
+	return BuildPaginatedResult(rows, total, page, perPage)
+}
+
+func (s *RbacService) buildUserRows(
+	users []models.User,
+	userRolesMap map[uint][]string,
+	roleByID map[uint]models.Role,
+) []RbacUserRow {
+	facilityIDs := make([]uint, 0)
+	for _, user := range users {
+		if user.ScopeFacilityID != nil {
+			facilityIDs = append(facilityIDs, *user.ScopeFacilityID)
+		}
+	}
+	facilities := loadFacilitiesByIDs(facilityIDs)
+
 	rows := make([]RbacUserRow, 0, len(users))
 	for _, user := range users {
 		roles := userRolesMap[user.ID]
@@ -514,27 +845,34 @@ func (s *RbacService) ListUsersPaginated(filter UserListFilter) (PaginatedResult
 			roles = appendUnique(roles, "super_admin")
 		}
 		category := accountCategoryForRoles(roles, roleByID)
-		if filter.RoleCode != "" && !containsString(roles, filter.RoleCode) {
-			continue
+		row := RbacUserRow{
+			ID:              user.ID,
+			Name:            user.Name,
+			Email:           user.Email,
+			IsActive:        user.IsActive,
+			IsSuperAdmin:    user.IsSuperAdmin,
+			StaffID:         user.StaffID,
+			PrimaryRole:     user.Role,
+			Roles:           roles,
+			AccountCategory: category,
+			LastLoginAt:     user.LastLoginAt,
 		}
-		if filter.Category != "" && category != filter.Category {
-			continue
+		if user.ScopeLevel != nil {
+			row.ScopeLevel = *user.ScopeLevel
 		}
-		if filter.ScopeDistrict != "" {
-			district := strings.ToUpper(strings.TrimSpace(filter.ScopeDistrict))
-			userDistrict := ""
-			if user.ScopeDistrictID != nil {
-				userDistrict = strings.ToUpper(strings.TrimSpace(*user.ScopeDistrictID))
+		if user.ScopeDistrictID != nil {
+			row.ScopeDistrictID = *user.ScopeDistrictID
+			row.ScopeDistrict = *user.ScopeDistrictID
+		}
+		if user.ScopeFacilityID != nil {
+			row.ScopeFacilityID = user.ScopeFacilityID
+			if facility, ok := facilities[*user.ScopeFacilityID]; ok {
+				row.ScopeFacility = facility.Name
 			}
-			if user.ScopeLevel != nil && *user.ScopeLevel == "national" {
-				// national accounts visible in all district filters
-			} else if userDistrict != district {
-				continue
-			}
 		}
-		rows = append(rows, s.buildUserRow(user, roles, category))
+		rows = append(rows, row)
 	}
-	return PaginateSlice(rows, page, perPage), nil
+	return rows
 }
 
 func accountCategoryForRoles(roleCodes []string, roleByID map[uint]models.Role) string {
@@ -601,4 +939,12 @@ func ParseBearerToken(ctx http.Context) string {
 		return strings.TrimSpace(header[7:])
 	}
 	return strings.TrimSpace(header)
+}
+
+func stringSliceToAny(values []string) []any {
+	out := make([]any, len(values))
+	for i, v := range values {
+		out[i] = v
+	}
+	return out
 }

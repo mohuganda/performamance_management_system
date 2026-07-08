@@ -9,12 +9,12 @@ Integrated performance, leave, attendance, and workforce management platform for
 
 | Area | Capabilities |
 |------|----------------|
-| **Dashboards** | Role-based views for health workers, supervisors, department heads, HR, directors, and executives |
-| **Performance** | KPI assignment, PPA planning (weights & targets), quarterly reporting, cumulative (YTD) indicators |
-| **Leave** | Self-service requests, multi-stage approval, balances, HR configuration and org-wide administration |
+| **Dashboards** | Role-based views; **clickable drilldown tables**; Uganda district choropleth map; **overall performance score** on staff dashboard |
+| **Performance** | KPI assignment, PPA planning, quarterly reporting, cumulative (YTD) indicators, **scoped status reports with Excel/PDF export** |
+| **Leave** | Self-service requests with **searchable leave type**, multi-stage approval, balances, HR administration |
 | **Out of station** | GPS destination requests with supervisor approval and geofenced attendance |
 | **Attendance** | Mobile-style clock-in/out with location verification |
-| **Administration** | Staff directory & supervisors, KPI catalog & assignments, leave policy, RBAC |
+| **Administration** | Staff directory with **searchable supervisor/department fields**, KPI catalog, leave policy, RBAC, system configuration |
 | **Notifications** | In-app alerts for approvals and system events |
 
 ## Architecture
@@ -198,16 +198,18 @@ Use the returned token: `Authorization: Bearer <token>`
 
 | Path | Module |
 |------|--------|
-| `/dashboard` | Role-based dashboard |
+| `/dashboard` | Role-based dashboard with drilldowns and district map |
 | `/performance` | PPA planning and quarterly reporting |
+| `/performance/reports` | PPA/quarterly status, Overall Performance Rating scores, Excel/PDF export |
 | `/leave` | Leave requests and balances |
 | `/out-of-station` | Off-site duty requests |
 | `/attendance` | Clock in/out and history |
 | `/notifications` | System notifications |
 | `/profile` | Profile and signature |
-| `/settings` | User preferences |
+| `/settings` | Preferences, data sources, email, notifications, reporting windows |
 | `/admin/leave` | Leave administration (HR) |
 | `/admin/staff` | Staff directory and supervisors |
+| `/admin/system` | Global system configuration (e.g. iHRIS overwrite) |
 | `/admin/kpi` | KPI catalog and assignments |
 | `/admin/rbac` | Roles and permissions |
 
@@ -233,6 +235,15 @@ Interactive docs: **http://localhost:3030/swagger/index.html**
 | POST | `/api/v1/mobile/performance/ppa` | Save performance plan |
 | GET | `/api/v1/mobile/performance/report-form` | Quarterly report form |
 | POST | `/api/v1/mobile/performance/reports` | Submit quarterly report |
+| GET | `/api/v1/mobile/performance/status-report` | Scoped PPA/report status and scores (RBAC) |
+| GET | `/api/v1/mobile/performance/overall-rating` | Overall rating for authenticated staff |
+
+**Overall Performance Rating** (aligned with iHRIS end-of-year review):
+
+- Per KPI: `contribution = (actual ÷ target) × weight`
+- Period raw score = sum of contributions; normalised = `raw × (100 ÷ total weight)` when weights ≠ 100%
+- Overall = average across periods with report entries
+- Raw and normalised values are both returned and shown in UI/exports
 
 ### Leave
 
@@ -248,6 +259,7 @@ Leave policy is **database-driven** — not hardcoded. HR admins manage types, e
 
 - **staff** / **staff_contracts** — biodata and deployment from iHRIS
 - **staff_supervisors** — up to 3 supervisors with `approval_sequence`
+- **districts** — Uganda districts with **map_key** (Highcharts) and **iso_code** for dashboard maps
 - **facilities** / **job_titles** / **departments**
 - **kpis** / **kpi_assignments** / **ppas** / **ppa_kpis** / **performance_reports**
 - **leave_*** / **out_of_station_*** / **attendance_clocks**

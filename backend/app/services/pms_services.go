@@ -39,7 +39,7 @@ func (s *IhrisSyncService) SyncFromDemoTable() (SyncResult, error) {
 		}
 		result.FacilitiesUpserted++
 
-		deptID, err := s.upsertDepartment(row)
+		deptID, err := s.upsertDepartment(row, facilityID)
 		if err != nil {
 			return result, err
 		}
@@ -76,6 +76,8 @@ func (s *IhrisSyncService) SyncFromDemoTable() (SyncResult, error) {
 	cacheKey := "pms:ihris:last_sync"
 	_ = facades.Cache().Put(cacheKey, time.Now().Format(time.RFC3339), 24*time.Hour)
 	NewStaffCacheService().Invalidate()
+	_, _ = NewGeographyService().BackfillFacilityDistrictLinks()
+	_, _ = BackfillDepartmentFacilityLinks()
 
 	return result, nil
 }
@@ -96,7 +98,7 @@ func (s *IhrisSyncService) SyncStaffByIhrisPID(ihrisPID string) (uint, error) {
 	if err != nil {
 		return 0, err
 	}
-	deptID, err := s.upsertDepartment(row)
+	deptID, err := s.upsertDepartment(row, facilityID)
 	if err != nil {
 		return 0, err
 	}
@@ -129,15 +131,31 @@ func (s *IhrisSyncService) upsertFacility(row models.IhrisData) (uint, error) {
 		name = "Unknown Facility"
 	}
 
+	geo := NewGeographyService().EnrichFacility(row)
+
 	nfrid := row.DhisFacilityID
+	districtID := row.DistrictID
+	districtName := row.District
+	if geo.DistrictID != nil {
+		districtID = geo.DistrictID
+	}
+	if geo.DistrictName != nil {
+		districtName = geo.DistrictName
+	}
+
 	payload := models.Facility{
 		IhrisFacilityID:     extID,
 		Nfrid:               nfrid,
 		DhisFacilityID:      row.DhisFacilityID,
 		Name:                name,
 		FacilityTypeID:      row.FacilityTypeID,
-		DistrictID:          row.DistrictID,
-		DistrictName:        row.District,
+		DistrictID:          districtID,
+		DistrictName:        districtName,
+		DistrictRefID:       geo.DistrictRefID,
+		RegionID:            geo.RegionID,
+		RegionCode:          geo.RegionCode,
+		Latitude:            geo.Latitude,
+		Longitude:           geo.Longitude,
 		InstitutionTypeID:   row.InstitutionTypeID,
 		InstitutionTypeName: strPtr(row.InstitutionTypeName),
 		IsActive:            true,
@@ -158,7 +176,7 @@ func (s *IhrisSyncService) upsertFacility(row models.IhrisData) (uint, error) {
 	return facility.ID, nil
 }
 
-func (s *IhrisSyncService) upsertDepartment(row models.IhrisData) (uint, error) {
+func (s *IhrisSyncService) upsertDepartment(row models.IhrisData, facilityID uint) (uint, error) {
 	extID := deref(row.DepartmentID)
 	name := deref(row.Department)
 	if extID == "" || name == "" {
@@ -167,7 +185,15 @@ func (s *IhrisSyncService) upsertDepartment(row models.IhrisData) (uint, error) 
 
 	var dept models.Department
 	err := facades.Orm().Query().Where("external_system_id", extID).First(&dept)
-	payload := models.Department{ExternalSystemID: extID, Name: name}
+	var facID *uint
+	if facilityID > 0 {
+		facID = &facilityID
+	}
+	payload := models.Department{
+		ExternalSystemID: extID,
+		Name:             name,
+		FacilityID:       facID,
+	}
 	if err != nil {
 		if createErr := facades.Orm().Query().Create(&payload); createErr != nil {
 			return 0, createErr
@@ -181,6 +207,71 @@ func (s *IhrisSyncService) upsertDepartment(row models.IhrisData) (uint, error) 
 	}
 
 	return dept.ID, nil
+}
+
+// BackfillDepartmentFacilityLinks sets departments.facility_id from staff contracts and iHRIS rows.
+func BackfillDepartmentFacilityLinks() (int, error) {
+	updated := 0
+
+	type contractLink struct {
+		DepartmentID uint
+		FacilityID   uint
+	}
+	var links []contractLink
+	if err := facades.Orm().Query().Table("staff_contracts").
+		Select("department_id, facility_id").
+		Where("department_id IS NOT NULL AND facility_id > 0").
+		Group("department_id, facility_id").
+		Get(&links); err != nil {
+		return 0, err
+	}
+	for _, link := range links {
+		if link.DepartmentID == 0 || link.FacilityID == 0 {
+			continue
+		}
+		res, err := facades.Orm().Query().Model(&models.Department{}).
+			Where("id", link.DepartmentID).
+			Where("facility_id IS NULL OR facility_id = 0 OR facility_id <> ?", link.FacilityID).
+			Update("facility_id", link.FacilityID)
+		if err != nil {
+			return updated, err
+		}
+		updated += int(res.RowsAffected)
+	}
+
+	if !facades.Schema().HasTable("ihrisdata") {
+		return updated, nil
+	}
+
+	var ihrisRows []models.IhrisData
+	if err := facades.Orm().Query().
+		Where("department_id IS NOT NULL AND department_id <> ''").
+		Where("facility_id IS NOT NULL AND facility_id <> ''").
+		Get(&ihrisRows); err != nil {
+		return updated, err
+	}
+
+	for _, row := range ihrisRows {
+		extDept := strings.TrimSpace(deref(row.DepartmentID))
+		extFac := strings.TrimSpace(deref(row.FacilityID))
+		if extDept == "" || extFac == "" {
+			continue
+		}
+		var facility models.Facility
+		if err := facades.Orm().Query().Where("ihris_facility_id", extFac).First(&facility); err != nil || facility.ID == 0 {
+			continue
+		}
+		res, err := facades.Orm().Query().Model(&models.Department{}).
+			Where("external_system_id", extDept).
+			Where("facility_id IS NULL OR facility_id = 0 OR facility_id <> ?", facility.ID).
+			Update("facility_id", facility.ID)
+		if err != nil {
+			return updated, err
+		}
+		updated += int(res.RowsAffected)
+	}
+
+	return updated, nil
 }
 
 func (s *IhrisSyncService) upsertJob(row models.IhrisData) (uint, error) {
@@ -404,9 +495,20 @@ func (s *DashboardService) HealthWorkerDashboard(staffID uint, quarter string) m
 		}
 	}
 
+	perf := NewPerformanceService()
+	overall, _ := perf.OverallRatingForStaff(staffID)
+
 	payload := map[string]any{
 		"role":    "health_worker",
 		"quarter": quarter,
+		"overall_performance": map[string]any{
+			"normalized_score": overall.OverallNormalized,
+			"raw_score":        overall.OverallRawScore,
+			"latest_score":     overall.LatestNormalized,
+			"ppa_status":       overall.PpaStatus,
+			"periods":          overall.Periods,
+			"financial_year":   overall.FinancialYear,
+		},
 		"task_completion": map[string]any{
 			"percent":   55,
 			"completed": 8,
@@ -525,7 +627,7 @@ func (s *DashboardService) HRManagerDashboard(staffID uint, quarter string) map[
 	if org.ScopeLevel != "national" && staffID > 0 {
 		// HR at MoH HQ still sees national facility roll-up; others see their facility context in header.
 	}
-	facilities := s.org.ListFacilityPerformance(20)
+	facilities := s.org.ListFacilityPerformance(0)
 	summary := s.org.SummarizeFacilities(facilities)
 
 	facilityRows := make([]map[string]any, 0, len(facilities))

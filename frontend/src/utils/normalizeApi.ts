@@ -1,3 +1,5 @@
+import { unwrapApiData } from '@/utils/unwrapApi'
+
 /** Normalize API records that may use PascalCase (Go default) or snake_case. */
 export function field<T>(row: Record<string, unknown>, ...keys: string[]): T | undefined {
   for (const key of keys) {
@@ -189,4 +191,51 @@ export function normalizeSupervisorCandidates(value: unknown): SupervisorCandida
       }
     })
     .filter((row): row is SupervisorCandidate => row !== null)
+}
+
+export type RbacPermissionNormalized = {
+  id: number
+  code: string
+  name: string
+  module: string
+  action: string
+}
+
+export function normalizePermissions(value: unknown): RbacPermissionNormalized[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((raw) => {
+      const row = raw as Record<string, unknown>
+      const id = Number(field<number>(row, 'id', 'ID'))
+      const code = String(field<string>(row, 'code', 'Code') ?? '')
+      const name = String(field<string>(row, 'name', 'Name') ?? code)
+      const moduleName = String(field<string>(row, 'module', 'Module') ?? 'other')
+      const action = String(field<string>(row, 'action', 'Action') ?? '')
+      if (!id || !code) return null
+      return { id, code, name, module: moduleName, action }
+    })
+    .filter((row): row is RbacPermissionNormalized => row !== null)
+}
+
+export function normalizePermissionCodes(value: unknown): string[] {
+  const payload = unwrapApiData<unknown>(value)
+  if (Array.isArray(payload)) {
+    return payload
+      .map((item) => {
+        if (typeof item === 'string') return item.trim()
+        if (item && typeof item === 'object') {
+          const code = field<string>(item as Record<string, unknown>, 'code', 'Code')
+          return code ? String(code) : ''
+        }
+        return ''
+      })
+      .filter(Boolean)
+  }
+  if (payload && typeof payload === 'object') {
+    const row = payload as Record<string, unknown>
+    for (const key of ['permissions', 'codes', 'items']) {
+      if (row[key] !== undefined) return normalizePermissionCodes(row[key])
+    }
+  }
+  return []
 }

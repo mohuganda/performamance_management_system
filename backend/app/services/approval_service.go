@@ -36,25 +36,27 @@ func (s *ApprovalService) LoadCurrentSupervisors(staffID uint) ([]models.StaffSu
 	return supervisors, nil
 }
 
-func (s *ApprovalService) SeedLeaveApprovals(requestID uint, staffID uint) error {
-	supervisors, err := s.LoadCurrentSupervisors(staffID)
+func (s *ApprovalService) SeedLeaveApprovals(requestID uint, staffID uint, leaveType models.LeaveType) error {
+	workflow := NewLeaveWorkflowService()
+	plan, _, err := workflow.BuildApprovalPlan(staffID, leaveType)
 	if err != nil {
 		return err
 	}
-	if len(supervisors) == 0 {
-		return fmt.Errorf("no supervisors configured for staff %d", staffID)
-	}
 
-	for _, sup := range supervisors {
-		approval := models.LeaveApproval{
-			LeaveRequestID:    requestID,
-			SupervisorStaffID: sup.SupervisorStaffID,
-			Sequence:          sup.ApprovalSequence,
-			Status:            "pending",
-		}
+	for _, row := range plan {
+		approval := row
+		approval.LeaveRequestID = requestID
 		if err := facades.Orm().Query().Create(&approval); err != nil {
 			return err
 		}
+	}
+
+	var request models.LeaveRequest
+	if err := facades.Orm().Query().Where("id", requestID).First(&request); err == nil && request.ID > 0 {
+		if len(plan) > 0 && plan[0].StageCode != nil {
+			request.ApprovalStage = *plan[0].StageCode
+		}
+		_ = facades.Orm().Query().Save(&request)
 	}
 
 	return nil
@@ -131,14 +133,41 @@ func (s *ApprovalService) ActOnLeaveApproval(approvalID uint, supervisorStaffID 
 	}
 
 	if pending == 0 {
+		hrStage := s.hrFinalizeStageForRequest(request)
 		request.Status = "approved"
-		request.ApprovalStage = "hr"
+		request.ApprovalStage = hrStage
 		return facades.Orm().Query().Save(&request)
 	}
 
-	request.CurrentApprovalSequence = approval.Sequence + 1
+	var next models.LeaveApproval
+	_ = facades.Orm().Query().
+		Where("leave_request_id", request.ID).
+		Where("status", "pending").
+		Order("sequence asc").
+		First(&next)
+	if next.StageCode != nil {
+		request.ApprovalStage = *next.StageCode
+	}
+	request.CurrentApprovalSequence = next.Sequence
 	request.Status = "pending"
 	return facades.Orm().Query().Save(&request)
+}
+
+func (s *ApprovalService) hrFinalizeStageForRequest(request models.LeaveRequest) string {
+	leaveType, err := NewLeaveConfigService().GetTypeByID(request.LeaveTypeID)
+	if err != nil {
+		return "hr"
+	}
+	stages, err := NewLeaveWorkflowService().StagesForProfile(NewLeaveWorkflowService().ProfileForLeaveType(leaveType))
+	if err != nil {
+		return "hr"
+	}
+	for _, stage := range stages {
+		if stage.StageType == "hr_finalize" {
+			return stage.Code
+		}
+	}
+	return "hr"
 }
 
 func (s *ApprovalService) ActOnOutOfStationApproval(approvalID uint, supervisorStaffID uint, approve bool, comments string) error {
@@ -213,6 +242,8 @@ type PendingLeaveApproval struct {
 	DaysRequested int    `json:"days_requested"`
 	Reason        string `json:"reason"`
 	Status        string `json:"status"`
+	StageName     string `json:"stage_name,omitempty"`
+	StageCode     string `json:"stage_code,omitempty"`
 }
 
 type PendingOosApproval struct {
@@ -265,6 +296,8 @@ func (s *ApprovalService) ListPendingLeaveApprovals(supervisorStaffID uint) ([]P
 			DaysRequested: request.DaysRequested,
 			Reason:        reason,
 			Status:        request.Status,
+			StageName:     deref(approval.StageName),
+			StageCode:     deref(approval.StageCode),
 		})
 	}
 

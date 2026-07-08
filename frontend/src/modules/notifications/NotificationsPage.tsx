@@ -81,6 +81,7 @@ export function NotificationsPage() {
         isError={listQuery.isError}
         error={listQuery.error}
         label="notifications"
+        variant="cards"
         onRetry={() => listQuery.refetch()}
       >
         <Card {...mt} className="rounded-sm border border-moh-green/15 p-4">

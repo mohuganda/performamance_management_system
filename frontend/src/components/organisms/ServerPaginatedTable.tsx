@@ -1,12 +1,14 @@
-import { Button, Typography } from '@material-tailwind/react'
-import { ChevronLeft, ChevronRight, Database } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { Database } from 'lucide-react'
 import type { PaginatedResponse } from '@/types/pagination'
-import { mt } from '@/utils/mt'
+import { TablePagination } from '@/components/molecules/TablePagination'
 import { cn } from '@/utils/cn'
 
 export interface FancyTableColumn {
   key: string
   label: string
+  icon?: LucideIcon
+  iconClassName?: string
   className?: string
   align?: 'left' | 'center' | 'right'
 }
@@ -18,12 +20,17 @@ interface ServerPaginatedTableProps<T> {
   rows: T[]
   pagination: Pick<PaginatedResponse<T>, 'total' | 'page' | 'per_page' | 'total_pages'>
   onPageChange: (page: number) => void
-  renderRow: (row: T, index: number) => React.ReactNode
+  renderRow: (row: T, index: number, rowNumber: number) => React.ReactNode
   rowKey: (row: T) => string | number
   emptyMessage?: string
   className?: string
-  /** Show total record counter in header and footer (default true) */
+  /** Toolbar slot (filters, export, etc.) rendered below header */
+  toolbar?: React.ReactNode
+  /** Show total record counter in header (default true) */
   showRecordCounter?: boolean
+  /** Show # column with row numbers (default true) */
+  showRowNumbers?: boolean
+  rowNumberLabel?: string
 }
 
 export function ServerPaginatedTable<T>({
@@ -37,12 +44,18 @@ export function ServerPaginatedTable<T>({
   rowKey,
   emptyMessage = 'No records found.',
   className,
+  toolbar,
   showRecordCounter = true,
+  showRowNumbers = true,
+  rowNumberLabel = '#',
 }: ServerPaginatedTableProps<T>) {
   const { page, total_pages, total, per_page } = pagination
   const start = total === 0 ? 0 : (page - 1) * per_page + 1
   const end = Math.min(page * per_page, total)
   const pageRows = rows.length
+  const displayColumns = showRowNumbers
+    ? [{ key: '_rownum', label: rowNumberLabel, align: 'center' as const, className: 'w-12' }, ...columns]
+    : columns
 
   return (
     <div
@@ -76,11 +89,15 @@ export function ServerPaginatedTable<T>({
         </div>
       )}
 
+      {toolbar ? (
+        <div className="border-b border-gray-100 bg-white px-4 py-3">{toolbar}</div>
+      ) : null}
+
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
           <thead>
             <tr className="border-b border-moh-green/10 bg-moh-green/[0.06] text-[11px] font-semibold uppercase tracking-wider text-gray-600">
-              {columns.map((col) => (
+              {displayColumns.map((col) => (
                 <th
                   key={col.key}
                   className={cn(
@@ -90,7 +107,21 @@ export function ServerPaginatedTable<T>({
                     col.className,
                   )}
                 >
-                  {col.label}
+                  {col.icon ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span
+                        className={cn(
+                          'inline-flex rounded p-1',
+                          col.iconClassName ?? 'bg-moh-green/10 text-moh-green',
+                        )}
+                      >
+                        <col.icon className="h-3 w-3" />
+                      </span>
+                      {col.label}
+                    </span>
+                  ) : (
+                    col.label
+                  )}
                 </th>
               ))}
             </tr>
@@ -98,12 +129,14 @@ export function ServerPaginatedTable<T>({
           <tbody className="divide-y divide-gray-100">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-12 text-center">
+                <td colSpan={displayColumns.length} className="px-4 py-12 text-center">
                   <p className="text-sm text-gray-400">{emptyMessage}</p>
                 </td>
               </tr>
             ) : (
-              rows.map((row, index) => (
+              rows.map((row, index) => {
+                const rowNumber = start + index
+                return (
                 <tr
                   key={rowKey(row)}
                   className={cn(
@@ -111,51 +144,29 @@ export function ServerPaginatedTable<T>({
                     index % 2 === 1 && 'bg-gray-50/60',
                   )}
                 >
-                  {renderRow(row, index)}
+                  {showRowNumbers ? (
+                    <td className="px-4 py-3 text-center text-xs font-medium tabular-nums text-gray-500">
+                      {rowNumber}
+                    </td>
+                  ) : null}
+                  {renderRow(row, index, rowNumber)}
                 </tr>
-              ))
+              )})
             )}
           </tbody>
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/50 px-4 py-3">
-        <Typography {...mt} className="text-xs text-gray-600">
-          {total === 0 ? (
-            'No records'
-          ) : (
-            <>
-              Page <strong>{page}</strong> of <strong>{total_pages}</strong>
-              <span className="mx-2 text-gray-300">|</span>
-              {start}–{end} of {total.toLocaleString()} record{total === 1 ? '' : 's'}
-            </>
-          )}
-        </Typography>
-        <div className="flex items-center gap-2">
-          <Button
-            {...mt}
-            size="sm"
-            variant="outlined"
-            className="flex items-center gap-1 rounded-sm border-moh-green/25 normal-case text-moh-green hover:bg-moh-green/5"
-            disabled={page <= 1}
-            onClick={() => onPageChange(page - 1)}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Previous
-          </Button>
-          <Button
-            {...mt}
-            size="sm"
-            variant="outlined"
-            className="flex items-center gap-1 rounded-sm border-moh-green/25 normal-case text-moh-green hover:bg-moh-green/5"
-            disabled={page >= total_pages}
-            onClick={() => onPageChange(page + 1)}
-          >
-            Next
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <TablePagination
+        page={page}
+        totalPages={total_pages}
+        onPageChange={onPageChange}
+        summary={
+          total === 0
+            ? 'No records'
+            : `Page ${page} of ${total_pages} · ${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()}`
+        }
+      />
     </div>
   )
 }

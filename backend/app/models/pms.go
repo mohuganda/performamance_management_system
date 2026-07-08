@@ -15,19 +15,41 @@ type Facility struct {
 	FacilityTypeID      *string
 	DistrictID          *string
 	DistrictName        *string
+	DistrictRefID       *uint
+	RegionID            *uint
+	RegionCode          *string
+	Latitude            *float64
+	Longitude           *float64
 	InstitutionTypeID   *string
 	InstitutionTypeName *string
 	IsActive            bool
 }
 
+type Region struct {
+	orm.Model
+	Code             string `gorm:"column:code"`
+	Name             string `gorm:"column:name"`
+	ExternalSystemID *string `gorm:"column:external_system_id"`
+	ISOCode          *string `gorm:"column:iso_code"`
+	IsActive         bool   `gorm:"column:is_active"`
+}
+
+func (Region) TableName() string {
+	return "regions"
+}
+
 type District struct {
 	orm.Model
-	Code      string  `gorm:"column:code;uniqueIndex"`
-	Name      string  `gorm:"column:name"`
-	Region    string  `gorm:"column:region"`
-	Latitude  float64 `gorm:"column:latitude"`
-	Longitude float64 `gorm:"column:longitude"`
-	IsActive  bool    `gorm:"column:is_active"`
+	Code             string  `gorm:"column:code;uniqueIndex"`
+	Name             string  `gorm:"column:name"`
+	Region           string  `gorm:"column:region"`
+	RegionID         *uint   `gorm:"column:region_id"`
+	IhrisDistrictID  *string `gorm:"column:ihris_district_id"`
+	MapKey           string  `gorm:"column:map_key"`
+	ISOCode          string  `gorm:"column:iso_code"`
+	Latitude         float64 `gorm:"column:latitude"`
+	Longitude        float64 `gorm:"column:longitude"`
+	IsActive         bool    `gorm:"column:is_active"`
 }
 
 func (District) TableName() string {
@@ -38,6 +60,8 @@ type Department struct {
 	orm.Model
 	Name             string `json:"name"`
 	ExternalSystemID string `json:"external_system_id" gorm:"column:external_system_id;uniqueIndex"`
+	FacilityID       *uint  `json:"facility_id,omitempty" gorm:"column:facility_id"`
+	Facility         *Facility `json:"facility,omitempty" gorm:"foreignKey:FacilityID"`
 }
 
 type JobTitle struct {
@@ -228,13 +252,45 @@ type PpaKpi struct {
 
 type PerformanceReport struct {
 	orm.Model
-	StaffID         uint
-	FinancialYearID uint
-	QuarterID       uint
-	ReportType      string
-	Status          string `gorm:"default:draft"`
-	SubmittedAt     *time.Time
-	ApprovedAt      *time.Time
+	StaffID                   uint
+	FinancialYearID           uint
+	QuarterID                 uint
+	ReportType                string
+	Status                    string `gorm:"default:draft"`
+	PendingSupervisorSequence uint8  `gorm:"default:0"`
+	SubmittedAt               *time.Time
+	ApprovedAt                *time.Time
+}
+
+type PerformanceActionPlan struct {
+	orm.Model
+	PerformanceReportID uint
+	PerformanceGap      string
+	AgreedAction        string
+	TimeFrame           string
+	SortOrder           int
+}
+
+type PerformanceAppraisalComment struct {
+	orm.Model
+	PerformanceReportID uint
+	CommentRole         string
+	SupervisorSequence  *uint8
+	AuthorStaffID       uint
+	Comments            string
+	AuthorName          *string
+	JobTitle            *string
+	SignedAt            *time.Time
+}
+
+type PerformanceApprovalTrail struct {
+	orm.Model
+	PerformanceReportID uint
+	Action              string
+	ActorStaffID        uint
+	ActorName           *string
+	Role                *string
+	Comments            *string
 }
 
 type PerformanceReportEntry struct {
@@ -260,16 +316,38 @@ type LeaveType struct {
 	EligibilityNotes           *string `json:"eligibility_notes,omitempty"`
 	RequiresSupervisorApproval bool    `json:"requires_supervisor_approval" gorm:"default:true"`
 	RequiresHrApproval         bool    `json:"requires_hr_approval" gorm:"default:false"`
+	WorkflowProfileCode        string  `json:"workflow_profile_code" gorm:"default:default"`
+}
+
+type LeaveWorkflowProfile struct {
+	orm.Model
+	Code        string  `json:"code" gorm:"uniqueIndex"`
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+	IsDefault   bool    `json:"is_default" gorm:"default:false"`
+	IsActive    bool    `json:"is_active" gorm:"default:true"`
+}
+
+func (LeaveWorkflowProfile) TableName() string {
+	return "leave_workflow_profiles"
 }
 
 type LeaveApprovalStage struct {
 	orm.Model
-	Code          string `gorm:"uniqueIndex"`
-	Name          string
-	Sequence      uint8
-	ApproverRole  string
-	Description   *string
-	IsActive      bool `gorm:"default:true"`
+	Code                 string  `gorm:"uniqueIndex:idx_leave_stage_profile_code"`
+	Name                 string
+	Sequence             uint8
+	ApproverRole         string
+	Description          *string
+	IsActive             bool    `gorm:"default:true"`
+	WorkflowProfileCode  string  `gorm:"column:workflow_profile_code;default:default;uniqueIndex:idx_leave_stage_profile_code"`
+	StageType            string  `gorm:"column:stage_type;default:supervisor"`
+	Scope                string  `gorm:"default:none"`
+	JobTitleID           *uint   `gorm:"column:job_title_id"`
+	JobTitleMatch        *string `gorm:"column:job_title_match"`
+	SupervisorSequence   *uint8  `gorm:"column:supervisor_sequence"`
+	IsRequired           bool    `gorm:"default:true"`
+	SkipIfUnresolved     bool    `gorm:"column:skip_if_unresolved;default:true"`
 }
 
 type LeaveRequest struct {
@@ -297,6 +375,9 @@ type LeaveApproval struct {
 	Status            string
 	Comments          *string
 	ActedAt           *time.Time
+	StageCode         *string `gorm:"column:stage_code"`
+	StageType         *string `gorm:"column:stage_type"`
+	StageName         *string `gorm:"column:stage_name"`
 }
 
 type LeaveEntitlement struct {
@@ -401,6 +482,19 @@ type User struct {
 	ScopeFacilityID      *uint      `json:"scope_facility_id,omitempty" gorm:"column:scope_facility_id"`
 }
 
+type UserScopeAssignment struct {
+	orm.Model
+	UserID    uint    `gorm:"column:user_id;index"`
+	ScopeType string  `gorm:"column:scope_type"`
+	RefID     *uint   `gorm:"column:ref_id"`
+	RefCode   *string `gorm:"column:ref_code"`
+	Label     *string `gorm:"column:label"`
+}
+
+func (UserScopeAssignment) TableName() string {
+	return "user_scope_assignments"
+}
+
 type UserNotification struct {
 	orm.Model
 	UserID    uint       `gorm:"column:user_id;index"`
@@ -424,7 +518,9 @@ type IhrisData struct {
 	IhrisPID            string `gorm:"column:ihris_pid"`
 	DistrictID          *string
 	District            *string
+	Region              *string
 	DhisFacilityID      *string `gorm:"column:dhis_facility_id"`
+	DhisDistrictID      *string `gorm:"column:dhis_district_id"`
 	Nin                 *string
 	FacilityTypeID      *string `gorm:"column:facility_type_id"`
 	FacilityID          *string `gorm:"column:facility_id"`

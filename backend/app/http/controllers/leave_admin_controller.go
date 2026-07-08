@@ -11,14 +11,16 @@ import (
 )
 
 type LeaveAdminController struct {
-	config *services.LeaveConfigService
-	admin  *services.LeaveAdminService
+	config   *services.LeaveConfigService
+	admin    *services.LeaveAdminService
+	workflow *services.LeaveWorkflowService
 }
 
 func NewLeaveAdminController() *LeaveAdminController {
 	return &LeaveAdminController{
-		config: services.NewLeaveConfigService(),
-		admin:  services.NewLeaveAdminService(),
+		config:   services.NewLeaveConfigService(),
+		admin:    services.NewLeaveAdminService(),
+		workflow: services.NewLeaveWorkflowService(),
 	}
 }
 
@@ -285,6 +287,31 @@ func (c *LeaveAdminController) UpdateApprovalStage(ctx http.Context) http.Respon
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 	}
 	return ctx.Response().Success().Json(row)
+}
+
+func (c *LeaveAdminController) DeleteApprovalStage(ctx http.Context) http.Response {
+	id, _ := strconv.ParseUint(ctx.Request().Route("id"), 10, 64)
+	if err := c.workflow.DeleteStage(uint(id)); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{"message": "approval stage deleted"})
+}
+
+func (c *LeaveAdminController) ListWorkflowProfiles(ctx http.Context) http.Response {
+	rows, err := c.workflow.ListProfiles()
+	if err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(rows)
+}
+
+func (c *LeaveAdminController) ListWorkflowStages(ctx http.Context) http.Response {
+	profile := ctx.Request().Query("profile", "default")
+	rows, err := c.workflow.ListStagesByProfile(profile)
+	if err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(rows)
 }
 
 func (c *LeaveAdminController) Overview(ctx http.Context) http.Response {

@@ -1,6 +1,24 @@
 import type { ReactNode } from 'react'
-import { Button, Spinner, Typography } from '@material-tailwind/react'
+import { Button, Typography } from '@material-tailwind/react'
+import {
+  CardListSkeleton,
+  DashboardPageSkeleton,
+  FormPageSkeleton,
+  InlineBlockSkeleton,
+  MetricsPanelSkeleton,
+  ProfilePageSkeleton,
+  TablePageSkeleton,
+} from '@/components/molecules/PageSkeletons'
 import { mt } from '@/utils/mt'
+
+export type QueryStateVariant =
+  | 'inline'
+  | 'dashboard'
+  | 'table'
+  | 'cards'
+  | 'profile'
+  | 'form'
+  | 'metrics'
 
 interface QueryStateProps {
   isLoading: boolean
@@ -9,7 +27,29 @@ interface QueryStateProps {
   label: string
   onRetry?: () => void
   isPending?: boolean
+  variant?: QueryStateVariant
+  skeleton?: ReactNode
   children: ReactNode
+}
+
+function renderSkeleton(variant: QueryStateVariant) {
+  switch (variant) {
+    case 'dashboard':
+      return <DashboardPageSkeleton />
+    case 'table':
+      return <TablePageSkeleton />
+    case 'cards':
+      return <CardListSkeleton />
+    case 'profile':
+      return <ProfilePageSkeleton />
+    case 'form':
+      return <FormPageSkeleton />
+    case 'metrics':
+      return <MetricsPanelSkeleton />
+    case 'inline':
+    default:
+      return <InlineBlockSkeleton />
+  }
 }
 
 export function QueryState({
@@ -19,17 +59,12 @@ export function QueryState({
   label,
   onRetry,
   isPending = false,
+  variant = 'inline',
+  skeleton,
   children,
 }: QueryStateProps) {
   if (isLoading || isPending) {
-    return (
-      <div className="flex items-center gap-3 py-12">
-        <Spinner {...mt} className="h-6 w-6 text-moh-green" />
-        <Typography {...mt} className="text-sm text-gray-600">
-          Loading {label}...
-        </Typography>
-      </div>
-    )
+    return <>{skeleton ?? renderSkeleton(variant)}</>
   }
 
   if (isError) {
