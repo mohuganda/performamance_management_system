@@ -1,6 +1,20 @@
-# MoH Uganda Performance Management System (PMS - iHRIS)
+# MoH Uganda Performance Management System (PMS)
 
-Integrated performance management platform for the Ministry of Health Uganda. The stack pairs **Goravel v1.18** (Go API) with a **React + TypeScript** frontend, **MySQL** (extracted legacy tables + normalized PMS schema), and **Redis** for caching and sessions.
+Integrated performance, leave, attendance, and workforce management platform for the **Ministry of Health Uganda**. The stack pairs **Goravel v1.18** (Go API) with a **React + TypeScript** SPA, **MySQL** (legacy iHRIS extract + normalized PMS schema), and **Redis** for caching and sessions.
+
+**User documentation:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+
+## Features
+
+| Area | Capabilities |
+|------|----------------|
+| **Dashboards** | Role-based views for health workers, supervisors, department heads, HR, directors, and executives |
+| **Performance** | KPI assignment, PPA planning (weights & targets), quarterly reporting, cumulative (YTD) indicators |
+| **Leave** | Self-service requests, multi-stage approval, balances, HR configuration and org-wide administration |
+| **Out of station** | GPS destination requests with supervisor approval and geofenced attendance |
+| **Attendance** | Mobile-style clock-in/out with location verification |
+| **Administration** | Staff directory & supervisors, KPI catalog & assignments, leave policy, RBAC |
+| **Notifications** | In-app alerts for approvals and system events |
 
 ## Architecture
 
@@ -8,37 +22,165 @@ Integrated performance management platform for the Ministry of Health Uganda. Th
 performamance_management_system/
 ├── backend/          # Goravel v1.18 API
 ├── frontend/         # React + Vite + TypeScript SPA
-├── database/sql/legacy/01_legacy_source_tables.sql  # ihrisdata, kpi, kpi_job_category only
+├── database/sql/legacy/01_legacy_source_tables.sql
 ├── docker-compose.yml
 └── docs/
+    ├── USER_GUIDE.md
     └── REACT_IMPLEMENTATION_GUIDE.md
 ```
 
-## Authentication & RBAC
+## Quick Start (Docker)
 
-Multi-layered JWT authentication with roles, permissions, and iHRIS-based data scoping.
+```bash
+docker compose up --build
+```
 
-### Setup
+| Service  | URL |
+|----------|-----|
+| Frontend | http://localhost:5173 |
+| API      | http://localhost:3030/api/v1 |
+| Swagger  | http://localhost:3030/swagger/index.html |
+| MySQL    | localhost:3307 (`moh_pms` / `pms` / `pms_secret`) |
+| Redis    | localhost:6379 |
+
+After containers are healthy, open the frontend and sign in with a demo account (see [Demo accounts](#demo-accounts)).
+
+## Production deployment (nginx + Docker)
+
+Use **`setup.sh`** on a Linux server with Docker installed. It builds production images, starts MySQL/Redis/API/frontend, and exposes the app through an **nginx gateway** on your server IP.
+
+```bash
+# Clone the repo on the server, then:
+chmod +x setup.sh
+./setup.sh
+```
+
+Open **`http://<server-ip>/`** in your browser.
+
+### Common options
+
+```bash
+# Set public IP/hostname explicitly
+./setup.sh --host 203.0.113.50
+
+# Production without demo seed data
+./setup.sh --no-demo-data --admin-password 'YourSecurePass123!'
+
+# Use system nginx on port 80 (Docker gateway on localhost:8080)
+sudo ./setup.sh --install-host-nginx --host 203.0.113.50
+
+# Custom HTTP port (e.g. when port 80 is taken)
+./setup.sh --http-port 8080
+
+# Force image rebuild
+./setup.sh --rebuild
+
+# Stop / status / logs
+./setup.sh --down
+./setup.sh --status
+./setup.sh --logs backend
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--demo-data` / `--no-demo-data` | demo on | Seed demo users, KPIs, leave balances |
+| `--ihris-demo` / `--no-ihris-demo` | on with demo | Load legacy `ihrisdata` demo table |
+| `--http-port` | `80` | Port users access in the browser |
+| `--install-host-nginx` | off | Install `/etc/nginx/sites-available/moh-pms` |
+| `--expose-mysql` | off | Publish MySQL on host port 3307 |
+| `--expose-redis` | off | Publish Redis on host port 6379 |
+
+Generated config and secrets are stored in **`deploy/.env`** (git-ignored). See `./setup.sh --help` for all flags.
+
+### Stack layout
+
+```text
+Browser → nginx gateway (:80)
+            ├── /        → frontend (static React build)
+            ├── /api/    → backend (:3030)
+            └── /swagger → API docs
+```
+
+Files: `deploy/docker-compose.prod.yml`, `deploy/nginx/gateway.conf`, `frontend/Dockerfile.prod`
+
+## Local Development
+
+### Prerequisites
+
+- Go 1.22+
+- Node.js 20+
+- MySQL 8.x and Redis (or use Docker for data services only)
+
+### Backend
 
 ```bash
 cd backend
-./artisan jwt:secret
-# Set in .env:
-# SUPER_ADMIN_EMAIL=...
-# SUPER_ADMIN_PASSWORD=...   (min 12 chars, env-managed only)
-# ADMIN_EMAIL=admin@moh.go.ug
-# ADMIN_PASSWORD=...         (database admin, min 10 chars)
+cp .env.example .env
+# Set DB_*, REDIS_*, JWT_SECRET, ADMIN_PASSWORD (min 10 chars)
 
+go run . artisan key:generate
+go run . artisan jwt:secret
 go run . artisan migrate
-go run . artisan db:seed --seeder=RbacSeeder
+go run . artisan db:seed
+go run .
 ```
 
-### Login
+API listens on **http://127.0.0.1:3030**.
+
+Regenerate Swagger after API changes:
+
+```bash
+cd backend
+~/go/bin/swag init --parseDependency --parseInternal
+```
+
+### Frontend
+
+```bash
+cd frontend
+cp .env.example .env
+npm install --legacy-peer-deps
+npm run dev
+```
+
+App runs at **http://127.0.0.1:5173** and calls `VITE_API_BASE_URL` (default `http://localhost:3030/api/v1`).
+
+### Sync demo iHRIS data
+
+Docker loads extracted legacy tables (`ihrisdata`, `kpi`, `kpi_job_category`) — not the full legacy SQL dump.
+
+```bash
+curl -X POST http://localhost:3030/api/v1/ihris/sync
+```
+
+## Demo accounts
+
+Seeded by `DemoAccountsSeeder` when you run `go run . artisan db:seed`. Default password for all demo personas:
+
+**`Demo@Moh2026!`**
+
+| Email | Role | Typical use |
+|-------|------|-------------|
+| `worker@moh.go.ug` | Staff | PPA, reporting, leave, attendance |
+| `supervisor@moh.go.ug` | Supervisor | Team approvals, supervision dashboard |
+| `depthead@moh.go.ug` | Department head | Department dashboard |
+| `hr@moh.go.ug` | HR officer | HR dashboard, leave admin, staff management |
+| `director@moh.go.ug` | Director | District-wide dashboard |
+| `ps@moh.go.ug` | Permanent secretary | Executive dashboard |
+| `admin@moh.go.ug` | Administrator | KPI catalog, RBAC, full admin |
+
+Super admin credentials are env-managed only (`SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` in `.env`).
+
+## Authentication & RBAC
+
+JWT authentication with roles, permissions, and iHRIS-based data scoping.
+
+### Login (API)
 
 ```bash
 curl -X POST http://localhost:3030/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@moh.go.ug","password":"your-password"}'
+  -d '{"email":"worker@moh.go.ug","password":"Demo@Moh2026!"}'
 ```
 
 Use the returned token: `Authorization: Bearer <token>`
@@ -63,171 +205,79 @@ Use the returned token: `Authorization: Bearer <token>`
 - Account lockout after failed attempts
 - Login rate limiting by IP + email
 - Super admin password only via `SUPER_ADMIN_PASSWORD` env
-- Route permission guards + Gate model policies for data scope
+- Route permission guards + data-scope policies
 
-### Admin RBAC API
+## Web application routes
 
-| Method | Endpoint |
-|--------|----------|
-| GET | `/api/v1/admin/rbac/roles` |
-| GET | `/api/v1/admin/rbac/permissions` |
-| POST | `/api/v1/admin/rbac/users` |
-| POST | `/api/v1/admin/rbac/users/{id}/roles` |
-| POST | `/api/v1/admin/rbac/roles/{id}/scopes` |
-| POST | `/api/v1/admin/rbac/roles/{code}/permissions` |
+| Path | Module |
+|------|--------|
+| `/dashboard` | Role-based dashboard |
+| `/performance` | PPA planning and quarterly reporting |
+| `/leave` | Leave requests and balances |
+| `/out-of-station` | Off-site duty requests |
+| `/attendance` | Clock in/out and history |
+| `/notifications` | System notifications |
+| `/profile` | Profile and signature |
+| `/settings` | User preferences |
+| `/admin/leave` | Leave administration (HR) |
+| `/admin/staff` | Staff directory and supervisors |
+| `/admin/kpi` | KPI catalog and assignments |
+| `/admin/rbac` | Roles and permissions |
 
-## Quick Start (Docker)
+## API overview
 
-```bash
-docker compose up --build
-```
-
-| Service  | URL |
-|----------|-----|
-| Frontend | http://localhost:5173 |
-| API      | http://localhost:3030/api/v1 |
-| Swagger  | http://localhost:3030/swagger/index.html |
-| MySQL    | localhost:3307 (`moh_pms`) |
-| Redis    | localhost:6379 |
-
-## Local Development
-
-### Backend
-
-```bash
-cd backend
-cp .env.example .env
-go run . artisan key:generate
-go run . artisan migrate
-go run . artisan db:seed --seeder=PmsSeeder
-go run . artisan db:seed --seeder=LeaveConfigSeeder
-go run . artisan db:seed --seeder=AttendanceModuleSeeder
-go run .
-```
-
-Regenerate Swagger after API changes:
-
-```bash
-cd backend
-~/go/bin/swag init --parseDependency --parseInternal
-```
-
-### Frontend
-
-```bash
-cd frontend
-cp .env.example .env
-npm install --legacy-peer-deps
-npm run dev
-```
-
-### Sync demo iHRIS data
-
-Docker loads only the extracted legacy tables (`ihrisdata`, `kpi`, `kpi_job_category`) — not the full `npm_dashboard (3).sql` dump.
-
-```bash
-curl -X POST http://localhost:3030/api/v1/ihris/sync
-```
-
-## API Endpoints
+Interactive docs: **http://localhost:3030/swagger/index.html**
 
 ### Core
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/v1/health` | Health check |
-| GET | `/api/v1/config` | Server-side public config (branding, thresholds, roles) |
-| POST | `/api/v1/ihris/sync` | Sync `ihrisdata` → normalized staff/facility/job tables |
-| GET | `/api/v1/dashboard/health-worker` | Health worker dashboard |
-| GET | `/api/v1/dashboard/supervisor` | Supervisor dashboard |
-| GET | `/api/v1/dashboard/department-head` | Department head dashboard |
-| GET | `/api/v1/dashboard/hr-manager` | HR manager dashboard |
+| GET | `/api/v1/config` | Public config (branding, thresholds) |
+| POST | `/api/v1/ihris/sync` | Sync `ihrisdata` → normalized staff tables |
+| GET | `/api/v1/dashboard/*` | Role-specific dashboards |
 
-### Mobile self-service (leave, out-of-station, attendance)
-
-All mobile endpoints use `X-Staff-Id` header for the authenticated employee (JWT to be added).
+### Performance (mobile namespace)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/v1/mobile/leave/types` | Leave types |
-| GET | `/api/v1/mobile/leave/balances` | Leave balances for staff |
-| GET | `/api/v1/mobile/leave/requests` | My leave requests |
-| POST | `/api/v1/mobile/leave/requests` | Create/submit leave request |
-| POST | `/api/v1/mobile/leave/approvals/{id}` | Supervisor approve/reject leave |
-| GET | `/api/v1/mobile/out-of-station/reasons` | OOS reasons |
-| GET | `/api/v1/mobile/out-of-station/requests` | My OOS requests |
-| POST | `/api/v1/mobile/out-of-station/requests` | Create/submit OOS request (with map coordinates) |
-| POST | `/api/v1/mobile/out-of-station/approvals/{id}` | Supervisor approve/reject OOS |
-| POST | `/api/v1/mobile/attendance/clock` | GPS clock-in/out (verified against approved OOS destination) |
-| GET | `/api/v1/mobile/attendance/clocks` | My attendance history |
+| GET | `/api/v1/mobile/performance/summary` | PPA status, KPI weights, reporting windows |
+| GET | `/api/v1/mobile/performance/kpis/grouped` | Assigned KPIs by subject area |
+| POST | `/api/v1/mobile/performance/ppa` | Save performance plan |
+| GET | `/api/v1/mobile/performance/report-form` | Quarterly report form |
+| POST | `/api/v1/mobile/performance/reports` | Submit quarterly report |
 
-Interactive API docs: **http://localhost:3030/swagger/index.html**
+### Leave
 
-## Modules
+Leave policy is **database-driven** — not hardcoded. HR admins manage types, entitlements, approval stages, and settings via `/api/v1/admin/leave/*`. See [leave.md](leave.md) for policy reference.
 
-### Leave (`leave.md`) — database-driven
+### Out of station & attendance
 
-Leave policy is **not hardcoded**. HR admins manage configuration via API; mobile and web clients read from the database.
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/mobile/leave/config` | Full leave config (settings, types, entitlements, stages) |
-| GET | `/api/v1/admin/leave/settings` | Global leave policy settings |
-| PUT | `/api/v1/admin/leave/settings` | Update settings (advance notice, work hours, carry-over, etc.) |
-| GET/POST | `/api/v1/admin/leave/types` | Manage leave types |
-| PUT/DELETE | `/api/v1/admin/leave/types/{id}` | Update or deactivate a leave type |
-| GET/POST | `/api/v1/admin/leave/entitlements` | Entitlements by salary grade |
-| PUT/DELETE | `/api/v1/admin/leave/entitlements/{id}` | Update or delete entitlement |
-| GET/POST | `/api/v1/admin/leave/approval-stages` | Approval workflow stages |
-| PUT | `/api/v1/admin/leave/approval-stages/{id}` | Update approval stage |
-
-Configurable items stored in DB:
-
-- **`system_configs`** (group `leave`) — advance notice days, work hours, carry-over deadline, clock window
-- **`leave_types`** — name, code, max days, medical report rules, per-type advance notice, eligibility notes
-- **`leave_entitlements`** — days per year by salary grade (U2–U8)
-- **`leave_approval_stages`** — employee → supervisor → responsible officer → HR
-
-Seed initial MoH defaults: `go run . artisan db:seed --seeder=LeaveConfigSeeder`
-
-### Leave (employee flow)
-
-- Leave types, entitlements by salary grade (U2–U8)
-- Sequential supervisor approval (up to 3 supervisors per contract)
-- Advance notice and medical report rules enforced from DB config
-
-### Out-of-station
-
-Modeled on the legacy attend system (`/attend/requests/newRequest`):
-
-- Date range, reason, remarks, attachment
-- **Destination** with latitude/longitude (Google Maps or any map picker)
-- Configurable geofence radius (default 500 m)
-- Sequential supervisor approval
-
-### Attendance clocking
-
-- `attendance_clocks` table stores GPS clock events
-- When staff has an approved OOS request for the day, clock position is compared to destination using Haversine distance
+- OOS requests include GPS destination; configurable geofence (default 500 m)
+- Attendance clocks verify location against approved OOS destination
 - Verification statuses: `verified_oos`, `outside_geofence`, `at_duty_station`
 
-## Database Design (Normalized)
+## Database design (normalized)
 
-- **staff** — biodata (from iHRIS `ihris_pid`, names, contacts)
-- **staff_contracts** — deployment details; `contract_status`: `active` / `ended`
-- **staff_supervisors** — up to 3 supervisors with `approval_sequence` (1 = first approver)
-- **facilities** — includes `nfrid` (National Facility Registry ID)
-- **job_titles** — normalized from iHRIS / `kpi_job_category`
-- **leave_requests** / **leave_approvals** / **leave_entitlements** / **leave_balances**
-- **out_of_station_requests** / **out_of_station_approvals** — with GPS destination
-- **attendance_clocks** — mobile GPS clock events
+- **staff** / **staff_contracts** — biodata and deployment from iHRIS
+- **staff_supervisors** — up to 3 supervisors with `approval_sequence`
+- **facilities** / **job_titles** / **departments**
+- **kpis** / **kpi_assignments** / **ppas** / **ppa_kpis** / **performance_reports**
+- **leave_*** / **out_of_station_*** / **attendance_clocks**
+- Legacy source (import): `ihrisdata`, `kpi`, `kpi_job_category`
 
-Legacy source tables (read-only import): `ihrisdata`, `kpi`, `kpi_job_category`
-
-## MoH Branding
+## MoH branding
 
 Primary green `#2E7D32`, accent gold `#F9A825`, background `#F8FAF5`. Typography: Arial/Helvetica per MoH co-branding guidelines.
 
 ## Documentation
 
-See [docs/REACT_IMPLEMENTATION_GUIDE.md](docs/REACT_IMPLEMENTATION_GUIDE.md) for the full React implementation prompt and module roadmap.
+| Document | Audience |
+|----------|----------|
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | End users (staff, supervisors, HR, admins) |
+| [docs/REACT_IMPLEMENTATION_GUIDE.md](docs/REACT_IMPLEMENTATION_GUIDE.md) | Frontend implementation notes |
+| [leave.md](leave.md) | Leave policy reference |
+
+## License
+
+Ministry of Health Uganda — internal use.
