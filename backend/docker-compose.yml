@@ -1,0 +1,9 @@
+version: '3'
+
+services:
+  goravel:
+    build:
+      context: .
+    ports:
+      - "3030:3030"
+    restart: always

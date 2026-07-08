@@ -1,0 +1,816 @@
+basePath: /
+definitions:
+  controllers.approvalBody:
+    properties:
+      approve:
+        type: boolean
+      comments:
+        type: string
+    type: object
+  controllers.clockBody:
+    properties:
+      accuracy_meters:
+        type: number
+      clock_type:
+        type: string
+      latitude:
+        type: number
+      location_label:
+        type: string
+      longitude:
+        type: number
+    type: object
+  controllers.leaveRequestBody:
+    properties:
+      end_date:
+        type: string
+      leave_type_id:
+        type: integer
+      medical_report_url:
+        type: string
+      reason:
+        type: string
+      start_date:
+        type: string
+      submit:
+        type: boolean
+    type: object
+  controllers.leaveSettingsBody:
+    properties:
+      advance_notice_days:
+        type: integer
+      allow_carry_over:
+        type: boolean
+      carry_over_deadline:
+        type: string
+      clock_window_morning:
+        type: string
+      vesting_day:
+        type: integer
+      vesting_month:
+        type: integer
+      work_hours:
+        additionalProperties:
+          type: string
+        type: object
+    type: object
+  controllers.loginBody:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  controllers.oosRequestBody:
+    properties:
+      attachment_url:
+        type: string
+      destination_address:
+        type: string
+      destination_latitude:
+        type: number
+      destination_longitude:
+        type: number
+      destination_name:
+        type: string
+      end_date:
+        type: string
+      geofence_radius_meters:
+        type: integer
+      reason_id:
+        type: integer
+      remarks:
+        type: string
+      start_date:
+        type: string
+      submit:
+        type: boolean
+    type: object
+  github_com_goravel_framework_support_carbon.DateTime:
+    properties:
+      error: {}
+    type: object
+  models.LeaveApprovalStage:
+    properties:
+      approverRole:
+        type: string
+      code:
+        type: string
+      created_at:
+        $ref: '#/definitions/github_com_goravel_framework_support_carbon.DateTime'
+      description:
+        type: string
+      id:
+        type: integer
+      isActive:
+        type: boolean
+      name:
+        type: string
+      sequence:
+        format: int32
+        type: integer
+      updated_at:
+        $ref: '#/definitions/github_com_goravel_framework_support_carbon.DateTime'
+    type: object
+  models.LeaveEntitlement:
+    properties:
+      created_at:
+        $ref: '#/definitions/github_com_goravel_framework_support_carbon.DateTime'
+      daysPerYear:
+        type: integer
+      id:
+        type: integer
+      leaveTypeID:
+        type: integer
+      medicalReportAfterDays:
+        type: integer
+      requiresHrFinalization:
+        type: boolean
+      salaryGrade:
+        type: string
+      updated_at:
+        $ref: '#/definitions/github_com_goravel_framework_support_carbon.DateTime'
+    type: object
+  models.LeaveType:
+    properties:
+      advanceNoticeDays:
+        type: integer
+      code:
+        type: string
+      created_at:
+        $ref: '#/definitions/github_com_goravel_framework_support_carbon.DateTime'
+      description:
+        type: string
+      eligibilityNotes:
+        type: string
+      id:
+        type: integer
+      isActive:
+        type: boolean
+      maxDaysPerRequest:
+        type: integer
+      maxDaysPerYear:
+        type: integer
+      medicalReportAfterDays:
+        type: integer
+      name:
+        type: string
+      requiresHrApproval:
+        type: boolean
+      requiresSupervisorApproval:
+        type: boolean
+      sortOrder:
+        type: integer
+      updated_at:
+        $ref: '#/definitions/github_com_goravel_framework_support_carbon.DateTime'
+    type: object
+host: localhost:3030
+info:
+  contact: {}
+  description: Performance Management System API for Ministry of Health Uganda. Mobile
+    self-service endpoints for leave, out-of-station, and GPS attendance clocking.
+  title: MoH Uganda PMS API
+  version: "1.0"
+paths:
+  /api/v1/admin/leave/approval-stages:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List leave approval stages
+      tags:
+      - admin-leave
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Approval stage
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.LeaveApprovalStage'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create leave approval stage
+      tags:
+      - admin-leave
+  /api/v1/admin/leave/approval-stages/{id}:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Stage ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Approval stage
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.LeaveApprovalStage'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update leave approval stage
+      tags:
+      - admin-leave
+  /api/v1/admin/leave/entitlements:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List leave entitlements
+      tags:
+      - admin-leave
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Entitlement
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.LeaveEntitlement'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create leave entitlement
+      tags:
+      - admin-leave
+  /api/v1/admin/leave/entitlements/{id}:
+    delete:
+      parameters:
+      - description: Entitlement ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete leave entitlement
+      tags:
+      - admin-leave
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Entitlement ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Entitlement
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.LeaveEntitlement'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update leave entitlement
+      tags:
+      - admin-leave
+  /api/v1/admin/leave/settings:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get leave policy settings
+      tags:
+      - admin-leave
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Leave settings
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.leaveSettingsBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update leave policy settings
+      tags:
+      - admin-leave
+  /api/v1/admin/leave/types:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List all leave types (admin)
+      tags:
+      - admin-leave
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Leave type
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.LeaveType'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create leave type
+      tags:
+      - admin-leave
+  /api/v1/admin/leave/types/{id}:
+    delete:
+      parameters:
+      - description: Leave type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Deactivate leave type
+      tags:
+      - admin-leave
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Leave type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Leave type
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.LeaveType'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update leave type
+      tags:
+      - admin-leave
+  /api/v1/admin/rbac/grant-permission:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Grant permission to role
+      tags:
+      - admin-rbac
+  /api/v1/admin/rbac/permissions:
+    get:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: List permissions
+      tags:
+      - admin-rbac
+  /api/v1/admin/rbac/roles:
+    get:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: List roles
+      tags:
+      - admin-rbac
+  /api/v1/admin/rbac/roles/{id}/scopes:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Configure data scope for a role
+      tags:
+      - admin-rbac
+  /api/v1/admin/rbac/users:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Create application user (database admin)
+      tags:
+      - admin-rbac
+  /api/v1/admin/rbac/users/{id}/roles:
+    delete:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Revoke role from user
+      tags:
+      - admin-rbac
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Assign role to user
+      tags:
+      - admin-rbac
+  /api/v1/auth/change-password:
+    post:
+      consumes:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Change own password
+      tags:
+      - auth
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.loginBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Authenticate and receive JWT
+      tags:
+      - auth
+  /api/v1/auth/logout:
+    post:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Invalidate JWT
+      tags:
+      - auth
+  /api/v1/auth/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Current user profile with roles and permissions
+      tags:
+      - auth
+  /api/v1/auth/refresh:
+    post:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Refresh JWT
+      tags:
+      - auth
+  /api/v1/mobile/attendance/clock:
+    post:
+      consumes:
+      - application/json
+      description: Compares GPS position against approved out-of-station destination
+        when applicable
+      parameters:
+      - description: Clock event
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.clockBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Clock in or out with GPS
+      tags:
+      - mobile-attendance
+  /api/v1/mobile/attendance/clocks:
+    get:
+      parameters:
+      - description: From date YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: To date YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List my attendance clocks
+      tags:
+      - mobile-attendance
+  /api/v1/mobile/leave/approvals/{id}:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Leave approval ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Decision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.approvalBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Supervisor approve/reject leave
+      tags:
+      - mobile-supervisor
+  /api/v1/mobile/leave/balances:
+    get:
+      parameters:
+      - description: Calendar year
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get leave balances
+      tags:
+      - mobile-leave
+  /api/v1/mobile/leave/config:
+    get:
+      description: Settings, types, entitlements, and approval stages loaded from
+        database
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Full dynamic leave configuration
+      tags:
+      - mobile-leave
+  /api/v1/mobile/leave/requests:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List my leave requests
+      tags:
+      - mobile-leave
+    post:
+      consumes:
+      - application/json
+      description: 'Per leave.md: submit at least 2 weeks in advance; sick leave >2
+        days needs medical report'
+      parameters:
+      - description: Leave request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.leaveRequestBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create leave request (self-service)
+      tags:
+      - mobile-leave
+  /api/v1/mobile/leave/types:
+    get:
+      description: Returns leave types from database configuration (not hardcoded)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List active leave types
+      tags:
+      - mobile-leave
+  /api/v1/mobile/out-of-station/approvals/{id}:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Out-of-station approval ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Decision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.approvalBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Supervisor approve/reject out-of-station request
+      tags:
+      - mobile-supervisor
+  /api/v1/mobile/out-of-station/reasons:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List out-of-station reasons
+      tags:
+      - mobile-out-of-station
+  /api/v1/mobile/out-of-station/requests:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List my out-of-station requests
+      tags:
+      - mobile-out-of-station
+    post:
+      consumes:
+      - application/json
+      description: Mirrors attend/requests/newRequest with map-picked destination
+        coordinates for GPS verification
+      parameters:
+      - description: Out of station request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.oosRequestBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create out-of-station request
+      tags:
+      - mobile-out-of-station
+  /swagger/{any}:
+    get:
+      responses: {}
+      summary: Swagger API documentation
+securityDefinitions:
+  BearerAuth:
+    description: 'JWT Bearer token. Format: Bearer {token}'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
