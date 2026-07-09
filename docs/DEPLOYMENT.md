@@ -277,6 +277,27 @@ Users open: **`http://203.0.113.50/`**
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Seeded admin account |
 | `MYSQL_*` | Database credentials |
 | `VITE_API_BASE_URL` | Frontend API path (`/api/v1`) |
+| `DATA_DIR` | Host path for MySQL, Redis, and API `storage/` (default `/var/lib/moh-pms`) |
+
+### Persistent data on disk
+
+Production `setup.sh` stores data on the **host filesystem** under `DATA_DIR` (not inside disposable containers):
+
+| Path | Contents |
+|------|----------|
+| `${DATA_DIR}/mysql` | MySQL database files |
+| `${DATA_DIR}/redis` | Redis persistence (sessions/cache) |
+| `${DATA_DIR}/storage` | API logs and filesystem uploads |
+
+Override the location:
+
+```bash
+./setup.sh --data-dir /var/SOFTWARE/performamance_management_system/data --demo-data --http-port 8080
+```
+
+`./setup.sh --down` stops containers but **keeps** these directories. `./setup.sh --down-volumes` removes containers only (bind-mount data on disk is **not** deleted).
+
+Profile photos and signatures are stored **in MySQL** (base64 in `users`), so they are included in MySQL backups.
 
 To change settings after first deploy, edit `deploy/.env` and run:
 
@@ -384,6 +405,8 @@ Before go-live:
 | Blank page / 502 | Backend not ready | `./setup.sh --logs backend`; wait for migrations |
 | API errors in browser | Gateway misroute | Verify `curl http://127.0.0.1/api/v1/health` |
 | Login fails (demo) | Demo not seeded | Redeploy with `--demo-data` or check `LOAD_DEMO_DATA` in `deploy/.env` |
+| **502 Bad Gateway** on login/API | Backend still seeding or crashed | `docker logs moh-pms-api --tail 100`; wait 2–3 min on first boot; `./setup.sh --rebuild` |
+| `setup.sh` stuck on health check | First migrate + demo seed is slow | Wait up to 5 min; check backend logs; ensure `DATA_DIR` is writable |
 | `setup.sh` permission denied | Not executable | `chmod +x setup.sh` |
 | Database connection error | MySQL still starting | Wait 30s; `./setup.sh --logs mysql` |
 | Need fresh database | Old volume data | `./setup.sh --down-volumes` then redeploy |

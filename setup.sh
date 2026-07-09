@@ -41,6 +41,7 @@ MYSQL_HOST_PORT="3307"
 REDIS_HOST_PORT="6379"
 INSTALL_HOST_NGINX="false"
 SERVER_NAME="_"
+DATA_DIR="/var/lib/moh-pms"
 REBUILD="false"
 ACTION="deploy"
 VITE_API_BASE_URL="/api/v1"
@@ -51,6 +52,7 @@ CLI_LOAD_DEMO_DATA=""
 CLI_IHRIS_USE_DEMO_DATA=""
 CLI_INSTALL_HOST_NGINX=""
 CLI_GATEWAY_PORT=""
+CLI_DATA_DIR=""
 
 log() { printf '\033[1;32m[setup]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[setup]\033[0m %s\n' "$*"; }
@@ -65,7 +67,7 @@ Usage: ./setup.sh [options]
 Deploy / manage:
   (no args)              Build and start the stack
   --down                 Stop and remove containers (keeps volumes)
-  --down-volumes         Stop and remove containers + database volumes
+  --down-volumes         Stop and remove containers (host data under DATA_DIR is kept)
   --restart              Restart running containers
   --status               Show container status
   --logs [service]       Tail logs (gateway|backend|frontend|mysql|redis)
@@ -92,6 +94,7 @@ Credentials (auto-generated when omitted):
 
 Infrastructure:
   --rebuild              Force Docker image rebuild
+  --data-dir PATH        Host path for MySQL, Redis, and API storage (default: /var/lib/moh-pms)
   --expose-mysql         Publish MySQL on host port (default 3307)
   --expose-redis         Publish Redis on host port (default 6379)
   --install-host-nginx   Install site config into system nginx (requires sudo)
@@ -199,6 +202,15 @@ dotenv_quote() {
   printf '"%s"' "${s}"
 }
 
+ensure_data_dirs() {
+  mkdir -p "${DATA_DIR}/mysql" "${DATA_DIR}/redis" "${DATA_DIR}/storage/app/public"
+  chmod 750 "${DATA_DIR}" "${DATA_DIR}/mysql" "${DATA_DIR}/redis" "${DATA_DIR}/storage" 2>/dev/null || true
+  log "Persistent data directories:"
+  log "  MySQL:   ${DATA_DIR}/mysql"
+  log "  Redis:   ${DATA_DIR}/redis"
+  log "  Storage: ${DATA_DIR}/storage (logs and file uploads)"
+}
+
 write_env_file() {
   mkdir -p "${DEPLOY_DIR}"
   local url
@@ -230,6 +242,7 @@ REDIS_HOST_PORT=${REDIS_HOST_PORT}
 VITE_API_BASE_URL=$(dotenv_quote "${VITE_API_BASE_URL}")
 INSTALL_HOST_NGINX=${INSTALL_HOST_NGINX}
 SERVER_NAME=$(dotenv_quote "${SERVER_NAME}")
+DATA_DIR=$(dotenv_quote "${DATA_DIR}")
 EOF
   chmod 600 "${ENV_FILE}"
   log "Wrote ${ENV_FILE}"
@@ -265,16 +278,22 @@ install_host_nginx() {
 
 wait_for_api() {
   local url="http://127.0.0.1:${HTTP_PORT}/api/v1/health"
-  log "Waiting for API health at ${url} ..."
+  log "Waiting for API health at ${url} (first boot may take 2–3 minutes for migrate + demo seed)..."
   local i
-  for i in $(seq 1 60); do
+  for i in $(seq 1 90); do
     if curl -fsS "${url}" >/dev/null 2>&1; then
       log "API is healthy"
       return 0
     fi
+    if [ $((i % 10)) -eq 0 ]; then
+      printf '.'
+    fi
     sleep 3
   done
-  warn "API health check timed out — check logs: ./setup.sh --logs backend"
+  echo ""
+  warn "API health check timed out."
+  warn "Run: ./setup.sh --logs backend"
+  warn "Run: docker logs moh-pms-api --tail 80"
   return 1
 }
 
@@ -294,6 +313,7 @@ print_summary() {
 
   Demo data:  ${LOAD_DEMO_DATA}
   iHRIS demo: ${IHRIS_USE_DEMO_DATA}
+  Data dir:   ${DATA_DIR}
 EOF
   if [[ "${LOAD_DEMO_DATA}" == "true" ]]; then
     cat <<EOF
@@ -331,6 +351,7 @@ while [[ $# -gt 0 ]]; do
     --expose-mysql) EXPOSE_MYSQL="true"; shift ;;
     --expose-reedis) EXPOSE_REDIS="true"; shift ;;
     --install-host-nginx) INSTALL_HOST_NGINX="true"; CLI_INSTALL_HOST_NGINX="true"; shift ;;
+    --data-dir) DATA_DIR="$2"; CLI_DATA_DIR="$2"; shift 2 ;;
     --server-name) SERVER_NAME="$2"; shift 2 ;;
     --rebuild) REBUILD="true"; shift ;;
     --down) ACTION="down"; shift ;;
@@ -356,6 +377,7 @@ fi
 [[ -n "${CLI_LOAD_DEMO_DATA}" ]] && LOAD_DEMO_DATA="${CLI_LOAD_DEMO_DATA}"
 [[ -n "${CLI_IHRIS_USE_DEMO_DATA}" ]] && IHRIS_USE_DEMO_DATA="${CLI_IHRIS_USE_DEMO_DATA}"
 [[ -n "${CLI_INSTALL_HOST_NGINX}" ]] && INSTALL_HOST_NGINX="${CLI_INSTALL_HOST_NGINX}"
+[[ -n "${CLI_DATA_DIR}" ]] && DATA_DIR="${CLI_DATA_DIR}"
 
 require_docker
 
@@ -391,7 +413,7 @@ fi
 
 if [[ "${ACTION}" == "down-volumes" ]]; then
   compose down -v
-  log "Stack stopped and volumes removed"
+  log "Stack stopped and containers removed (data under ${DATA_DIR:-/var/lib/moh-pms} preserved on disk)"
   exit 0
 fi
 
@@ -412,6 +434,7 @@ if [[ "${INSTALL_HOST_NGINX}" == "true" && "${HTTP_PORT}" == "80" && "${EUID}" -
 fi
 
 write_env_file
+ensure_data_dirs
 write_override
 
 log "Gateway will bind host port ${HTTP_PORT} (map to container :80)"

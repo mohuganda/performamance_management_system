@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /app/moh-pms-api .
 FROM alpine:3.21
 
 WORKDIR /app
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata curl
 
 COPY --from=builder /app/moh-pms-api /app/moh-pms-api
 COPY --from=builder /app/artisan /app/artisan

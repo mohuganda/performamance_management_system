@@ -9,7 +9,7 @@ services:
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
-      - mysql_data:/var/lib/mysql
+      - ${DATA_DIR}/mysql:/var/lib/mysql
       - ../database/sql/legacy/01_legacy_source_tables.sql:/docker-entrypoint-initdb.d/01_legacy_source_tables.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
@@ -24,7 +24,7 @@ services:
     container_name: moh-pms-redis
     restart: unless-stopped
     volumes:
-      - redis_data:/data
+      - ${DATA_DIR}/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -68,8 +68,16 @@ services:
       REDIS_PORT: 6379
       IHRIS_USE_DEMO_DATA: ${IHRIS_USE_DEMO_DATA}
       LOAD_DEMO_DATA: ${LOAD_DEMO_DATA}
+    volumes:
+      - ${DATA_DIR}/storage:/app/storage
     expose:
       - "3030"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3030/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 180s
     profiles:
       - app
 
@@ -93,8 +101,10 @@ services:
     container_name: moh-pms-gateway
     restart: unless-stopped
     depends_on:
-      - frontend
-      - backend
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy
     ports:
       - "${HTTP_PORT:-80}:80"
     volumes:
@@ -102,6 +112,3 @@ services:
     profiles:
       - app
 
-volumes:
-  mysql_data:
-  redis_data:
