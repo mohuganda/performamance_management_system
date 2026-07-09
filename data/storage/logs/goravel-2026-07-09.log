@@ -395,3 +395,11 @@
 /go/pkg/mod/github.com/goravel/gin@v1.18.0/middleware_cors.go:68 [gin.(*CorsMiddleware).Handle]
 /go/pkg/mod/github.com/goravel/gin@v1.18.0/utils.go:66 [gin.(*Route).init.middlewaresToGinHandlers.middlewareToGinHandler.func1]
 /go/pkg/mod/github.com/gin-gonic/gin@v1.12.0/context.go:192 [gin.(*Context).Next]
+[2026-07-09 08:03:59.067] production.warning: [560.798ms] [rows:1] [SLOW] SELECT * FROM `users` WHERE `users`.`id` = '2'
+[Context] map[trace.traceContextKeyType:{Span:<nil> sc:{traceID:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] spanID:[0 0 0 0 0 0 0 0] traceFlags:0 traceState:{list:[]} remote:false}}]
+[2026-07-09 08:04:00.05] production.warning: [204.206ms] [rows:1] [SLOW] UPDATE `user_notifications` SET `created_at`='2026-07-09 07:58:29',`updated_at`='2026-07-09 08:03:59.856',`user_id`=2,`type`='info',`category`='system',`title`='Quarterly reporting window',`message`='Submit quarterly progress reports before the deadline in the Performance module.',`action_url`='/performance',`dedupe_key`='system:quarterly-reminder',`read_at`=NULL,`emailed_at`=NULL WHERE `id` = 1
+[Context] map[trace.traceContextKeyType:{Span:<nil> sc:{traceID:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] spanID:[0 0 0 0 0 0 0 0] traceFlags:0 traceState:{list:[]} remote:false}}]
+[2026-07-09 08:08:24.294] production.warning: [381.915ms] [rows:1] [SLOW] SELECT * FROM `users` WHERE `users`.`id` = '2'
+[Context] map[trace.traceContextKeyType:{Span:<nil> sc:{traceID:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] spanID:[0 0 0 0 0 0 0 0] traceFlags:0 traceState:{list:[]} remote:false}}]
+[2026-07-09 08:08:24.915] production.warning: [253.904ms] [rows:1] [SLOW] UPDATE `user_notifications` SET `created_at`='2026-07-09 07:58:29',`updated_at`='2026-07-09 08:08:24.692',`user_id`=2,`type`='info',`category`='system',`title`='Quarterly reporting window',`message`='Submit quarterly progress reports before the deadline in the Performance module.',`action_url`='/performance',`dedupe_key`='system:quarterly-reminder',`read_at`=NULL,`emailed_at`=NULL WHERE `id` = 1
+[Context] map[trace.traceContextKeyType:{Span:<nil> sc:{traceID:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] spanID:[0 0 0 0 0 0 0 0] traceFlags:0 traceState:{list:[]} remote:false}}]

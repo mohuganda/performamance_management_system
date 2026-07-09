@@ -17,7 +17,8 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 18
+      start_period: 120s
 
   redis:
     image: redis:7-alpine
