@@ -22,6 +22,8 @@ Integrated performance, leave, attendance, and workforce management platform for
 ```text
 performamance_management_system/
 ├── setup.sh          # Production deployment script (Docker + nginx)
+├── scripts/
+│   └── load-demo-data.sh   # Migrate + seed demo data (local backend)
 ├── backend/          # Goravel v1.18 API
 ├── frontend/         # React + Vite + TypeScript SPA
 ├── deploy/           # Production compose, nginx configs, generated .env
@@ -33,7 +35,9 @@ performamance_management_system/
     └── REACT_IMPLEMENTATION_GUIDE.md
 ```
 
-## Quick Start (Docker)
+## Quick Start (Docker + demo data)
+
+Demo users, KPIs, leave balances, and legacy iHRIS sample tables are loaded **automatically** (`LOAD_DEMO_DATA=true`, `IHRIS_USE_DEMO_DATA=true` in `docker-compose.yml`).
 
 ```bash
 docker compose up --build
@@ -47,39 +51,93 @@ docker compose up --build
 | MySQL    | localhost:3307 (`moh_pms` / `pms` / `pms_secret`) |
 | Redis    | localhost:6379 |
 
-After containers are healthy, open the frontend and sign in with a demo account (see [Demo accounts](#demo-accounts)).
+After containers are healthy, sign in with **`worker@moh.go.ug`** / **`Demo@Moh2026!`** (see [Demo accounts](#demo-accounts)).
 
-## Production deployment (nginx + Docker)
+To re-seed demo data without rebuilding containers:
+
+```bash
+chmod +x scripts/load-demo-data.sh
+./scripts/load-demo-data.sh
+```
+
+Optional — import staff from the legacy `ihrisdata` demo table (sign in as HR first, or pass a JWT):
+
+```bash
+curl -X POST http://localhost:3030/api/v1/ihris/sync \
+  -H "Authorization: Bearer <token>"
+```
+
+Or use **Settings → Data sources → Start iHRIS sync** in the web UI.
+
+## Production deployment (Docker + nginx)
 
 Use **`setup.sh`** on a Linux server with Docker installed. Full instructions: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
 
+**Demo / training server** (default — seeds sample users and data):
+
 ```bash
 chmod +x setup.sh
-./setup.sh
+./setup.sh --host "$(hostname -I | awk '{print $1}')"
 ```
 
-Open **`http://<server-ip>/`** in your browser.
+**Production** (no demo seed):
+
+```bash
+./setup.sh --no-demo-data --admin-password 'YourSecureAdminPass123!'
+```
+
+Open **`http://<server-ip>/`** in your browser (append `:PORT` if not using port 80).
 
 ### Quick examples
 
 ```bash
 ./setup.sh --host 203.0.113.50                    # explicit IP
-./setup.sh --no-demo-data --admin-password '…'  # production
-./setup.sh --http-port 8080                       # non-standard port
+./setup.sh --demo-data                            # ensure demo seed (default)
+./setup.sh --no-demo-data --admin-password '…'    # production
+./setup.sh --http-port 8080                       # non-standard port (see NPM below)
 sudo ./setup.sh --install-host-nginx              # system nginx on :80
 ./setup.sh --rebuild                              # after code update
 ./setup.sh --down                                 # stop stack
+./setup.sh --down-volumes && ./setup.sh --demo-data   # wipe DB and reseed demo
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--demo-data` / `--no-demo-data` | demo on | Seed demo users, KPIs, leave balances |
 | `--ihris-demo` / `--no-ihris-demo` | on with demo | Load legacy `ihrisdata` demo table |
-| `--http-port` | `80` | Port users access in the browser |
+| `--http-port` | `80` | Port the Docker gateway binds on the host |
 | `--install-host-nginx` | off | Install `/etc/nginx/sites-available/moh-pms` |
 | `--expose-mysql` / `--expose-redis` | off | Publish data services on host |
 
 Secrets are stored in **`deploy/.env`** (git-ignored). Run `./setup.sh --help` for all options.
+
+### Nginx Proxy Manager (alternative to built-in gateway on :80)
+
+Use this when **Nginx Proxy Manager** (or another reverse proxy) already owns ports **80/443** on the server. Do **not** use `--install-host-nginx`.
+
+1. **Deploy PMS on an internal port** (e.g. 8080):
+
+```bash
+./setup.sh --demo-data --host pms.example.go.ug --http-port 8080
+```
+
+2. **Verify** on the server:
+
+```bash
+curl -s http://127.0.0.1:8080/api/v1/health
+```
+
+3. **In Nginx Proxy Manager** → Proxy Hosts → Add:
+
+| Field | Value |
+|-------|--------|
+| Domain | `pms.example.go.ug` |
+| Forward to | `http://127.0.0.1:8080` (same host) |
+| Block common exploits | On |
+
+4. **SSL tab** — request a certificate and force HTTPS.
+
+The Docker **gateway** container routes `/` → frontend, `/api/` → backend, and `/swagger/` → API docs. NPM forwards the **entire site** to port 8080; no separate API proxy host is needed. Keep `VITE_API_BASE_URL=/api/v1` in `deploy/.env` (set by `setup.sh`) so the browser calls the API on the same domain.
 
 ### Stack layout
 
@@ -98,19 +156,31 @@ Browser → nginx gateway (:80)
 - Node.js 20+
 - MySQL 8.x and Redis (or use Docker for data services only)
 
-### Backend
+### Data services only (Docker)
+
+```bash
+docker compose up mysql redis -d
+```
+
+MySQL on **localhost:3307**, Redis on **localhost:6379**.
+
+### Backend (with demo seed)
 
 ```bash
 cd backend
 cp .env.example .env
-# Set DB_*, REDIS_*, JWT_SECRET, ADMIN_PASSWORD (min 10 chars)
+# Set DB_HOST=127.0.0.1, DB_PORT=3307, DB_DATABASE=moh_pms, DB_USERNAME=pms, DB_PASSWORD=pms_secret
+# Set REDIS_HOST=127.0.0.1, ADMIN_PASSWORD=Demo@Moh2026! (min 10 chars)
+# Optional: IHRIS_USE_DEMO_DATA=true in config/pms or system settings
 
 go run . artisan key:generate
 go run . artisan jwt:secret
 go run . artisan migrate
-go run . artisan db:seed
+go run . artisan db:seed    # demo accounts and sample data
 go run .
 ```
+
+Or from the repo root: `./scripts/load-demo-data.sh`
 
 API listens on **http://127.0.0.1:3030**.
 
@@ -132,19 +202,11 @@ npm run dev
 
 App runs at **http://127.0.0.1:5173** and calls `VITE_API_BASE_URL` (default `http://localhost:3030/api/v1`).
 
-### Sync demo iHRIS data
-
-Docker loads extracted legacy tables (`ihrisdata`, `kpi`, `kpi_job_category`) — not the full legacy SQL dump.
-
-```bash
-curl -X POST http://localhost:3030/api/v1/ihris/sync
-```
-
 ## Demo accounts
 
-Seeded by `DemoAccountsSeeder` when you run `go run . artisan db:seed`. Default password for all demo personas:
+Seeded when `LOAD_DEMO_DATA=true` (Docker / `setup.sh` default) or when you run `go run . artisan db:seed` / `./scripts/load-demo-data.sh`.
 
-**`Demo@Moh2026!`**
+Default password for all demo personas: **`Demo@Moh2026!`**
 
 | Email | Role | Typical use |
 |-------|------|-------------|
@@ -274,7 +336,7 @@ Primary green `#2E7D32`, accent gold `#F9A825`, background `#F8FAF5`. Typography
 | Document | Audience |
 |----------|----------|
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | End users (staff, supervisors, HR, admins) |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Server deployment with `setup.sh`, Docker, and nginx |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Server deployment: `setup.sh`, Docker, nginx, firewall, TLS |
 | [docs/REACT_IMPLEMENTATION_GUIDE.md](docs/REACT_IMPLEMENTATION_GUIDE.md) | Frontend implementation notes |
 | [leave.md](leave.md) | Leave policy reference |
 

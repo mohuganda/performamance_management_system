@@ -44,6 +44,13 @@ SERVER_NAME="_"
 REBUILD="false"
 ACTION="deploy"
 VITE_API_BASE_URL="/api/v1"
+# Set when matching CLI flag is passed (so deploy/.env cannot override)
+CLI_HTTP_PORT=""
+CLI_PUBLIC_HOST=""
+CLI_LOAD_DEMO_DATA=""
+CLI_IHRIS_USE_DEMO_DATA=""
+CLI_INSTALL_HOST_NGINX=""
+CLI_GATEWAY_PORT=""
 
 log() { printf '\033[1;32m[setup]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[setup]\033[0m %s\n' "$*"; }
@@ -297,24 +304,16 @@ EOF
 EOF
 }
 
-# Load saved deploy env first (CLI flags below will override)
-if [[ -f "${ENV_FILE}" ]]; then
-  # shellcheck disable=SC1090
-  set -a
-  source "${ENV_FILE}"
-  set +a
-fi
-
-# --- Parse arguments ---
+# --- Parse arguments first (record overrides before deploy/.env is loaded) ---
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --host) PUBLIC_HOST="$2"; shift 2 ;;
-    --http-port) HTTP_PORT="$2"; shift 2 ;;
-    --gateway-port) GATEWAY_PORT="$2"; shift 2 ;;
-    --demo-data) LOAD_DEMO_DATA="true"; shift ;;
-    --no-demo-data) LOAD_DEMO_DATA="false"; shift ;;
-    --ihris-demo) IHRIS_USE_DEMO_DATA="true"; shift ;;
-    --no-ihris-demo) IHRIS_USE_DEMO_DATA="false"; shift ;;
+    --host) PUBLIC_HOST="$2"; CLI_PUBLIC_HOST="$2"; shift 2 ;;
+    --http-port) HTTP_PORT="$2"; CLI_HTTP_PORT="$2"; shift 2 ;;
+    --gateway-port) GATEWAY_PORT="$2"; CLI_GATEWAY_PORT="$2"; shift 2 ;;
+    --demo-data) LOAD_DEMO_DATA="true"; CLI_LOAD_DEMO_DATA="true"; shift ;;
+    --no-demo-data) LOAD_DEMO_DATA="false"; CLI_LOAD_DEMO_DATA="false"; shift ;;
+    --ihris-demo) IHRIS_USE_DEMO_DATA="true"; CLI_IHRIS_USE_DEMO_DATA="true"; shift ;;
+    --no-ihris-demo) IHRIS_USE_DEMO_DATA="false"; CLI_IHRIS_USE_DEMO_DATA="false"; shift ;;
     --admin-email) ADMIN_EMAIL="$2"; shift 2 ;;
     --admin-password) ADMIN_PASSWORD="$2"; shift 2 ;;
     --db-password) MYSQL_PASSWORD="$2"; shift 2 ;;
@@ -322,8 +321,8 @@ while [[ $# -gt 0 ]]; do
     --app-key) APP_KEY="$2"; shift 2 ;;
     --jwt-secret) JWT_SECRET="$2"; shift 2 ;;
     --expose-mysql) EXPOSE_MYSQL="true"; shift ;;
-    --expose-redis) EXPOSE_REDIS="true"; shift ;;
-    --install-host-nginx) INSTALL_HOST_NGINX="true"; shift ;;
+    --expose-reedis) EXPOSE_REDIS="true"; shift ;;
+    --install-host-nginx) INSTALL_HOST_NGINX="true"; CLI_INSTALL_HOST_NGINX="true"; shift ;;
     --server-name) SERVER_NAME="$2"; shift 2 ;;
     --rebuild) REBUILD="true"; shift ;;
     --down) ACTION="down"; shift ;;
@@ -335,6 +334,20 @@ while [[ $# -gt 0 ]]; do
     *) err "Unknown option: $1"; usage; exit 1 ;;
   esac
 done
+
+# Load saved deploy env (secrets + prior settings); CLI flags above win for network/demo options
+if [[ -f "${ENV_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  set -a
+  source "${ENV_FILE}"
+  set +a
+fi
+[[ -n "${CLI_PUBLIC_HOST}" ]] && PUBLIC_HOST="${CLI_PUBLIC_HOST}"
+[[ -n "${CLI_HTTP_PORT}" ]] && HTTP_PORT="${CLI_HTTP_PORT}"
+[[ -n "${CLI_GATEWAY_PORT}" ]] && GATEWAY_PORT="${CLI_GATEWAY_PORT}"
+[[ -n "${CLI_LOAD_DEMO_DATA}" ]] && LOAD_DEMO_DATA="${CLI_LOAD_DEMO_DATA}"
+[[ -n "${CLI_IHRIS_USE_DEMO_DATA}" ]] && IHRIS_USE_DEMO_DATA="${CLI_IHRIS_USE_DEMO_DATA}"
+[[ -n "${CLI_INSTALL_HOST_NGINX}" ]] && INSTALL_HOST_NGINX="${CLI_INSTALL_HOST_NGINX}"
 
 require_docker
 
@@ -392,6 +405,8 @@ fi
 
 write_env_file
 write_override
+
+log "Gateway will bind host port ${HTTP_PORT} (map to container :80)"
 
 log "Building and starting containers..."
 if [[ "${REBUILD}" == "true" ]]; then
