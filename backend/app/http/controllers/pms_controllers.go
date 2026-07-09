@@ -57,6 +57,30 @@ func (c *IhrisController) Status(ctx http.Context) http.Response {
 	return ctx.Response().Success().Json(status)
 }
 
+type HrmAttendController struct {
+	hrm *services.HrmAttendService
+}
+
+func NewHrmAttendController() *HrmAttendController {
+	return &HrmAttendController{hrm: services.NewHrmAttendService()}
+}
+
+func (c *HrmAttendController) Sync(ctx http.Context) http.Response {
+	var body struct {
+		YearMonth string `json:"year_month"`
+	}
+	_ = ctx.Request().Bind(&body)
+
+	result, err := c.hrm.SyncMonthlySummaries(body.YearMonth)
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{
+			"message": err.Error(),
+			"result":  result,
+		})
+	}
+	return ctx.Response().Success().Json(result)
+}
+
 type DashboardController struct {
 	dashboardService *services.DashboardService
 }

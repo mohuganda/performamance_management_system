@@ -1,10 +1,11 @@
 import { useCallback, useRef, useState, type RefObject } from 'react'
 import { X } from 'lucide-react'
 import { DataTable } from '@/components/organisms/DataTable'
-import { useAdminPageSize } from '@/hooks/useAdminPageSize'
 import { Button } from '@material-tailwind/react'
 import type { DashboardDrilldown } from '@/utils/dashboardDrilldown'
 import { mt } from '@/utils/mt'
+
+const DASHBOARD_DRILLDOWN_PAGE_SIZE = 10
 
 export function useDashboardDrilldown(defaultId: string | null = null) {
   const [activeId, setActiveId] = useState<string | null>(defaultId)
@@ -35,7 +36,6 @@ export function DashboardDrilldownPanel({
   onClose,
   panelRef,
 }: DashboardDrilldownPanelProps) {
-  const pageSize = useAdminPageSize()
   if (!activeId) return null
   const drilldown = drilldowns[activeId]
   if (!drilldown) return null
@@ -62,7 +62,7 @@ export function DashboardDrilldownPanel({
         description={drilldown.description}
         columns={drilldown.columns}
         rows={drilldown.rows}
-        perPage={pageSize}
+        perPage={DASHBOARD_DRILLDOWN_PAGE_SIZE}
         showRowNumbers
         emptyMessage="No records match this drilldown."
         highlighted

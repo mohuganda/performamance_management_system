@@ -10,6 +10,7 @@ import { UserAvatar } from '@/components/atoms/UserAvatar'
 import { SignaturePad } from '@/components/molecules/SignaturePad'
 import { useAuthStore } from '@/stores/appStore'
 import { mt } from '@/utils/mt'
+import { notifyApiError, toast } from '@/features/toast'
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -98,9 +99,11 @@ export function ProfilePage() {
       await queryClient.invalidateQueries({ queryKey: ['auth', 'me'] })
       await refreshProfile()
       setStatusMessage('Profile updated successfully.')
+      toast.success('Profile updated successfully.')
     },
     onError: (err: Error) => {
       setStatusMessage(err.message || 'Failed to update profile.')
+      notifyApiError(err, 'Failed to update profile.')
     },
   })
 

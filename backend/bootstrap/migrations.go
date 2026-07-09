@@ -29,5 +29,6 @@ func Migrations() []schema.Migration {
 		&migrations.M20260722000001LeaveWorkflow{},
 		&migrations.M20260723000001UserPermissionsLeaveWorkflow{},
 		&migrations.M20260724000001DepartmentFacilityLink{},
+		&migrations.M20260725000001StaffAttendanceMonthlySummaries{},
 	}
 }

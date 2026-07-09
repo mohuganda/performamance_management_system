@@ -12,6 +12,7 @@ func Api() {
 	health := controllers.NewHealthController()
 	configController := controllers.NewConfigController()
 	ihrisController := controllers.NewIhrisController()
+	hrmAttendController := controllers.NewHrmAttendController()
 	settingsAdminController := controllers.NewSettingsAdminController()
 	notificationsAdminController := controllers.NewNotificationsAdminController()
 	dashboardController := controllers.NewDashboardController()
@@ -45,6 +46,8 @@ func Api() {
 
 			auth.Middleware(middleware.Permission("ihris.sync")).Post("/ihris/sync", ihrisController.Sync)
 			auth.Middleware(middleware.Permission("ihris.sync")).Get("/ihris/sync/status", ihrisController.Status)
+
+			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Post("/hrm-attend/sync", hrmAttendController.Sync)
 
 			settingsReadPerm := middleware.Permission(
 				"settings.manage",
@@ -149,6 +152,7 @@ func Api() {
 				kpi.Middleware(middleware.Permission("kpi.catalog.view", "kpi.assignments.view")).Get("/permissions", kpiAdminController.PermissionCatalog)
 				kpi.Middleware(middleware.Permission("kpi.catalog.view", "kpi.assignments.view")).Get("/subject-areas", kpiAdminController.ListSubjectAreas)
 				kpi.Middleware(middleware.Permission("kpi.catalog.view")).Get("/categories", kpiAdminController.ListCategories)
+				kpi.Middleware(middleware.Permission("kpi.catalog.manage")).Get("/next-code", kpiAdminController.NextKpiCode)
 				kpi.Middleware(middleware.Permission("kpi.catalog.view")).Get("/kpis", kpiAdminController.ListKpis)
 				kpi.Middleware(middleware.Permission("kpi.catalog.view")).Get("/kpis/{id}", kpiAdminController.ShowKpi)
 				kpi.Middleware(middleware.Permission("kpi.catalog.manage")).Post("/kpis", kpiAdminController.CreateKpi)

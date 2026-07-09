@@ -11,6 +11,7 @@ import { ServerPaginatedTable } from '@/components/organisms/ServerPaginatedTabl
 import { useAdminPageSize } from '@/hooks/useAdminPageSize'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { mt } from '@/utils/mt'
+import { notifyApiError, toast } from '@/features/toast'
 
 type SupervisorForm = {
   supervisor1: string
@@ -114,10 +115,13 @@ export function StaffManagementPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'staff'] })
+      toast.success('Staff record saved successfully.')
       closeStaffModal()
     },
     onError: (error: unknown) => {
-      setFormError(apiErrorMessage(error, 'Could not save staff record'))
+      const message = apiErrorMessage(error, 'Could not save staff record')
+      setFormError(message)
+      notifyApiError(error, 'Could not save staff record')
     },
   })
 

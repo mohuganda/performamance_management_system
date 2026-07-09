@@ -39,6 +39,7 @@ import { ServerPaginatedTable } from '@/components/organisms/ServerPaginatedTabl
 import { useAdminPageSize } from '@/hooks/useAdminPageSize'
 import { useAuthStore } from '@/stores/appStore'
 import { mt } from '@/utils/mt'
+import { notifyApiError } from '@/features/toast'
 
 const LEAVE_STEPS = [
   {
@@ -182,7 +183,10 @@ export function LeaveAdminPage() {
       setSettingsError('')
       invalidateAll()
     },
-    onError: (error: unknown) => setSettingsError(apiErrorMessage(error, 'Could not save settings')),
+    onError: (error: unknown) => {
+      setSettingsError(apiErrorMessage(error, 'Could not save settings'))
+      notifyApiError(error, 'Could not save settings')
+    },
   })
 
   const updateTypeWorkflowMutation = useMutation({

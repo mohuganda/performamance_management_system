@@ -385,7 +385,11 @@ func (s *DashboardAnalyticsService) StaffAttendanceSummary(staffID uint) []map[s
 		if len(clocks) > 0 {
 			oosPct = math.Round(float64(verified)/float64(len(clocks))*1000) / 10
 		}
+		yearMonth := start.Format("2006-01")
 		hrmPct := 94.0
+		if pct, ok := s.hrm.StaffMonthlyPercent(staffID, yearMonth); ok {
+			hrmPct = pct
+		}
 		combined := math.Round((oosPct*0.35+hrmPct*0.65)*10) / 10
 		status := "on_target"
 		if combined < target {

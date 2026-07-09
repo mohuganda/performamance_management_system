@@ -26,6 +26,7 @@ import { ServerPaginatedTable } from '@/components/organisms/ServerPaginatedTabl
 import { useAdminPageSize } from '@/hooks/useAdminPageSize'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { mt } from '@/utils/mt'
+import { notifyApiError, toast } from '@/features/toast'
 
 type ListTab = 'regions' | 'districts' | 'facilities' | 'departments' | 'job-titles'
 
@@ -181,10 +182,14 @@ export function ListsAdminPanel() {
     },
     onSuccess: () => {
       setEditError('')
+      toast.success('Record saved successfully.')
       closeEdit()
       invalidate()
     },
-    onError: (error: unknown) => setEditError(apiErrorMessage(error, 'Could not save record')),
+    onError: (error: unknown) => {
+      setEditError(apiErrorMessage(error, 'Could not save record'))
+      notifyApiError(error, 'Could not save record')
+    },
   })
 
   const createMutation = useMutation({
@@ -204,9 +209,13 @@ export function ListsAdminPanel() {
     onSuccess: () => {
       setCreateOpen(false)
       setCreateForm({ name: '', external_id: '' })
+      toast.success('Record created successfully.')
       invalidate()
     },
-    onError: (error: unknown) => setEditError(apiErrorMessage(error, 'Could not create record')),
+    onError: (error: unknown) => {
+      setEditError(apiErrorMessage(error, 'Could not create record'))
+      notifyApiError(error, 'Could not create record')
+    },
   })
 
   const closeEdit = () => {

@@ -58,7 +58,7 @@ func (s *HrmAttendService) ConnectionStatus() HrmAttendConnection {
 		return status
 	}
 
-	req, err := http.NewRequest(http.MethodGet, base+"/api/v1/health", nil)
+	req, err := http.NewRequest(http.MethodGet, base+s.SummaryPath(), nil)
 	if err != nil {
 		return status
 	}
@@ -69,7 +69,7 @@ func (s *HrmAttendService) ConnectionStatus() HrmAttendConnection {
 	defer resp.Body.Close()
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		status.Status = "connected"
-		status.Message = "Receiving daily attendance summaries from HRM Attend"
+		status.Message = "Receiving monthly attendance summaries from HRM Attend"
 		status.LastSyncAt = s.settings.GetString("hrm_attend.last_sync_at", time.Now().Format(time.RFC3339))
 	}
 	return status
@@ -78,6 +78,9 @@ func (s *HrmAttendService) ConnectionStatus() HrmAttendConnection {
 func (s *HrmAttendService) MonthlySummaries(months int) []HrmAttendSummary {
 	if months <= 0 {
 		months = 4
+	}
+	if stored := s.AggregatedMonthlySummaries(months); len(stored) > 0 {
+		return stored
 	}
 	if live := s.fetchLiveSummaries(months); len(live) > 0 {
 		return live
@@ -152,7 +155,7 @@ func (s *HrmAttendService) IntegrationMeta() map[string]any {
 		"title":              "Unified Attendance View",
 		"connection":         conn,
 		"pms_tracks":         []string{"Out-of-station GPS clock-in/out", "Approved leave requests", "Geofence verification at duty destinations"},
-		"hrm_attend_provides": []string{"Daily duty-station attendance summaries", "Facility clock-in aggregates", "Monthly attendance reporting baselines"},
+		"hrm_attend_provides": []string{"Monthly duty-station attendance summaries per staff", "Facility clock-in aggregates", "End-of-month attendance reporting baselines"},
 		"pms_exports_to_hrm": []string{"Out-of-station raw clock logs", "Approved leave periods", "GPS verification metadata"},
 		"combined_outcome":   "HRM Attend + PMS together produce a complete employee attendance record across duty station and field assignments.",
 	}

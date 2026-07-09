@@ -1,7 +1,9 @@
 import { Card } from '@/components/atoms/Card'
 import { Badge } from '@/components/atoms/Badge'
+import { TrafficScore } from '@/components/atoms/TrafficScore'
 import { TablePagination } from '@/components/molecules/TablePagination'
 import { useClientPagination } from '@/hooks/useClientPagination'
+import { isScoreColumn, statusTone } from '@/utils/trafficSignal'
 import { Database } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
@@ -98,16 +100,9 @@ export function DataTable({
                   {columns.map((column) => (
                     <td key={column} className="px-4 py-3 align-top">
                       {column === 'Status' && typeof row[column] === 'string' ? (
-                        <Badge
-                          label={String(row[column])}
-                          tone={
-                            String(row[column]).toLowerCase().includes('off')
-                              ? 'error'
-                              : String(row[column]).toLowerCase().includes('risk')
-                                ? 'warning'
-                                : 'success'
-                          }
-                        />
+                        <Badge label={String(row[column])} tone={statusTone(String(row[column]))} />
+                      ) : isScoreColumn(column) ? (
+                        <TrafficScore value={row[column] ?? '—'} />
                       ) : (
                         row[column]
                       )}

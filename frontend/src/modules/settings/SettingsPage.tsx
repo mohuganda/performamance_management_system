@@ -19,7 +19,7 @@ import {
 } from '@material-tailwind/react'
 import { Select, Option } from '@/components/molecules/MtSelect'
 import { Link } from 'react-router-dom'
-import { adminSettingsService, ihrisAdminService, performanceAdminService } from '@/api/services/admin'
+import { adminSettingsService, hrmAttendAdminService, ihrisAdminService, performanceAdminService } from '@/api/services/admin'
 import { kpiAdminService } from '@/api/services/kpiAdmin'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
@@ -31,6 +31,7 @@ import {
 } from '@/constants/settingsPermissions'
 import { useAuthStore } from '@/stores/appStore'
 import { mt } from '@/utils/mt'
+import { notifyApiError, toast } from '@/features/toast'
 import { cn } from '@/utils/cn'
 import { ListsAdminPanel } from '@/modules/settings/ListsAdminPanel'
 
@@ -132,6 +133,7 @@ export function SettingsPage() {
   })
   const [hrmAttendForm, setHrmAttendForm] = useState({
     api_url: 'http://localhost/attend',
+    summary_path: '/attendance/attendance_summary',
     enabled: true,
   })
   const [emailForm, setEmailForm] = useState({
@@ -171,6 +173,7 @@ export function SettingsPage() {
     const hrm = settingsQuery.data.data_sources.hrm_attend
     setHrmAttendForm({
       api_url: hrm?.api_url ?? 'http://localhost/attend',
+      summary_path: hrm?.summary_path ?? '/attendance/attendance_summary',
       enabled: hrm?.enabled ?? true,
     })
     setEmailForm({
@@ -185,12 +188,20 @@ export function SettingsPage() {
   const saveDataSources = useMutation({
     mutationFn: () =>
       adminSettingsService.update('data_sources', { ihris: ihrisForm, hrm_attend: hrmAttendForm }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+      toast.success('Data source settings saved.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not save data sources'),
   })
 
   const saveEmail = useMutation({
     mutationFn: () => adminSettingsService.update('email', emailForm),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+      toast.success('Email settings saved.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not save email settings'),
   })
 
   const saveUi = useMutation({
@@ -199,7 +210,9 @@ export function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'page-size'] })
+      toast.success('UI preferences saved.')
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not save UI preferences'),
   })
 
   const syncMutation = useMutation({
@@ -219,11 +232,24 @@ export function SettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ihris', 'sync', 'status'] })
+      toast.success('iHRIS sync completed.')
     },
+    onError: (error: unknown) => notifyApiError(error, 'iHRIS sync failed'),
+  })
+
+  const hrmAttendSyncMutation = useMutation({
+    mutationFn: () => hrmAttendAdminService.syncSummaries(),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+      toast.success(result.message ?? `Imported ${result.imported} attendance summaries.`)
+    },
+    onError: (error: unknown) => notifyApiError(error, 'HRM Attend sync failed'),
   })
 
   const sendReminders = useMutation({
     mutationFn: () => adminSettingsService.sendReminders(),
+    onSuccess: () => toast.success('Reminder notifications sent.'),
+    onError: (error: unknown) => notifyApiError(error, 'Could not send reminders'),
   })
 
   const savePerformanceSettings = useMutation({
@@ -231,7 +257,9 @@ export function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'performance', 'settings'] })
       queryClient.invalidateQueries({ queryKey: ['performance'] })
+      toast.success('Performance settings saved.')
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not save performance settings'),
   })
 
   const kpiPermissionsQuery = useQuery({
@@ -437,7 +465,7 @@ export function SettingsPage() {
 
             <SettingsSection
               title="HRM Attend integration"
-              description="PMS exports out-of-station clocks and approved leave to HRM Attend, and pulls daily duty-station summaries for dashboards."
+              description="Pull end-of-month duty-station attendance summaries from HRM Attend for staff already in PMS."
               accent="blue"
             >
               <div className="space-y-6">
@@ -449,6 +477,14 @@ export function SettingsPage() {
                     onChange={(e) => setHrmAttendForm((f) => ({ ...f, api_url: e.target.value }))}
                   />
                 </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    label="Attendance summary path"
+                    value={hrmAttendForm.summary_path}
+                    onChange={(e) => setHrmAttendForm((f) => ({ ...f, summary_path: e.target.value }))}
+                  />
+                </Field>
                 <ToggleRow
                   label="Enable HRM Attend data exchange"
                   checked={hrmAttendForm.enabled}
@@ -457,8 +493,41 @@ export function SettingsPage() {
                 {settingsQuery.data?.data_sources.hrm_attend?.last_sync_at ? (
                   <p className="text-xs text-gray-500">
                     Last summary sync: {settingsQuery.data.data_sources.hrm_attend.last_sync_at}
+                    {settingsQuery.data.data_sources.hrm_attend.last_sync_status
+                      ? ` (${settingsQuery.data.data_sources.hrm_attend.last_sync_status})`
+                      : ''}
                   </p>
                 ) : null}
+                <p className="text-xs text-gray-500">
+                  Fetches monthly summaries from{' '}
+                  <code className="text-[11px]">
+                    {hrmAttendForm.api_url.replace(/\/$/, '')}
+                    {hrmAttendForm.summary_path}
+                  </code>{' '}
+                  and imports only rows matching PMS staff (by iHRIS PID, card number, or NIN).
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    {...mt}
+                    size="sm"
+                    className="rounded-sm bg-moh-green normal-case"
+                    onClick={() => saveDataSources.mutate()}
+                    loading={saveDataSources.isPending}
+                  >
+                    Save HRM settings
+                  </Button>
+                  <Button
+                    {...mt}
+                    size="sm"
+                    variant="outlined"
+                    className="rounded-sm normal-case"
+                    onClick={() => hrmAttendSyncMutation.mutate()}
+                    loading={hrmAttendSyncMutation.isPending}
+                    disabled={!hrmAttendForm.enabled}
+                  >
+                    Sync last month&apos;s summaries
+                  </Button>
+                </div>
               </div>
             </SettingsSection>
 

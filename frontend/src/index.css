@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @config '../tailwind.config.cjs';
+@import './styles/toast.css';
 
 @theme {
   /* Professional grey UI */

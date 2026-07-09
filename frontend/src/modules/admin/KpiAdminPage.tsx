@@ -33,6 +33,7 @@ import {
   Typography,
 } from '@material-tailwind/react'
 import { Select, Option } from '@/components/molecules/MtSelect'
+import { SearchableMultiSelect } from '@/components/molecules/SearchableMultiSelect'
 import { kpiAdminService, type KpiAssignmentRow, type KpiRow } from '@/api/services/kpiAdmin'
 import { kpiCategoryLabel } from '@/utils/normalizeApi'
 import { PageHeader } from '@/components/organisms/PageHeader'
@@ -42,6 +43,7 @@ import { useAuthStore } from '@/stores/appStore'
 import { useAdminPageSize } from '@/hooks/useAdminPageSize'
 import { ServerPaginatedTable } from '@/components/organisms/ServerPaginatedTable'
 import { mt } from '@/utils/mt'
+import { notifyApiError, toast } from '@/features/toast'
 
 const KPI_STEPS = [
   {
@@ -111,7 +113,7 @@ export function KpiAdminPage() {
   const [kpiFormError, setKpiFormError] = useState('')
   const [kpiForm, setKpiForm] = useState(emptyKpiForm)
   const [assignForm, setAssignForm] = useState({
-    kpi_id: '',
+    kpi_ids: [] as string[],
     assignable_type: 'job',
     job_id: '',
     department_id: '',
@@ -136,6 +138,12 @@ export function KpiAdminPage() {
     enabled: canManageCatalog,
   })
 
+  const nextKpiCodeQuery = useQuery({
+    queryKey: ['admin', 'kpi', 'next-code', kpiForm.category_id],
+    queryFn: () => kpiAdminService.nextKpiCode(Number(kpiForm.category_id)),
+    enabled: kpiModalMode === 'create' && Boolean(kpiForm.category_id),
+  })
+
   const kpisQuery = useQuery({
     queryKey: ['admin', 'kpi', 'list', search, subjectFilter, categoryFilter, kpiPage, pageSize],
     queryFn: () => {
@@ -153,6 +161,17 @@ export function KpiAdminPage() {
       })
     },
     enabled: canViewCatalog || canManageAssignments,
+  })
+
+  const assignmentKpisQuery = useQuery({
+    queryKey: ['admin', 'kpi', 'assignment-options'],
+    queryFn: () =>
+      kpiAdminService.listKpis({
+        active_only: true,
+        page: 1,
+        per_page: 500,
+      }),
+    enabled: canManageAssignments,
   })
 
   const assignmentsQuery = useQuery({
@@ -187,8 +206,7 @@ export function KpiAdminPage() {
 
   const saveKpiMutation = useMutation({
     mutationFn: () => {
-      const payload = {
-        kpi_code: kpiForm.kpi_code,
+      const payload: Record<string, unknown> = {
         short_name: kpiForm.short_name,
         indicator_statement: kpiForm.indicator_statement,
         frequency: kpiForm.frequency,
@@ -199,16 +217,21 @@ export function KpiAdminPage() {
         is_cumulative: kpiForm.is_cumulative,
         status: kpiForm.status,
       }
+      if (kpiModalMode === 'edit' && editingKpi) {
+        payload.kpi_code = kpiForm.kpi_code
+      }
       return kpiModalMode === 'edit' && editingKpi
         ? kpiAdminService.updateKpi(editingKpi.id, payload)
         : kpiAdminService.createKpi(payload)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'kpi'] })
+      toast.success('KPI saved successfully.')
       closeKpiModal()
     },
     onError: (error: unknown) => {
       setKpiFormError(apiErrorMessage(error, 'Could not save KPI'))
+      notifyApiError(error, 'Could not save KPI')
     },
   })
 
@@ -216,27 +239,41 @@ export function KpiAdminPage() {
     mutationFn: (id: number) => kpiAdminService.deactivateKpi(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'kpi'] })
+      toast.success('KPI deactivated.')
       closeKpiModal()
     },
     onError: (error: unknown) => {
       setKpiFormError(apiErrorMessage(error, 'Could not deactivate KPI'))
+      notifyApiError(error, 'Could not deactivate KPI')
     },
   })
 
   const assignMutation = useMutation({
     mutationFn: () =>
       kpiAdminService.createAssignment({
-        kpi_id: Number(assignForm.kpi_id),
+        kpi_ids: assignForm.kpi_ids.map(Number),
         assignable_type: assignForm.assignable_type,
         job_id: assignForm.job_id ? Number(assignForm.job_id) : undefined,
         department_id: assignForm.department_id ? Number(assignForm.department_id) : undefined,
         staff_id: assignForm.staff_id ? Number(assignForm.staff_id) : undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'kpi', 'assignments'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'kpi', 'list'] })
-      setAssignForm((f) => ({ ...f, job_id: '', department_id: '', staff_id: '' }))
+      setAssignForm((f) => ({ ...f, kpi_ids: [] }))
+      const bulk = result as { created?: number; reactivated?: number; failed?: number }
+      const total = (bulk.created ?? 0) + (bulk.reactivated ?? 0)
+      if (total > 0) {
+        toast.success(
+          bulk.failed
+            ? `Assigned ${total} KPI${total === 1 ? '' : 's'} (${bulk.failed} failed).`
+            : `Assigned ${total} KPI${total === 1 ? '' : 's'}.`,
+        )
+      } else {
+        toast.success('KPI assignment saved.')
+      }
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not assign KPIs'),
   })
 
   const removeAssignmentMutation = useMutation({
@@ -281,10 +318,6 @@ export function KpiAdminPage() {
   }
 
   const saveKpi = () => {
-    if (!kpiForm.kpi_code.trim()) {
-      setKpiFormError('KPI code is required.')
-      return
-    }
     if (!kpiForm.indicator_statement.trim()) {
       setKpiFormError('Indicator statement is required.')
       return
@@ -311,6 +344,21 @@ export function KpiAdminPage() {
   const jobs = jobsQuery.data ?? []
   const departments = departmentsQuery.data ?? []
   const staffOptions = staffQuery.data ?? []
+  const assignmentKpis = assignmentKpisQuery.data?.data ?? []
+  const assignmentKpiOptions = assignmentKpis.map((k) => ({
+    value: String(k.id),
+    label: `${k.kpi_code} — ${k.short_name || k.indicator_statement.slice(0, 48)}`,
+    description: k.subject_area_name,
+  }))
+  const assignTargetReady =
+    (assignForm.assignable_type === 'job' && Boolean(assignForm.job_id)) ||
+    (assignForm.assignable_type === 'department' && Boolean(assignForm.department_id)) ||
+    (assignForm.assignable_type === 'staff' && Boolean(assignForm.staff_id))
+  const canSubmitAssignment = assignForm.kpi_ids.length > 0 && assignTargetReady
+  const autoKpiCode =
+    kpiModalMode === 'create'
+      ? nextKpiCodeQuery.data?.kpi_code || (nextKpiCodeQuery.isLoading ? 'Generating…' : '—')
+      : kpiForm.kpi_code
 
   const myKpiPermissions =
     permissionsQuery.data?.permissions.filter((p) => hasPermission(p.code)) ?? []
@@ -591,13 +639,21 @@ export function KpiAdminPage() {
                 Identity
               </div>
               <div className="grid gap-5 md:grid-cols-2">
-                <Input
-                  {...mt}
-                  label="KPI code"
-                  value={kpiForm.kpi_code}
-                  onChange={(e) => setKpiForm((f) => ({ ...f, kpi_code: e.target.value }))}
-                  disabled={kpiModalMode === 'edit'}
-                />
+                <div>
+                  <Input
+                    {...mt}
+                    label={kpiModalMode === 'create' ? 'KPI code (auto-assigned)' : 'KPI code'}
+                    value={autoKpiCode}
+                    readOnly
+                    disabled
+                    className="bg-gray-50"
+                  />
+                  {kpiModalMode === 'create' ? (
+                    <Typography {...mt} variant="small" className="mt-1 text-gray-500">
+                      Updates when you change category. Assigned on save.
+                    </Typography>
+                  ) : null}
+                </div>
                 <Input
                   {...mt}
                   label="Short name"
@@ -761,19 +817,21 @@ export function KpiAdminPage() {
                 </Typography>
               </div>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <Select
-                  {...mt}
-                  label="KPI"
-                  value={assignForm.kpi_id}
-                  onChange={(v) => setAssignForm((f) => ({ ...f, kpi_id: v ?? '' }))}
-                >
-                  <Option value="">— Select KPI —</Option>
-                  {kpis.filter((k) => k.status).map((k) => (
-                    <Option key={k.id} value={String(k.id)}>
-                      {k.kpi_code} — {k.short_name || k.indicator_statement.slice(0, 40)}
-                    </Option>
-                  ))}
-                </Select>
+                <div className="md:col-span-2 lg:col-span-3">
+                  <SearchableMultiSelect
+                    label="KPIs"
+                    values={assignForm.kpi_ids}
+                    options={assignmentKpiOptions}
+                    onChange={(kpi_ids) => setAssignForm((f) => ({ ...f, kpi_ids }))}
+                    placeholder="Search KPIs to assign…"
+                    emptyLabel="— Select one or more KPIs —"
+                  />
+                  {assignForm.kpi_ids.length > 0 ? (
+                    <Typography {...mt} variant="small" className="mt-1 text-gray-500">
+                      {assignForm.kpi_ids.length} KPI{assignForm.kpi_ids.length === 1 ? '' : 's'} selected
+                    </Typography>
+                  ) : null}
+                </div>
                 <Select
                   {...mt}
                   label="Assign to"
@@ -867,11 +925,13 @@ export function KpiAdminPage() {
                 {...mt}
                 size="sm"
                 className="mt-4 flex items-center gap-2 rounded-sm bg-moh-green"
-                disabled={!assignForm.kpi_id || assignMutation.isPending}
+                disabled={!canSubmitAssignment || assignMutation.isPending}
                 onClick={() => assignMutation.mutate()}
               >
                 <Link2 className="h-4 w-4" />
-                Assign KPI
+                {assignForm.kpi_ids.length > 1
+                  ? `Assign ${assignForm.kpi_ids.length} KPIs`
+                  : 'Assign KPI'}
               </Button>
             </Card>
           ) : null}

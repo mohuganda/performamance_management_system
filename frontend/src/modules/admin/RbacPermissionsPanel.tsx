@@ -8,6 +8,7 @@ import {
 } from '@/api/services/rbacAdmin'
 import { mt } from '@/utils/mt'
 import { cn } from '@/utils/cn'
+import { notifyApiError, toast } from '@/features/toast'
 
 type RolePermissionsPanelProps = {
   roles: RbacRole[]
@@ -54,7 +55,9 @@ export function RolePermissionsPanel({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'rbac', 'role-permissions', selectedRoleCode] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'rbac', 'audit'] })
+      toast.success('Role permissions updated.')
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not update role permissions'),
   })
 
   const selectedRole = roles.find((r) => r.code === selectedRoleCode)
@@ -169,7 +172,9 @@ export function UserPermissionsPanel({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'rbac', 'user-permissions', userId] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'rbac', 'audit'] })
+      toast.success('User permissions updated.')
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not update user permissions'),
   })
 
   const grouped = useMemo(() => {

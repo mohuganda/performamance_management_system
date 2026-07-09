@@ -1,6 +1,7 @@
 import apiClient from '../client'
 import { asArray } from '@/utils/asArray'
 import { normalizeKpiCategories } from '@/utils/normalizeApi'
+import { unwrapApiData } from '@/utils/unwrapApi'
 import type { PaginatedResponse } from '@/types/pagination'
 import { unwrapPaginated } from '@/types/pagination'
 
@@ -55,6 +56,13 @@ export const kpiAdminService = {
     const { data } = await apiClient.get('/admin/kpi/categories')
     return normalizeKpiCategories(data)
   },
+  nextKpiCode: async (categoryId: number): Promise<{ kpi_code: string }> => {
+    const { data } = await apiClient.get('/admin/kpi/next-code', {
+      params: { category_id: categoryId },
+    })
+    const payload = unwrapApiData<{ kpi_code?: string }>(data)
+    return { kpi_code: payload.kpi_code ?? '' }
+  },
   listKpis: async (params?: {
     search?: string
     subject_area?: number
@@ -91,14 +99,17 @@ export const kpiAdminService = {
     return { ...page, data: asArray<KpiAssignmentRow>(page.data) }
   },
   createAssignment: async (payload: {
-    kpi_id: number
+    kpi_id?: number
+    kpi_ids?: number[]
     assignable_type: string
     job_id?: number
     department_id?: number
     staff_id?: number
   }) => {
     const { data } = await apiClient.post('/admin/kpi/assignments', payload)
-    return data
+    return data as
+      | { created: number; reactivated: number; failed: number; errors?: string[] }
+      | Record<string, unknown>
   },
   removeAssignment: async (id: number) => {
     const { data } = await apiClient.delete(`/admin/kpi/assignments/${id}`)

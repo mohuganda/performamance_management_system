@@ -434,6 +434,22 @@ type OutOfStationApproval struct {
 	ActedAt               *time.Time
 }
 
+type StaffAttendanceMonthlySummary struct {
+	orm.Model
+	StaffID            uint    `gorm:"column:staff_id"`
+	YearMonth          string  `gorm:"column:year_month"`
+	DutyStationPercent float64 `gorm:"column:duty_station_percent"`
+	DaysPresent        *int    `gorm:"column:days_present"`
+	DaysExpected       *int    `gorm:"column:days_expected"`
+	Source             string  `gorm:"column:source;default:hrm_attend"`
+	ExternalRef        *string `gorm:"column:external_ref"`
+	Staff              Staff   `gorm:"foreignKey:StaffID"`
+}
+
+func (StaffAttendanceMonthlySummary) TableName() string {
+	return "staff_attendance_monthly_summaries"
+}
+
 type AttendanceClock struct {
 	orm.Model
 	EntryID                     string `gorm:"uniqueIndex"`

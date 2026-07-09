@@ -30,6 +30,18 @@ func (c *KpiAdminController) ListCategories(ctx http.Context) http.Response {
 	return jsonResponse(ctx, http.StatusOK, rows)
 }
 
+func (c *KpiAdminController) NextKpiCode(ctx http.Context) http.Response {
+	categoryID := uint(ctx.Request().QueryInt("category_id", 0))
+	if categoryID == 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "category_id is required"})
+	}
+	code, err := c.kpi.NextKpiCode(categoryID)
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{"kpi_code": code})
+}
+
 func (c *KpiAdminController) ListKpis(ctx http.Context) http.Response {
 	search := ctx.Request().Query("search", "")
 	subjectArea := uint8(ctx.Request().QueryInt("subject_area", 0))
@@ -145,6 +157,7 @@ func (c *KpiAdminController) ListAssignments(ctx http.Context) http.Response {
 
 type kpiAssignmentBody struct {
 	KpiID          uint   `json:"kpi_id"`
+	KpiIDs         []uint `json:"kpi_ids"`
 	AssignableType string `json:"assignable_type"`
 	JobID          *uint  `json:"job_id"`
 	DepartmentID   *uint  `json:"department_id"`
@@ -155,6 +168,22 @@ func (c *KpiAdminController) CreateAssignment(ctx http.Context) http.Response {
 	var body kpiAssignmentBody
 	if err := ctx.Request().Bind(&body); err != nil {
 		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	if len(body.KpiIDs) > 0 {
+		result, err := c.kpi.CreateAssignmentsBulk(services.KpiAssignmentInput{
+			KpiIDs:         body.KpiIDs,
+			AssignableType: body.AssignableType,
+			JobID:          body.JobID,
+			DepartmentID:   body.DepartmentID,
+			StaffID:        body.StaffID,
+		})
+		if err != nil {
+			return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{
+				"message": err.Error(),
+				"result":  result,
+			})
+		}
+		return ctx.Response().Success().Json(result)
 	}
 	row, err := c.kpi.CreateAssignment(services.KpiAssignmentInput{
 		KpiID:          body.KpiID,

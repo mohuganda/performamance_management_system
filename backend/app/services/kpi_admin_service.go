@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"goravel/app/facades"
@@ -68,10 +69,18 @@ type KpiAssignmentRow struct {
 
 type KpiAssignmentInput struct {
 	KpiID          uint
+	KpiIDs         []uint
 	AssignableType string
 	JobID          *uint
 	DepartmentID   *uint
 	StaffID        *uint
+}
+
+type KpiBulkAssignmentResult struct {
+	Created     int      `json:"created"`
+	Reactivated int      `json:"reactivated"`
+	Failed      int      `json:"failed"`
+	Errors      []string `json:"errors,omitempty"`
 }
 
 type SubjectAreaOption struct {
@@ -188,13 +197,20 @@ func (s *KpiAdminService) GetKpi(id uint) (models.Kpi, error) {
 }
 
 func (s *KpiAdminService) CreateKpi(input KpiInput) (models.Kpi, error) {
-	if strings.TrimSpace(input.KpiCode) == "" || strings.TrimSpace(input.IndicatorStatement) == "" {
-		return models.Kpi{}, fmt.Errorf("kpi code and indicator statement are required")
+	if strings.TrimSpace(input.IndicatorStatement) == "" {
+		return models.Kpi{}, fmt.Errorf("indicator statement is required")
 	}
 	if input.CategoryID == 0 {
 		var cat models.KpiCategory
 		_ = facades.Orm().Query().Order("id asc").First(&cat)
 		input.CategoryID = cat.ID
+	}
+	if strings.TrimSpace(input.KpiCode) == "" {
+		code, err := s.NextKpiCode(input.CategoryID)
+		if err != nil {
+			return models.Kpi{}, err
+		}
+		input.KpiCode = code
 	}
 	if input.Frequency == "" {
 		input.Frequency = "Quarterly"
@@ -232,6 +248,45 @@ func (s *KpiAdminService) CreateKpi(input KpiInput) (models.Kpi, error) {
 		return models.Kpi{}, err
 	}
 	return kpi, nil
+}
+
+// NextKpiCode returns the next available KPI code for a category (preview before create).
+func (s *KpiAdminService) NextKpiCode(categoryID uint) (string, error) {
+	if categoryID == 0 {
+		return "", fmt.Errorf("category is required")
+	}
+	var cat models.KpiCategory
+	if err := facades.Orm().Query().Where("id", categoryID).First(&cat); err != nil || cat.ID == 0 {
+		return "", fmt.Errorf("category not found")
+	}
+
+	name := strings.ToLower(strings.TrimSpace(cat.CategoryName))
+	switch name {
+	case "score card":
+		return s.nextPrefixedKpiCode("SC-", 3)
+	case "ordinary", "normal":
+		return s.nextPrefixedKpiCode("ORD-", 3)
+	default:
+		return s.nextPrefixedKpiCode("KPI-", 4)
+	}
+}
+
+func (s *KpiAdminService) nextPrefixedKpiCode(prefix string, pad int) (string, error) {
+	var kpis []models.Kpi
+	if err := facades.Orm().Query().Where("kpi_code LIKE ?", prefix+"%").Get(&kpis); err != nil {
+		return "", err
+	}
+
+	max := 0
+	for _, kpi := range kpis {
+		suffix := strings.TrimPrefix(kpi.KpiCode, prefix)
+		n, err := strconv.Atoi(suffix)
+		if err == nil && n > max {
+			max = n
+		}
+	}
+
+	return fmt.Sprintf("%s%0*d", prefix, pad, max+1), nil
 }
 
 func (s *KpiAdminService) UpdateKpi(id uint, input KpiInput) (models.Kpi, error) {
@@ -438,6 +493,60 @@ func (s *KpiAdminService) CreateAssignment(input KpiAssignmentInput) (models.Kpi
 	}
 	s.cache.Invalidate()
 	return row, nil
+}
+
+func (s *KpiAdminService) CreateAssignmentsBulk(input KpiAssignmentInput) (KpiBulkAssignmentResult, error) {
+	result := KpiBulkAssignmentResult{}
+	if len(input.KpiIDs) == 0 {
+		return result, fmt.Errorf("at least one kpi_id is required")
+	}
+
+	for _, kpiID := range input.KpiIDs {
+		if kpiID == 0 {
+			result.Failed++
+			result.Errors = append(result.Errors, "invalid kpi_id: 0")
+			continue
+		}
+
+		var existing models.KpiAssignment
+		query := facades.Orm().Query().
+			Where("kpi_id", kpiID).
+			Where("assignable_type", input.AssignableType)
+		if input.JobID != nil {
+			query = query.Where("job_id", *input.JobID)
+		}
+		if input.DepartmentID != nil {
+			query = query.Where("department_id", *input.DepartmentID)
+		}
+		if input.StaffID != nil {
+			query = query.Where("staff_id", *input.StaffID)
+		}
+
+		hadExisting := query.First(&existing) == nil && existing.ID > 0
+
+		row, err := s.CreateAssignment(KpiAssignmentInput{
+			KpiID:          kpiID,
+			AssignableType: input.AssignableType,
+			JobID:          input.JobID,
+			DepartmentID:   input.DepartmentID,
+			StaffID:        input.StaffID,
+		})
+		if err != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("KPI %d: %s", kpiID, err.Error()))
+			continue
+		}
+		if hadExisting {
+			result.Reactivated++
+		} else if row.ID > 0 {
+			result.Created++
+		}
+	}
+
+	if result.Created == 0 && result.Reactivated == 0 && result.Failed > 0 {
+		return result, fmt.Errorf("could not create any assignments")
+	}
+	return result, nil
 }
 
 func (s *KpiAdminService) DeactivateAssignment(id uint) error {

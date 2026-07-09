@@ -46,8 +46,10 @@ export type AdminSettings = {
     }
     hrm_attend?: {
       api_url: string
+      summary_path?: string
       enabled: boolean
       last_sync_at: string
+      last_sync_status?: string
     }
   }
   email: {
@@ -124,6 +126,23 @@ export const ihrisAdminService = {
   },
   syncBatch: async (opts?: { run_id?: number; start_page?: number; pages_per_batch?: number }) => {
     const { data } = await apiClient.post<IhrisSyncBatchResult>('/ihris/sync', opts ?? {})
+    return data
+  },
+}
+
+export type HrmAttendSyncResult = {
+  status: string
+  year_month: string
+  imported: number
+  skipped_unknown: number
+  skipped_invalid: number
+  total_fetched: number
+  message?: string
+}
+
+export const hrmAttendAdminService = {
+  syncSummaries: async (opts?: { year_month?: string }): Promise<HrmAttendSyncResult> => {
+    const { data } = await apiClient.post<HrmAttendSyncResult>('/hrm-attend/sync', opts ?? {})
     return data
   },
 }

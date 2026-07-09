@@ -37,6 +37,7 @@ import { useAdminPageSize } from '@/hooks/useAdminPageSize'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { mt } from '@/utils/mt'
 import { cn } from '@/utils/cn'
+import { notifyApiError, toast } from '@/features/toast'
 
 type TabKey = 'users' | 'executive' | 'roles' | 'audit'
 
@@ -277,6 +278,7 @@ export function RbacAdminPage() {
       }),
     onSuccess: () => {
       invalidateUsers()
+      toast.success('User account created.')
       setCreateOpen(false)
       setCreateForm({
         name: '',
@@ -286,6 +288,7 @@ export function RbacAdminPage() {
         ...emptyScopeForm(),
       })
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not create user'),
   })
 
   const updateScopeMutation = useMutation({
@@ -296,8 +299,10 @@ export function RbacAdminPage() {
       }),
     onSuccess: () => {
       invalidateUsers()
+      toast.success('User scope updated.')
       usersQuery.refetch()
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not update scope'),
   })
 
   const toggleActiveMutation = useMutation({
@@ -310,17 +315,21 @@ export function RbacAdminPage() {
     mutationFn: () => rbacAdminService.assignRole(manageUser!.id, assignRoleCode),
     onSuccess: () => {
       invalidateUsers()
+      toast.success('Role assigned.')
       setAssignRoleCode('')
       usersQuery.refetch()
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not assign role'),
   })
 
   const revokeMutation = useMutation({
     mutationFn: (roleCode: string) => rbacAdminService.revokeRole(manageUser!.id, roleCode),
     onSuccess: () => {
       invalidateUsers()
+      toast.success('Role removed.')
       usersQuery.refetch()
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not remove role'),
   })
 
   const recoverMutation = useMutation({
@@ -328,7 +337,9 @@ export function RbacAdminPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'rbac', 'audit'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'rbac', 'users'] })
+      toast.success('Audit entry recovered.')
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not recover audit entry'),
   })
 
   useEffect(() => {

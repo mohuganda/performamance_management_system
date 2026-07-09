@@ -17,9 +17,9 @@ function resolveSelectedLabel(value: SelectProps['value'], children: ReactNode):
   const match = items.find((item) => optionValue(item.props) === normalized)
   if (match) return match.props.children
 
-  // Empty / unset value — show first option (typically "All …")
   if (normalized === '') {
-    return items[0]?.props.children ?? null
+    const emptyOption = items.find((item) => optionValue(item.props) === '')
+    return emptyOption?.props.children ?? null
   }
 
   return normalized || null
