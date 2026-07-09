@@ -48,6 +48,8 @@ export type AdminSettings = {
       api_url: string
       summary_path?: string
       enabled: boolean
+      needs_host_configuration?: boolean
+      host_configured?: boolean
       last_sync_at: string
       last_sync_status?: string
     }

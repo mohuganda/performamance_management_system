@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -38,11 +39,71 @@ type HrmAttendConnection struct {
 }
 
 func (s *HrmAttendService) BaseURL() string {
-	url := strings.TrimSpace(s.settings.GetString("hrm_attend.api_url", ""))
-	if url == "" {
-		url = strings.TrimSpace(facades.Config().GetString("pms.hrm_attend.api_base_url", "http://localhost/attend"))
+	raw := strings.TrimSpace(s.settings.GetString("hrm_attend.api_url", ""))
+	if raw == "" {
+		raw = strings.TrimSpace(facades.Config().GetString("pms.hrm_attend.api_base_url", "http://localhost/attend"))
 	}
-	return strings.TrimRight(url, "/")
+	return strings.TrimRight(raw, "/")
+}
+
+// NeedsHostConfiguration is true on production when HRM still points at localhost.
+// Admins must set the real HRM host in Settings before sync or live fetch runs.
+func (s *HrmAttendService) NeedsHostConfiguration() bool {
+	if !isProductionDeployment() {
+		return false
+	}
+	return isLocalhostURL(s.BaseURL())
+}
+
+func (s *HrmAttendService) syncBlockedError() error {
+	return fmt.Errorf(
+		"configure the production HRM Attend base URL in Settings → Data sources before syncing (localhost is only valid in local development)",
+	)
+}
+
+func isProductionDeployment() bool {
+	env := strings.ToLower(strings.TrimSpace(facades.Config().GetString("app.env", "")))
+	if env == "production" || env == "prod" {
+		return true
+	}
+	appURL := strings.TrimSpace(facades.Config().GetString("app.url", ""))
+	if appURL == "" {
+		return false
+	}
+	return !isLocalhostHost(urlHost(appURL))
+}
+
+func isLocalhostURL(raw string) bool {
+	host := urlHost(raw)
+	return host == "" || isLocalhostHost(host)
+}
+
+func urlHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if !strings.Contains(raw, "://") {
+		raw = "http://" + raw
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return strings.ToLower(strings.TrimSpace(raw))
+	}
+	host := parsed.Hostname()
+	if i := strings.Index(host, "%"); i >= 0 {
+		host = host[:i]
+	}
+	return strings.ToLower(host)
+}
+
+func isLocalhostHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	switch host {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return strings.HasPrefix(host, "127.")
 }
 
 func (s *HrmAttendService) ConnectionStatus() HrmAttendConnection {
@@ -55,6 +116,11 @@ func (s *HrmAttendService) ConnectionStatus() HrmAttendConnection {
 	if !s.settings.GetBool("hrm_attend.enabled", true) {
 		status.Status = "disabled"
 		status.Message = "HRM Attend integration is disabled in settings"
+		return status
+	}
+	if s.NeedsHostConfiguration() {
+		status.Status = "needs_configuration"
+		status.Message = "Set the production HRM Attend base URL in Settings → Data sources, then run a manual sync"
 		return status
 	}
 
@@ -82,14 +148,23 @@ func (s *HrmAttendService) MonthlySummaries(months int) []HrmAttendSummary {
 	if stored := s.AggregatedMonthlySummaries(months); len(stored) > 0 {
 		return stored
 	}
+	if s.NeedsHostConfiguration() {
+		return nil
+	}
 	if live := s.fetchLiveSummaries(months); len(live) > 0 {
 		return live
+	}
+	if isProductionDeployment() {
+		return nil
 	}
 	return s.demoSummaries(months)
 }
 
 func (s *HrmAttendService) fetchLiveSummaries(months int) []HrmAttendSummary {
 	if !s.settings.GetBool("hrm_attend.enabled", true) {
+		return nil
+	}
+	if s.NeedsHostConfiguration() {
 		return nil
 	}
 	url := fmt.Sprintf("%s/api/v1/attendance/summaries?months=%d", s.BaseURL(), months)

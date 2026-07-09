@@ -17,8 +17,6 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata curl
 
 COPY --from=builder /app/moh-pms-api /app/moh-pms-api
-COPY --from=builder /app/artisan /app/artisan
-COPY --from=builder /app/.env.example /app/.env.example
 COPY --from=builder /app/config /app/config
 COPY --from=builder /app/database /app/database
 COPY --from=builder /app/bootstrap /app/bootstrap

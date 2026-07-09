@@ -7,6 +7,7 @@ const STATUS_STYLES: Record<string, string> = {
   connected: 'bg-emerald-100 text-emerald-900 border-emerald-200',
   demo: 'bg-amber-50 text-amber-900 border-amber-200',
   disabled: 'bg-gray-100 text-gray-700 border-gray-200',
+  needs_configuration: 'bg-orange-50 text-orange-900 border-orange-200',
 }
 
 export function AttendanceIntegrationBanner({ data }: { data: AttendanceIntegration }) {

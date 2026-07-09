@@ -54,6 +54,9 @@ func (s *HrmAttendService) SyncMonthlySummaries(yearMonth string) (HrmAttendSync
 	if !s.settings.GetBool("hrm_attend.enabled", true) {
 		return result, fmt.Errorf("HRM Attend integration is disabled")
 	}
+	if s.NeedsHostConfiguration() {
+		return result, s.syncBlockedError()
+	}
 
 	if yearMonth == "" {
 		prev := time.Now().AddDate(0, -1, 0)

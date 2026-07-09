@@ -108,6 +108,8 @@ func (s *SettingsService) PublicSettings() map[string]any {
 }
 
 func (s *SettingsService) dataSourcesConfig() map[string]any {
+	hrm := NewHrmAttendService()
+	needsHost := hrm.NeedsHostConfiguration()
 	return map[string]any{
 		"ihris": map[string]any{
 			"api_url":         s.GetString("ihris.api_url", ihrisAPIURL()),
@@ -120,11 +122,13 @@ func (s *SettingsService) dataSourcesConfig() map[string]any {
 			"last_sync_status": s.GetString("ihris.last_sync_status", ""),
 		},
 		"hrm_attend": map[string]any{
-			"api_url":           s.GetString("hrm_attend.api_url", "http://localhost/attend"),
-			"summary_path":      s.GetString("hrm_attend.summary_path", "/attendance/attendance_summary"),
-			"enabled":           s.GetBool("hrm_attend.enabled", true),
-			"last_sync_at":      s.GetString("hrm_attend.last_sync_at", ""),
-			"last_sync_status":  s.GetString("hrm_attend.last_sync_status", ""),
+			"api_url":                  s.GetString("hrm_attend.api_url", "http://localhost/attend"),
+			"summary_path":             s.GetString("hrm_attend.summary_path", "/attendance/attendance_summary"),
+			"enabled":                  s.GetBool("hrm_attend.enabled", true),
+			"needs_host_configuration": needsHost,
+			"host_configured":          !needsHost,
+			"last_sync_at":             s.GetString("hrm_attend.last_sync_at", ""),
+			"last_sync_status":         s.GetString("hrm_attend.last_sync_status", ""),
 		},
 	}
 }

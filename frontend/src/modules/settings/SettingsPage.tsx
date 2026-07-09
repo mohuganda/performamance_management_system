@@ -108,6 +108,17 @@ function ToggleRow({
   )
 }
 
+function isLocalhostHrmUrl(value: string): boolean {
+  const raw = value.trim()
+  if (!raw) return true
+  try {
+    const host = new URL(raw.includes('://') ? raw : `http://${raw}`).hostname.toLowerCase()
+    return host === 'localhost' || host === '127.0.0.1' || host.startsWith('127.')
+  } catch {
+    return true
+  }
+}
+
 export function SettingsPage() {
   const { quarter, setQuarter } = useAuthStore()
   const queryClient = useQueryClient()
@@ -153,6 +164,11 @@ export function SettingsPage() {
     queryFn: () => adminSettingsService.get(),
     enabled: canLoadSettings,
   })
+
+  const hrmNeedsProductionHost =
+    settingsQuery.data?.data_sources.hrm_attend?.needs_host_configuration === true
+  const hrmSyncBlocked =
+    !hrmAttendForm.enabled || (hrmNeedsProductionHost && isLocalhostHrmUrl(hrmAttendForm.api_url))
 
   const syncStatusQuery = useQuery({
     queryKey: ['ihris', 'sync', 'status'],
@@ -490,6 +506,12 @@ export function SettingsPage() {
                   checked={hrmAttendForm.enabled}
                   onChange={(checked) => setHrmAttendForm((f) => ({ ...f, enabled: checked }))}
                 />
+                {settingsQuery.data?.data_sources.hrm_attend?.needs_host_configuration ? (
+                  <div className="rounded-sm border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900">
+                    Production deployment detected. Update the HRM Attend base URL below to your server host
+                    (not <code className="text-xs">localhost</code>), save settings, then run sync.
+                  </div>
+                ) : null}
                 {settingsQuery.data?.data_sources.hrm_attend?.last_sync_at ? (
                   <p className="text-xs text-gray-500">
                     Last summary sync: {settingsQuery.data.data_sources.hrm_attend.last_sync_at}
@@ -523,11 +545,16 @@ export function SettingsPage() {
                     className="rounded-sm normal-case"
                     onClick={() => hrmAttendSyncMutation.mutate()}
                     loading={hrmAttendSyncMutation.isPending}
-                    disabled={!hrmAttendForm.enabled}
+                    disabled={hrmSyncBlocked}
                   >
                     Sync last month&apos;s summaries
                   </Button>
                 </div>
+                {hrmSyncBlocked && hrmAttendForm.enabled && hrmNeedsProductionHost ? (
+                  <p className="text-xs text-orange-700">
+                    Save a non-localhost HRM base URL before running sync on this server.
+                  </p>
+                ) : null}
               </div>
             </SettingsSection>
 
