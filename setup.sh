@@ -384,7 +384,10 @@ require_docker
 if [[ "${ACTION}" == "deploy" ]]; then
   [[ -z "${MYSQL_ROOT_PASSWORD}" ]] && MYSQL_ROOT_PASSWORD="$(rand_secret)"
   [[ -z "${MYSQL_PASSWORD}" ]] && MYSQL_PASSWORD="$(rand_secret)"
-  [[ -z "${APP_KEY}" ]] && APP_KEY="base64:$(openssl rand -base64 32 2>/dev/null || rand_secret)"
+  [[ -z "${APP_KEY}" ]] && APP_KEY="$(openssl rand -hex 16 2>/dev/null || rand_secret | head -c 32)"
+  if [[ "${APP_KEY}" == base64:* ]] || [[ ${#APP_KEY} -ne 32 ]]; then
+    APP_KEY="$(openssl rand -hex 16 2>/dev/null || rand_secret | head -c 32)"
+  fi
   [[ -z "${JWT_SECRET}" ]] && JWT_SECRET="$(rand_secret)"
 fi
 

@@ -6,9 +6,9 @@ cd /app
 
 mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/logs
 
-# Quote values for .env (spaces/special chars in passwords and names)
+# Quote values for .env (double-quoted .env format; escapes " and \)
 env_quote() {
-  printf '%s' "$1" | sed "s/'/'\\\\''/g; s/^/'/; s/$/'/"
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$/"/'
 }
 
 write_runtime_env() {
@@ -38,13 +38,13 @@ EOF
 }
 
 run_artisan() {
-  ./moh-pms-api artisan "$@"
+  ./moh-pms-api artisan "$@" </dev/null
 }
 
 run_migrate() {
   attempt=1
   while [ "$attempt" -le 12 ]; do
-    if run_artisan migrate --force; then
+    if run_artisan migrate; then
       return 0
     fi
     echo "[entrypoint] migrate attempt ${attempt}/12 failed — retrying in 5s..."
@@ -58,7 +58,10 @@ run_migrate() {
 write_runtime_env
 
 echo "[entrypoint] Running migrations..."
-run_migrate
+if ! run_migrate; then
+  echo "[entrypoint] FATAL: migrations did not complete"
+  exit 1
+fi
 
 SEED_MARKER="/app/storage/.initial_seed_complete"
 if [ "${LOAD_DEMO_DATA:-true}" = "true" ]; then
@@ -66,11 +69,12 @@ if [ "${LOAD_DEMO_DATA:-true}" = "true" ]; then
     echo "[entrypoint] Demo seed already completed (${SEED_MARKER}); skipping db:seed"
   else
     echo "[entrypoint] Loading demo data (first boot)..."
-    if run_artisan db:seed; then
+    if run_artisan db:seed --force; then
       touch "${SEED_MARKER}"
       echo "[entrypoint] Demo seed complete"
     else
-      echo "[entrypoint] WARNING: db:seed failed — starting API anyway (check logs)"
+      echo "[entrypoint] FATAL: db:seed failed on first boot"
+      exit 1
     fi
   fi
 else
