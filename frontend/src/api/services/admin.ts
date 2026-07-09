@@ -53,6 +53,10 @@ export type AdminSettings = {
       last_sync_at: string
       last_sync_status?: string
     }
+    google_maps?: {
+      api_key: string
+      country_code?: string
+    }
   }
   email: {
     driver: 'smtp' | 'exchange'

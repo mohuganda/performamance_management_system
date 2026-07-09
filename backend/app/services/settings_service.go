@@ -104,6 +104,10 @@ func (s *SettingsService) PublicSettings() map[string]any {
 			},
 		},
 		"notifications": s.notificationsConfig(),
+		"google_maps": map[string]any{
+			"api_key":      s.GetString("google_maps.api_key", ""),
+			"country_code": s.GetString("google_maps.country_code", "ug"),
+		},
 	}
 }
 
@@ -129,6 +133,10 @@ func (s *SettingsService) dataSourcesConfig() map[string]any {
 			"host_configured":          !needsHost,
 			"last_sync_at":             s.GetString("hrm_attend.last_sync_at", ""),
 			"last_sync_status":         s.GetString("hrm_attend.last_sync_status", ""),
+		},
+		"google_maps": map[string]any{
+			"api_key":      s.GetString("google_maps.api_key", ""),
+			"country_code": s.GetString("google_maps.country_code", "ug"),
 		},
 	}
 }
@@ -207,7 +215,10 @@ func (s *SettingsService) UpdateGroup(group string, payload map[string]any) erro
 		if strings.Contains(key, "password") && fmt.Sprint(value) == "" {
 			continue
 		}
-		if err := s.Set(key, group, value, strings.HasPrefix(key, "ihris.") || strings.HasPrefix(key, "notifications.")); err != nil {
+		isPublic := strings.HasPrefix(key, "ihris.") ||
+			strings.HasPrefix(key, "notifications.") ||
+			strings.HasPrefix(key, "google_maps.")
+		if err := s.Set(key, group, value, isPublic); err != nil {
 			return err
 		}
 	}

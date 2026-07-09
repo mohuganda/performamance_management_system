@@ -14,18 +14,25 @@ export type LeaveTypeOption = {
   id: number
   name: string
   code: string
+  medical_report_after_days?: number | null
 }
 
 export function normalizeLeaveTypes(value: unknown): LeaveTypeOption[] {
   if (!Array.isArray(value)) return []
   return value
-    .map((raw) => {
+    .map((raw): LeaveTypeOption | null => {
       const row = raw as Record<string, unknown>
       const id = Number(field<number>(row, 'id', 'ID'))
       const name = String(field<string>(row, 'name', 'Name') ?? '')
       const code = String(field<string>(row, 'code', 'Code') ?? '')
+      const medicalRaw = field<number>(row, 'medical_report_after_days', 'MedicalReportAfterDays')
       if (!id || !name) return null
-      return { id, name, code }
+      return {
+        id,
+        name,
+        code,
+        medical_report_after_days: medicalRaw != null ? Number(medicalRaw) : undefined,
+      }
     })
     .filter((row): row is LeaveTypeOption => row !== null)
 }

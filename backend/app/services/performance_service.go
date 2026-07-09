@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -544,17 +545,18 @@ func (s *PerformanceService) GetReportForm(staffID uint, reportType string) (Rep
 			field.ReportingHint = "Enter your year-to-date cumulative actual. Progress is tracked against your annual target as performance builds through the year."
 		}
 		if entry, ok := entriesByPpaKpi[row.ID]; ok {
-			if entry.ActualValue != nil {
-				field.ActualValue = *entry.ActualValue
-				if target > 0 {
-					field.ProgressPercent = (*entry.ActualValue / target) * 100
-					if field.ProgressPercent > 100 {
-						field.ProgressPercent = 100
-					}
-				}
-			}
 			if entry.Narrative != nil {
 				field.Narrative = *entry.Narrative
+			}
+		}
+		actual, hasActual := resolveReportKpiActual(entriesByPpaKpi[row.ID], reportType, target, kpi.IsCumulative, field.PriorReports)
+		if hasActual {
+			field.ActualValue = actual
+			if target > 0 {
+				field.ProgressPercent = (actual / target) * 100
+				if field.ProgressPercent > 100 {
+					field.ProgressPercent = 100
+				}
 			}
 		}
 		byArea[SubjectAreaSortKey(kpi.SubjectArea)] = append(byArea[SubjectAreaSortKey(kpi.SubjectArea)], field)
@@ -844,6 +846,73 @@ func reportTypeLabel(reportType string) string {
 		return "End of Year Report"
 	default:
 		return reportType
+	}
+}
+
+func resolveReportKpiActual(
+	entry models.PerformanceReportEntry,
+	reportType string,
+	target float64,
+	isCumulative bool,
+	prior []PriorReportSnapshot,
+) (float64, bool) {
+	if entry.ID > 0 && entry.ActualValue != nil {
+		return *entry.ActualValue, true
+	}
+	suggested := suggestedReportActual(reportType, target, isCumulative, prior)
+	if suggested > 0 {
+		return suggested, true
+	}
+	return 0, false
+}
+
+// suggestedReportActual pre-fills report forms when no saved entry exists yet.
+func suggestedReportActual(reportType string, target float64, isCumulative bool, prior []PriorReportSnapshot) float64 {
+	if target <= 0 {
+		return 0
+	}
+	if isCumulative {
+		fraction := cumulativeYtdFraction(reportType)
+		ytd := target * fraction
+		if len(prior) > 0 {
+			last := prior[len(prior)-1].ActualValue
+			if ytd < last {
+				ytd = last
+			}
+		}
+		return math.Round(ytd*10) / 10
+	}
+	mult := periodAchievementFactor(reportType)
+	return math.Round(target*mult*10) / 10
+}
+
+func cumulativeYtdFraction(reportType string) float64 {
+	switch reportType {
+	case "q1":
+		return 0.27
+	case "midterm":
+		return 0.52
+	case "q3":
+		return 0.76
+	case "endterm":
+		return 0.94
+	default:
+		return 0.5
+	}
+}
+
+func periodAchievementFactor(reportType string) float64 {
+	switch reportType {
+	case "q1":
+		return 0.88
+	case "midterm":
+		return 0.91
+	case "q3":
+		return 0.93
+	case "endterm":
+		return 0.96
+	default:
+		return 0.9
 	}
 }
 

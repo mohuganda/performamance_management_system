@@ -5,6 +5,7 @@ import { MapPin } from 'lucide-react'
 import { attendanceService } from '@/api/services/mobile'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
+import { notifyApiError, toast } from '@/features/toast'
 import { useAuthStore } from '@/stores/appStore'
 import { mt } from '@/utils/mt'
 
@@ -30,7 +31,11 @@ export function AttendancePage() {
         longitude: coords.lng,
       })
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['attendance'] }),
+    onSuccess: (_data, action) => {
+      queryClient.invalidateQueries({ queryKey: ['attendance'] })
+      toast.success(`Clock ${action === 'in' ? 'in' : 'out'} recorded successfully.`, 'Attendance')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not record attendance'),
   })
 
   const captureLocation = () => {

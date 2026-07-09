@@ -1,6 +1,18 @@
 import apiClient from '../client'
 import { normalizeLeaveTypes } from '@/utils/normalizeApi'
 
+export const uploadService = {
+  uploadAttachment: async (payload: { data_url: string; file_name: string }) => {
+    const { data } = await apiClient.post<{
+      url: string
+      name: string
+      mime_type: string
+      size: number
+    }>('/uploads', payload)
+    return data
+  },
+}
+
 export const leaveService = {
   getConfig: async () => {
     const { data } = await apiClient.get('/mobile/leave/config')
@@ -133,9 +145,12 @@ export const oosService = {
     start_date: string
     end_date: string
     remarks?: string
+    attachment_url?: string
     destination_name?: string
+    destination_address?: string
     destination_latitude: number
     destination_longitude: number
+    geofence_radius_meters?: number
     submit: boolean
   }) => {
     const { data } = await apiClient.post('/mobile/out-of-station/requests', payload)

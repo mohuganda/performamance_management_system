@@ -14,6 +14,7 @@ func Api() {
 	ihrisController := controllers.NewIhrisController()
 	hrmAttendController := controllers.NewHrmAttendController()
 	settingsAdminController := controllers.NewSettingsAdminController()
+	uploadController := controllers.NewUploadController()
 	notificationsAdminController := controllers.NewNotificationsAdminController()
 	dashboardController := controllers.NewDashboardController()
 	mobileController := controllers.NewMobileController()
@@ -165,6 +166,9 @@ func Api() {
 				kpi.Middleware(middleware.Permission("kpi.assignments.view", "kpi.assignments.manage")).Get("/departments", kpiAdminController.ListDepartments)
 				kpi.Middleware(middleware.Permission("kpi.assignments.manage")).Get("/staff-search", kpiAdminController.SearchStaff)
 			})
+
+			auth.Post("/uploads", uploadController.UploadAttachment)
+			auth.Get("/files", uploadController.ServeUploadedFile)
 
 			auth.Prefix("mobile").Group(func(mobile route.Router) {
 				mobile.Middleware(middleware.Permission("leave.requests.view")).Get("/leave/config", mobileController.LeaveConfig)

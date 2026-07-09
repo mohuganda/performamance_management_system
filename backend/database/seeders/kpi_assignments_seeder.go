@@ -30,7 +30,153 @@ func (s *KpiAssignmentsSeeder) Run() error {
 	if err := s.seedDemoStaffAssignments(); err != nil {
 		return err
 	}
-	return s.seedDemoPpas()
+	if err := s.seedDemoPpas(); err != nil {
+		return err
+	}
+	return s.seedDemoPerformanceReports()
+}
+
+func (s *KpiAssignmentsSeeder) seedDemoPerformanceReports() error {
+	staffID, err := s.staffIDByEmail("worker@moh.go.ug")
+	if err != nil {
+		return nil
+	}
+	fy, err := s.ensureFinancialYear()
+	if err != nil {
+		return err
+	}
+	var ppa models.Ppa
+	if err := facades.Orm().Query().
+		Where("staff_id", staffID).
+		Where("financial_year_id", fy.ID).
+		First(&ppa); err != nil || ppa.ID == 0 {
+		return nil
+	}
+
+	type reportSeed struct {
+		reportType string
+		status     string
+		actuals    map[string]float64
+	}
+	seeds := []reportSeed{
+		{
+			reportType: "q1",
+			status:     "submitted",
+			actuals:    map[string]float64{"201": 88, "202": 90, "203": 79, "204": 84, "205": 92},
+		},
+		{
+			reportType: "midterm",
+			status:     "draft",
+			actuals:    map[string]float64{"201": 91, "202": 91, "203": 82, "204": 86, "205": 94},
+		},
+		{
+			reportType: "q3",
+			status:     "draft",
+			actuals:    map[string]float64{"201": 93, "202": 94, "203": 84, "204": 88, "205": 95},
+		},
+		{
+			reportType: "endterm",
+			status:     "draft",
+			actuals:    map[string]float64{"201": 96, "202": 97, "203": 87, "204": 91, "205": 98},
+		},
+	}
+
+	for _, seed := range seeds {
+		if err := s.seedPerformanceReport(staffID, fy.ID, ppa.ID, seed.reportType, seed.status, seed.actuals); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *KpiAssignmentsSeeder) seedPerformanceReport(
+	staffID, fyID, ppaID uint,
+	reportType, status string,
+	actuals map[string]float64,
+) error {
+	var quarter models.Quarter
+	if err := facades.Orm().Query().
+		Where("financial_year_id", fyID).
+		Where("report_type", reportType).
+		FirstOr(&quarter, func() error {
+			qNum := uint8(1)
+			switch reportType {
+			case "midterm":
+				qNum = 2
+			case "q3":
+				qNum = 3
+			case "endterm":
+				qNum = 4
+			}
+			quarter = models.Quarter{
+				FinancialYearID: fyID,
+				QuarterNumber:   qNum,
+				Label:           reportType,
+				ReportType:      reportType,
+				StartDate:       time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC),
+				EndDate:         time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC),
+			}
+			return facades.Orm().Query().Create(&quarter)
+		}); err != nil {
+		return err
+	}
+
+	var report models.PerformanceReport
+	if err := facades.Orm().Query().
+		Where("staff_id", staffID).
+		Where("financial_year_id", fyID).
+		Where("quarter_id", quarter.ID).
+		FirstOr(&report, func() error {
+			report = models.PerformanceReport{
+				StaffID:         staffID,
+				FinancialYearID: fyID,
+				QuarterID:       quarter.ID,
+				ReportType:      reportType,
+				Status:          status,
+			}
+			return facades.Orm().Query().Create(&report)
+		}); err != nil {
+		return err
+	}
+	report.Status = status
+	if err := facades.Orm().Query().Save(&report); err != nil {
+		return err
+	}
+
+	for code, actual := range actuals {
+		kpiID, err := s.kpiIDByCode(code)
+		if err != nil {
+			continue
+		}
+		var ppaKpi models.PpaKpi
+		if err := facades.Orm().Query().
+			Where("ppa_id", ppaID).
+			Where("kpi_id", kpiID).
+			First(&ppaKpi); err != nil || ppaKpi.ID == 0 {
+			continue
+		}
+		val := actual
+		narrative := fmt.Sprintf("Demo %s report entry for KPI %s.", reportType, code)
+		var entry models.PerformanceReportEntry
+		if err := facades.Orm().Query().
+			Where("performance_report_id", report.ID).
+			Where("ppa_kpi_id", ppaKpi.ID).
+			FirstOr(&entry, func() error {
+				entry = models.PerformanceReportEntry{
+					PerformanceReportID: report.ID,
+					PpaKpiID:            ppaKpi.ID,
+					ActualValue:         &val,
+					Narrative:           &narrative,
+				}
+				return facades.Orm().Query().Create(&entry)
+			}); err != nil {
+			return err
+		}
+		entry.ActualValue = &val
+		entry.Narrative = &narrative
+		_ = facades.Orm().Query().Save(&entry)
+	}
+	return nil
 }
 
 func (s *KpiAssignmentsSeeder) syncSubjectAreas() error {

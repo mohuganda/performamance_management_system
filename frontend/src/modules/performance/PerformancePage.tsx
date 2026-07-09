@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Button,
@@ -23,6 +23,8 @@ import {
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { ProcessGuide } from '@/components/organisms/ProcessGuide'
 import { QueryState } from '@/components/organisms/QueryState'
+import { FormStatusAlert, type FormStatusType } from '@/components/molecules/FormStatusAlert'
+import { notifyApiError, toast } from '@/features/toast'
 import { useAuthStore } from '@/stores/appStore'
 import { mt } from '@/utils/mt'
 import { cn } from '@/utils/cn'
@@ -241,9 +243,9 @@ function KpiPlanningRow({
   onTargetChange: (id: number, value: string) => void
 }) {
   return (
-    <div className="rounded-sm border border-ui-border bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
+    <div className="overflow-hidden rounded-sm border border-ui-border bg-white p-4 shadow-sm">
+      <div className="space-y-4">
+        <div className="min-w-0">
           <p className="text-sm font-semibold leading-snug text-ui-text">{kpi.name}</p>
           <p className="mt-1 text-xs text-ui-muted">
             {kpi.code} · {kpi.frequency} · {kpi.computation_category}
@@ -253,40 +255,45 @@ function KpiPlanningRow({
             {kpi.is_cumulative ? cumulativeChip() : null}
           </div>
         </div>
-        <div className="grid w-full shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:w-72">
-          <div className="min-w-0">
-            <Input
-              {...mt}
-              type="number"
-              label="Weight %"
-              value={
-                planWeights[kpi.id] ?? (kpi.in_current_ppa ? String(kpi.weight_percentage) : '')
-              }
-              onChange={(e) => onWeightChange(kpi.id, e.target.value)}
-              containerProps={{ className: 'min-w-0' }}
-            />
-          </div>
-          <div className="min-w-0">
-            <Input
-              {...mt}
-              type="number"
-              label="Target"
-              value={
-                planTargets[kpi.id] ??
-                (kpi.target_value != null
-                  ? String(kpi.target_value)
-                  : kpi.default_target != null
-                    ? String(kpi.default_target)
-                    : '100')
-              }
-              onChange={(e) => onTargetChange(kpi.id, e.target.value)}
-              containerProps={{ className: 'min-w-0' }}
-            />
-          </div>
+        <div className="grid grid-cols-1 gap-3 border-t border-ui-border/60 pt-4 sm:grid-cols-2 sm:max-w-md">
+          <Input
+            {...mt}
+            type="number"
+            label="Weight %"
+            className="!min-w-0"
+            value={
+              planWeights[kpi.id] ?? (kpi.in_current_ppa ? String(kpi.weight_percentage) : '')
+            }
+            onChange={(e) => onWeightChange(kpi.id, e.target.value)}
+            containerProps={{ className: 'min-w-0 w-full' }}
+          />
+          <Input
+            {...mt}
+            type="number"
+            label="Target"
+            className="!min-w-0"
+            value={
+              planTargets[kpi.id] ??
+              (kpi.target_value != null
+                ? String(kpi.target_value)
+                : kpi.default_target != null
+                  ? String(kpi.default_target)
+                  : '100')
+            }
+            onChange={(e) => onTargetChange(kpi.id, e.target.value)}
+            containerProps={{ className: 'min-w-0 w-full' }}
+          />
         </div>
       </div>
     </div>
   )
+}
+
+function formatReportActual(value: number | undefined): string {
+  if (value === undefined || value === null || Number.isNaN(value)) {
+    return ''
+  }
+  return String(value)
 }
 
 function KpiReportRow({
@@ -298,7 +305,10 @@ function KpiReportRow({
   reportDraft: Record<number, { actual: string; narrative: string }>
   onDraftChange: (ppaKpiId: number, patch: { actual?: string; narrative?: string }) => void
 }) {
-  const actualValue = reportDraft[kpi.ppa_kpi_id]?.actual ?? (kpi.actual_value != null ? String(kpi.actual_value) : '')
+  const draftActual = reportDraft[kpi.ppa_kpi_id]?.actual
+  const apiActual = formatReportActual(kpi.actual_value)
+  const actualValue =
+    draftActual != null && draftActual !== '' ? draftActual : apiActual
   const narrativeValue = reportDraft[kpi.ppa_kpi_id]?.narrative ?? kpi.narrative ?? ''
   const isCumulative = kpi.is_cumulative === true
   const priorReports = kpi.prior_reports ?? []
@@ -355,15 +365,16 @@ function KpiReportRow({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="min-w-0">
           <Input
             {...mt}
             type="number"
             label={isCumulative ? 'Year-to-date actual (cumulative)' : 'Actual achieved'}
+            className="!min-w-0"
             value={actualValue}
             onChange={(e) => onDraftChange(kpi.ppa_kpi_id, { actual: e.target.value })}
-            containerProps={{ className: 'min-w-0' }}
+            containerProps={{ className: 'min-w-0 w-full' }}
           />
           {belowPrior ? (
             <p className="mt-1.5 text-xs text-amber-700">
@@ -414,6 +425,9 @@ export function PerformancePage() {
   const [reviewDrafts, setReviewDrafts] = useState<
     Record<string, { comments: string; job_title: string }>
   >({})
+  const [planAlert, setPlanAlert] = useState<{ type: FormStatusType; message: string; title?: string } | null>(
+    null,
+  )
 
   const summaryQuery = useQuery({
     queryKey: ['performance', 'summary'],
@@ -433,6 +447,26 @@ export function PerformancePage() {
     enabled: Boolean(staffId) && activeTab === 'reporting',
     retry: false,
   })
+
+  useEffect(() => {
+    if (activeTab !== 'reporting' || !reportFormQuery.data) {
+      return
+    }
+    if (reportFormQuery.data.report_type && reportFormQuery.data.report_type !== reportType) {
+      return
+    }
+    const groups = asArray<ReportGroup>(reportFormQuery.data.subject_groups)
+    const next: Record<number, { actual: string; narrative: string }> = {}
+    for (const group of groups) {
+      for (const kpi of asArray<ReportKpi>(group.kpis)) {
+        next[kpi.ppa_kpi_id] = {
+          actual: formatReportActual(kpi.actual_value),
+          narrative: kpi.narrative ?? '',
+        }
+      }
+    }
+    setReportDraft(next)
+  }, [activeTab, reportFormQuery.data, reportType])
 
   const pendingAppraisalsQuery = useQuery({
     queryKey: ['performance', 'pending-appraisals'],
@@ -473,12 +507,32 @@ export function PerformancePage() {
         })),
       })
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['performance'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['performance'] })
+      const msg = 'Your performance plan has been saved. You can continue editing or submit when total weight is 100%.'
+      setPlanAlert({ type: 'success', title: 'Plan saved', message: msg })
+      toast.success(msg, 'PPA saved')
+    },
+    onError: (error: unknown) => {
+      const msg = extractErrorMessage(error)
+      setPlanAlert({ type: 'error', title: 'Could not save plan', message: msg })
+      notifyApiError(error, 'Could not save performance plan')
+    },
   })
 
   const submitPlanMutation = useMutation({
     mutationFn: () => performanceService.submitPlan(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['performance'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['performance'] })
+      const msg = 'Your PPA has been submitted for supervisor review.'
+      setPlanAlert({ type: 'success', title: 'PPA submitted', message: msg })
+      toast.success(msg, 'PPA submitted')
+    },
+    onError: (error: unknown) => {
+      const msg = extractErrorMessage(error)
+      setPlanAlert({ type: 'error', title: 'Submission failed', message: msg })
+      notifyApiError(error, 'Could not submit performance plan')
+    },
   })
 
   const saveAppraisalMutation = useMutation({
@@ -488,7 +542,11 @@ export function PerformancePage() {
         action_plans: actionPlans,
         appraisee_comments: appraiseeComments,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['performance'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['performance'] })
+      toast.success('Appraisal sections saved.', 'Saved')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not save appraisal'),
   })
 
   const submitReportMutation = useMutation({
@@ -510,7 +568,11 @@ export function PerformancePage() {
       )
       return performanceService.submitReport({ report_type: reportType, entries })
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['performance'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['performance'] })
+      toast.success(`${reportType.toUpperCase()} report submitted successfully.`, 'Report submitted')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not submit report'),
   })
 
   const reviewAppraisalMutation = useMutation({
@@ -524,7 +586,9 @@ export function PerformancePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['performance'] })
       setReviewDrafts({})
+      toast.success('Appraisal review recorded.', 'Review submitted')
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not submit review'),
   })
 
   const groups = asArray<SubjectGroup>(groupedQuery.data)
@@ -585,6 +649,23 @@ export function PerformancePage() {
     appraisalBundle?.report_status !== 'draft' &&
     appraisalBundle?.report_status !== '' &&
     appraisalBundle?.report_status !== 'returned'
+
+  const handleSubmitPlan = () => {
+    if (!ppaWindowOpen) {
+      const msg = 'The PPA planning window is closed. You cannot submit right now.'
+      setPlanAlert({ type: 'warning', title: 'Window closed', message: msg })
+      toast.warning(msg, 'PPA closed')
+      return
+    }
+    if (totalWeight < 99.9 || totalWeight > 100.1) {
+      const msg = `Total KPI weight is ${totalWeight.toFixed(1)}%. Adjust weights until the total equals exactly 100% before submitting.`
+      setPlanAlert({ type: 'warning', title: 'Weights must total 100%', message: msg })
+      toast.warning(msg, 'Check weights')
+      return
+    }
+    setPlanAlert(null)
+    submitPlanMutation.mutate()
+  }
 
   return (
     <div className="pb-8">
@@ -779,7 +860,7 @@ export function PerformancePage() {
           ) : null}
 
           {activeTab === 'planning' ? (
-            <Card {...mt} className="rounded-sm border border-ui-border p-5 sm:p-6">
+            <Card {...mt} className="overflow-hidden rounded-sm border border-ui-border p-5 sm:p-6">
               {!ppaWindowOpen ? (
                 <Card {...mt} className="mb-4 rounded-sm border border-moh-warning/40 bg-moh-warning/10 p-4">
                   <Typography {...mt} className="text-sm text-ui-text">
@@ -809,6 +890,15 @@ export function PerformancePage() {
                 Mandatory KPIs are pre-assigned to your role. Adjust weights and targets until the total
                 equals 100%, then save and submit for supervisor review.
               </Typography>
+              {planAlert ? (
+                <FormStatusAlert
+                  type={planAlert.type}
+                  title={planAlert.title}
+                  message={planAlert.message}
+                  onDismiss={() => setPlanAlert(null)}
+                  className="mb-4"
+                />
+              ) : null}
               <QueryState
                 isLoading={groupedQuery.isLoading}
                 isError={groupedQuery.isError}
@@ -850,17 +940,28 @@ export function PerformancePage() {
                 <Card {...mt} className="mt-6 rounded-sm border border-ui-border bg-ui-subtle/30 p-4">
                   <p className="text-sm">
                     Total weight:{' '}
-                    <strong className={totalWeight >= 99.9 ? 'text-moh-green' : 'text-moh-warning'}>
+                    <strong
+                      className={
+                        totalWeight >= 99.9 && totalWeight <= 100.1
+                          ? 'text-moh-green'
+                          : 'text-moh-warning'
+                      }
+                    >
                       {totalWeight.toFixed(1)}%
                     </strong>
-                    {totalWeight < 99.9 ? ' — must equal 100% to submit' : ''}
+                    {totalWeight < 99.9 || totalWeight > 100.1
+                      ? ' — must equal 100% to submit'
+                      : ' — ready to submit'}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                   <Button
                     {...mt}
                     className="rounded-sm bg-moh-green normal-case"
                     disabled={savePlanMutation.isPending || !ppaWindowOpen}
-                    onClick={() => savePlanMutation.mutate()}
+                    onClick={() => {
+                      setPlanAlert(null)
+                      savePlanMutation.mutate()
+                    }}
                   >
                     Save plan
                   </Button>
@@ -868,8 +969,8 @@ export function PerformancePage() {
                     {...mt}
                     variant="outlined"
                     className="rounded-sm normal-case"
-                    disabled={submitPlanMutation.isPending || totalWeight < 99.9 || !ppaWindowOpen}
-                    onClick={() => submitPlanMutation.mutate()}
+                    disabled={submitPlanMutation.isPending || !ppaWindowOpen}
+                    onClick={handleSubmitPlan}
                   >
                     Submit for supervisor review
                   </Button>
@@ -1017,9 +1118,18 @@ export function PerformancePage() {
                                   actual:
                                     patch.actual ??
                                     p[ppaKpiId]?.actual ??
-                                    (kpi.actual_value != null ? String(kpi.actual_value) : ''),
+                                    formatReportActual(
+                                      reportGroups
+                                        .flatMap((g) => g.kpis)
+                                        .find((k) => k.ppa_kpi_id === ppaKpiId)?.actual_value,
+                                    ),
                                   narrative:
-                                    patch.narrative ?? p[ppaKpiId]?.narrative ?? kpi.narrative ?? '',
+                                    patch.narrative ??
+                                    p[ppaKpiId]?.narrative ??
+                                    reportGroups
+                                      .flatMap((g) => g.kpis)
+                                      .find((k) => k.ppa_kpi_id === ppaKpiId)?.narrative ??
+                                    '',
                                 },
                               }))
                             }

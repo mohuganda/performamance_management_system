@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Card, Input, Textarea, Typography } from '@material-tailwind/react'
+import { Button, Card, Textarea, Typography } from '@material-tailwind/react'
 import { Select, Option } from '@/components/molecules/MtSelect'
+import { FileAttachmentField } from '@/components/molecules/FileAttachmentField'
+import { PlaceAutocompleteField, type PlaceSelection } from '@/components/molecules/PlaceAutocompleteField'
 import { oosService } from '@/api/services/mobile'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { ProcessGuide } from '@/components/organisms/ProcessGuide'
 import { QueryState } from '@/components/organisms/QueryState'
+import { notifyApiError, toast } from '@/features/toast'
 import { useAuthStore } from '@/stores/appStore'
+import { serializeAttachments, type AttachmentMeta } from '@/utils/attachments'
 import { mt } from '@/utils/mt'
 
 const OOS_STEPS = [
@@ -18,7 +22,7 @@ const OOS_STEPS = [
   {
     title: 'Set destination location',
     description:
-      'Use “Use my current location” or enter GPS coordinates of where you will be working. This is used to verify attendance when you clock in away from your facility.',
+      'Search for where you will be working using Google Maps. The location is used to verify attendance when you clock in away from your facility.',
     actor: 'Employee',
   },
   {
@@ -46,12 +50,13 @@ export function OutOfStationPage() {
     end_date: '',
     remarks: '',
     destination_name: '',
+    destination_address: '',
     destination_latitude: '',
     destination_longitude: '',
     submit: true,
   })
+  const [attachments, setAttachments] = useState<AttachmentMeta[]>([])
   const [approvalComment, setApprovalComment] = useState('')
-  const [locating, setLocating] = useState(false)
 
   const reasonsQuery = useQuery({
     queryKey: ['oos', 'reasons'],
@@ -70,6 +75,21 @@ export function OutOfStationPage() {
     enabled: Boolean(staffId) && canApprove,
   })
 
+  const resetForm = () => {
+    setForm({
+      reason_id: '',
+      start_date: '',
+      end_date: '',
+      remarks: '',
+      destination_name: '',
+      destination_address: '',
+      destination_latitude: '',
+      destination_longitude: '',
+      submit: true,
+    })
+    setAttachments([])
+  }
+
   const createMutation = useMutation({
     mutationFn: () =>
       oosService.createRequest({
@@ -77,51 +97,66 @@ export function OutOfStationPage() {
         start_date: form.start_date,
         end_date: form.end_date,
         remarks: form.remarks,
+        attachment_url: serializeAttachments(attachments),
         destination_name: form.destination_name,
+        destination_address: form.destination_address,
         destination_latitude: Number(form.destination_latitude),
         destination_longitude: Number(form.destination_longitude),
         submit: form.submit,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['oos'] })
-      setForm({
-        reason_id: '',
-        start_date: '',
-        end_date: '',
-        remarks: '',
-        destination_name: '',
-        destination_latitude: '',
-        destination_longitude: '',
-        submit: true,
-      })
+      resetForm()
+      toast.success('Out-of-station request submitted.', 'Travel')
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not submit travel request'),
   })
 
   const approveMutation = useMutation({
     mutationFn: ({ id, approve }: { id: number; approve: boolean }) =>
       oosService.approve(id, { approve, comments: approvalComment }),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['oos'] })
       setApprovalComment('')
+      toast.success(
+        variables.approve ? 'Travel request approved.' : 'Travel request returned.',
+        'Travel',
+      )
     },
+    onError: (error: unknown) => notifyApiError(error, 'Could not process travel approval'),
   })
 
-  const useCurrentLocation = () => {
-    if (!navigator.geolocation) return
-    setLocating(true)
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm((f) => ({
-          ...f,
-          destination_latitude: String(pos.coords.latitude),
-          destination_longitude: String(pos.coords.longitude),
-        }))
-        setLocating(false)
-      },
-      () => setLocating(false),
-      { enableHighAccuracy: true },
-    )
+  const handlePlaceSelect = (place: PlaceSelection) => {
+    setForm((f) => ({
+      ...f,
+      destination_name: place.name,
+      destination_address: place.address,
+      destination_latitude: String(place.latitude),
+      destination_longitude: String(place.longitude),
+    }))
   }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.reason_id) {
+      toast.warning('Select a travel reason.', 'Travel form')
+      return
+    }
+    if (!form.start_date || !form.end_date) {
+      toast.warning('Enter start and end dates.', 'Travel form')
+      return
+    }
+    if (!form.destination_name || !form.destination_latitude || !form.destination_longitude) {
+      toast.warning('Search and select your destination on Google Maps.', 'Travel form')
+      return
+    }
+    createMutation.mutate()
+  }
+
+  const hasDestination =
+    Boolean(form.destination_latitude) &&
+    Boolean(form.destination_longitude) &&
+    Number(form.destination_latitude) !== 0
 
   return (
     <div>
@@ -216,13 +251,7 @@ export function OutOfStationPage() {
           <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
             New out-of-station application
           </Typography>
-          <form
-            className="grid gap-4 md:grid-cols-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              createMutation.mutate()
-            }}
-          >
+          <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
             <Select
               {...mt}
               label="Reason"
@@ -237,62 +266,59 @@ export function OutOfStationPage() {
                 ),
               )}
             </Select>
-            <Input
-              {...mt}
-              label="Destination name"
+            <PlaceAutocompleteField
               value={form.destination_name}
-              onChange={(e) => setForm((f) => ({ ...f, destination_name: e.target.value }))}
-              placeholder="e.g. Kampala training centre"
+              onChange={(destination_name) => setForm((f) => ({ ...f, destination_name }))}
+              onPlaceSelect={handlePlaceSelect}
             />
-            <Input
-              {...mt}
+            <input
               type="date"
-              label="Start date"
+              className="rounded-sm border border-ui-border px-3 py-2 text-sm"
               value={form.start_date}
               onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
+              aria-label="Start date"
             />
-            <Input
-              {...mt}
+            <input
               type="date"
-              label="End date"
+              className="rounded-sm border border-ui-border px-3 py-2 text-sm"
               value={form.end_date}
               onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))}
+              aria-label="End date"
             />
-            <Input
-              {...mt}
-              type="number"
-              step="any"
-              label="Latitude"
-              value={form.destination_latitude}
-              onChange={(e) => setForm((f) => ({ ...f, destination_latitude: e.target.value }))}
-            />
-            <Input
-              {...mt}
-              type="number"
-              step="any"
-              label="Longitude"
-              value={form.destination_longitude}
-              onChange={(e) => setForm((f) => ({ ...f, destination_longitude: e.target.value }))}
-            />
-            <div className="md:col-span-2">
-              <Button
-                {...mt}
-                type="button"
-                variant="outlined"
-                size="sm"
-                className="rounded-sm"
-                onClick={useCurrentLocation}
-                disabled={locating}
-              >
-                {locating ? 'Getting location...' : 'Use my current location'}
-              </Button>
-            </div>
+            {hasDestination ? (
+              <div className="md:col-span-2 rounded-sm border border-ui-border bg-ui-subtle/30 px-4 py-3 text-sm">
+                <p className="font-semibold text-ui-text">{form.destination_name}</p>
+                {form.destination_address ? (
+                  <p className="mt-1 text-ui-muted">{form.destination_address}</p>
+                ) : null}
+                <p className="mt-2 text-xs text-ui-muted">
+                  Coordinates: {Number(form.destination_latitude).toFixed(5)},{' '}
+                  {Number(form.destination_longitude).toFixed(5)}
+                </p>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${form.destination_latitude},${form.destination_longitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-block text-xs font-medium text-moh-green hover:underline"
+                >
+                  Preview on Google Maps
+                </a>
+              </div>
+            ) : null}
             <div className="md:col-span-2">
               <Textarea
                 {...mt}
                 label="Remarks"
                 value={form.remarks}
                 onChange={(e) => setForm((f) => ({ ...f, remarks: e.target.value }))}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <FileAttachmentField
+                label="Supporting documents"
+                hint="Optional travel letters, invitations, or other supporting files."
+                value={attachments}
+                onChange={setAttachments}
               />
             </div>
             {createMutation.isError ? (
@@ -349,7 +375,7 @@ export function OutOfStationPage() {
                         {String(row.start_date).slice(0, 10)} – {String(row.end_date).slice(0, 10)}
                       </td>
                       <td className="py-2 pr-4 text-xs text-gray-600">
-                        {String(row.destination_name ?? row.destination_latitude ?? '—')}
+                        {String(row.destination_name ?? row.destination_address ?? '—')}
                       </td>
                       <td className="py-2 font-medium capitalize text-moh-green">
                         {String(row.status ?? 'pending')}

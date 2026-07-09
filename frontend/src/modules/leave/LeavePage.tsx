@@ -1,16 +1,38 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Card, Textarea, Typography } from '@material-tailwind/react'
+import { differenceInCalendarDays } from 'date-fns'
+import { getApiErrorMessage } from '@/api/client'
+import { FileAttachmentField } from '@/components/molecules/FileAttachmentField'
 import { SearchableSelect } from '@/components/molecules/SearchableSelect'
 import { leaveService } from '@/api/services/mobile'
 import { DatePickerField } from '@/components/molecules/DatePickerField'
+import { FormStatusAlert, type FormStatusType } from '@/components/molecules/FormStatusAlert'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { ProcessGuide } from '@/components/organisms/ProcessGuide'
 import { QueryState } from '@/components/organisms/QueryState'
+import { notifyApiError, toast } from '@/features/toast'
 import { useAuthStore } from '@/stores/appStore'
+import { serializeAttachments, type AttachmentMeta } from '@/utils/attachments'
 import { normalizeLeaveTypes } from '@/utils/normalizeApi'
 import { mt } from '@/utils/mt'
 import { parseISO } from 'date-fns'
+
+type FormAlert = { type: FormStatusType; message: string; title?: string }
+
+function validateLeaveForm(form: {
+  leave_type_id: string
+  start_date: string
+  end_date: string
+  reason: string
+}): string | null {
+  if (!form.leave_type_id) return 'Select a leave type before continuing.'
+  if (!form.start_date) return 'Enter a start date.'
+  if (!form.end_date) return 'Enter an end date.'
+  if (form.end_date < form.start_date) return 'End date cannot be before the start date.'
+  if (!form.reason.trim()) return 'Provide a reason for your leave request.'
+  return null
+}
 
 const LEAVE_STEPS = [
   {
@@ -51,6 +73,9 @@ export function LeavePage() {
     submit: true,
   })
   const [approvalComment, setApprovalComment] = useState('')
+  const [attachments, setAttachments] = useState<AttachmentMeta[]>([])
+  const [formAlert, setFormAlert] = useState<FormAlert | null>(null)
+  const [approvalAlert, setApprovalAlert] = useState<FormAlert | null>(null)
 
   const balancesQuery = useQuery({
     queryKey: ['leave', 'balances'],
@@ -76,32 +101,87 @@ export function LeavePage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (submit: boolean) =>
       leaveService.createRequest({
         leave_type_id: Number(form.leave_type_id),
         start_date: form.start_date,
         end_date: form.end_date,
         reason: form.reason,
-        submit: form.submit,
+        medical_report_url: serializeAttachments(attachments),
+        submit,
       }),
-    onSuccess: () => {
+    onSuccess: (_data, submit) => {
       queryClient.invalidateQueries({ queryKey: ['leave'] })
       setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', submit: true })
+      setAttachments([])
+      const message = submit
+        ? 'Your leave request has been submitted for supervisor approval.'
+        : 'Your leave request has been saved as a draft. You can submit it when ready.'
+      setFormAlert({
+        type: 'success',
+        title: submit ? 'Submitted' : 'Draft saved',
+        message,
+      })
+      toast.success(message, submit ? 'Leave submitted' : 'Draft saved')
+    },
+    onError: (error: unknown) => {
+      const message = getApiErrorMessage(error, 'Could not save leave request')
+      setFormAlert({ type: 'error', title: 'Could not save', message })
+      notifyApiError(error, 'Could not save leave request')
     },
   })
 
   const approveMutation = useMutation({
     mutationFn: ({ id, approve }: { id: number; approve: boolean }) =>
       leaveService.approve(id, { approve, comments: approvalComment }),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leave'] })
       setApprovalComment('')
+      const message = variables.approve
+        ? 'Leave request approved and moved to the next stage.'
+        : 'Leave request returned to the employee.'
+      setApprovalAlert({
+        type: 'success',
+        title: variables.approve ? 'Approved' : 'Returned',
+        message,
+      })
+      toast.success(message, variables.approve ? 'Leave approved' : 'Leave returned')
+    },
+    onError: (error: unknown) => {
+      const message = getApiErrorMessage(error, 'Could not process leave approval')
+      setApprovalAlert({ type: 'error', title: 'Action failed', message })
+      notifyApiError(error, 'Could not process leave approval')
     },
   })
+
+  const handleCreate = (submit: boolean) => {
+    const validationError = validateLeaveForm(form)
+    if (validationError) {
+      setFormAlert({ type: 'warning', title: 'Check the form', message: validationError })
+      toast.warning(validationError, 'Leave form')
+      return
+    }
+    if (needsMedicalReport && attachments.length === 0) {
+      const message = `A medical report is required for ${selectedLeaveType?.name ?? 'this leave type'} longer than ${selectedLeaveType?.medical_report_after_days} days.`
+      setFormAlert({ type: 'warning', title: 'Medical report required', message })
+      toast.warning(message, 'Leave form')
+      return
+    }
+    setFormAlert(null)
+    createMutation.mutate(submit)
+  }
 
   const staffLinked = Boolean(staffId)
   const leaveTypes = normalizeLeaveTypes(typesQuery.data)
   const typeById = new Map(leaveTypes.map((t) => [t.id, t.name]))
+  const selectedLeaveType = leaveTypes.find((t) => String(t.id) === form.leave_type_id)
+  const leaveDays =
+    form.start_date && form.end_date
+      ? differenceInCalendarDays(parseISO(form.end_date), parseISO(form.start_date)) + 1
+      : 0
+  const needsMedicalReport =
+    selectedLeaveType?.medical_report_after_days != null &&
+    leaveDays > selectedLeaveType.medical_report_after_days
   const startDateValue = form.start_date ? parseISO(form.start_date) : undefined
 
   return (
@@ -135,6 +215,15 @@ export function LeavePage() {
             <Typography {...mt} className="mb-3 text-sm font-bold uppercase text-ui-text">
               Pending approvals — action required
             </Typography>
+            {approvalAlert ? (
+              <FormStatusAlert
+                type={approvalAlert.type}
+                title={approvalAlert.title}
+                message={approvalAlert.message}
+                onDismiss={() => setApprovalAlert(null)}
+                className="mb-4"
+              />
+            ) : null}
             {Array.isArray(pendingQuery.data) && pendingQuery.data.length > 0 ? (
               <div className="space-y-4">
                 {pendingQuery.data.map(
@@ -257,11 +346,20 @@ export function LeavePage() {
             <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
               Step 2 — New Leave Application
             </Typography>
+            {formAlert ? (
+              <FormStatusAlert
+                type={formAlert.type}
+                title={formAlert.title}
+                message={formAlert.message}
+                onDismiss={() => setFormAlert(null)}
+                className="mb-4"
+              />
+            ) : null}
             <form
               className="grid gap-4 md:grid-cols-2"
               onSubmit={(e) => {
                 e.preventDefault()
-                createMutation.mutate()
+                handleCreate(true)
               }}
             >
               <SearchableSelect
@@ -299,25 +397,38 @@ export function LeavePage() {
                   className="rounded-sm"
                 />
               </div>
-              {createMutation.isError ? (
-                <Typography {...mt} className="text-sm text-moh-error md:col-span-2">
-                  {(createMutation.error as Error).message}
-                  {(createMutation.error as Error).message?.includes('supervisor') ? (
-                    <span>
-                      {' '}
-                      Ask HR to assign a supervisor under Admin → Staff Management.
-                    </span>
-                  ) : null}
-                </Typography>
-              ) : null}
-              <Button
-                {...mt}
-                type="submit"
-                className="rounded-sm bg-moh-green md:col-span-2"
-                disabled={createMutation.isPending}
-              >
-                {createMutation.isPending ? 'Submitting...' : 'Submit for supervisor approval'}
-              </Button>
+              <div className="md:col-span-2">
+                <FileAttachmentField
+                  label={needsMedicalReport ? 'Medical report / supporting documents' : 'Supporting documents'}
+                  hint={
+                    needsMedicalReport
+                      ? `Required for absences longer than ${selectedLeaveType?.medical_report_after_days} days. Upload images or PDF files.`
+                      : 'Optional supporting documents (images or PDF, up to 5 files).'
+                  }
+                  value={attachments}
+                  onChange={setAttachments}
+                />
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row md:col-span-2">
+                <Button
+                  {...mt}
+                  type="button"
+                  variant="outlined"
+                  className="rounded-sm flex-1"
+                  disabled={createMutation.isPending}
+                  onClick={() => handleCreate(false)}
+                >
+                  {createMutation.isPending ? 'Saving...' : 'Save as draft'}
+                </Button>
+                <Button
+                  {...mt}
+                  type="submit"
+                  className="rounded-sm bg-moh-green flex-1"
+                  disabled={createMutation.isPending}
+                >
+                  {createMutation.isPending ? 'Submitting...' : 'Submit for supervisor approval'}
+                </Button>
+              </div>
             </form>
           </Card>
         ) : null}

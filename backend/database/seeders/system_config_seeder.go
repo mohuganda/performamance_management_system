@@ -34,6 +34,8 @@ func (s *SystemConfigSeeder) Run() error {
 		"hrm_attend.enabled":      {group: "data_sources", value: true, public: true},
 		"hrm_attend.last_sync_at": {group: "data_sources", value: "", public: true},
 		"hrm_attend.last_sync_status": {group: "data_sources", value: "", public: true},
+		"google_maps.api_key":         {group: "data_sources", value: "", public: true},
+		"google_maps.country_code":    {group: "data_sources", value: "ug", public: true},
 		"email.driver":           {group: "email", value: "smtp", public: false},
 		"email.smtp.host":        {group: "email", value: "", public: false},
 		"email.smtp.port":        {group: "email", value: "587", public: false},

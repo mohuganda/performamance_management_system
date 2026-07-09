@@ -147,6 +147,7 @@ export function SettingsPage() {
     summary_path: '/attendance/attendance_summary',
     enabled: true,
   })
+  const [googleMapsForm, setGoogleMapsForm] = useState({ api_key: '', country_code: 'ug' })
   const [emailForm, setEmailForm] = useState({
     driver: 'smtp',
     smtp: { host: '', port: '587', username: '', password: '', encryption: 'tls', from_address: '', from_name: '' },
@@ -192,6 +193,10 @@ export function SettingsPage() {
       summary_path: hrm?.summary_path ?? '/attendance/attendance_summary',
       enabled: hrm?.enabled ?? true,
     })
+    setGoogleMapsForm({
+      api_key: settingsQuery.data.data_sources.google_maps?.api_key ?? '',
+      country_code: settingsQuery.data.data_sources.google_maps?.country_code ?? 'ug',
+    })
     setEmailForm({
       driver: settingsQuery.data.email.driver ?? 'smtp',
       smtp: { ...emailForm.smtp, ...settingsQuery.data.email.smtp },
@@ -203,9 +208,14 @@ export function SettingsPage() {
 
   const saveDataSources = useMutation({
     mutationFn: () =>
-      adminSettingsService.update('data_sources', { ihris: ihrisForm, hrm_attend: hrmAttendForm }),
+      adminSettingsService.update('data_sources', {
+        ihris: ihrisForm,
+        hrm_attend: hrmAttendForm,
+        google_maps: googleMapsForm,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+      queryClient.invalidateQueries({ queryKey: ['public-config', 'maps'] })
       toast.success('Data source settings saved.')
     },
     onError: (error: unknown) => notifyApiError(error, 'Could not save data sources'),
@@ -555,6 +565,53 @@ export function SettingsPage() {
                     Save a non-localhost HRM base URL before running sync on this server.
                   </p>
                 ) : null}
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
+              title="Google Maps"
+              description="Powers Uber-style destination search on out-of-station forms. Restrict the API key to your site domain in Google Cloud Console."
+              accent="green"
+            >
+              <div className="space-y-4">
+                <Field>
+                  <Input
+                    {...mt}
+                    label="Google Maps API key"
+                    value={googleMapsForm.api_key}
+                    onChange={(e) => setGoogleMapsForm((f) => ({ ...f, api_key: e.target.value }))}
+                    placeholder="AIza..."
+                  />
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    label="Country restriction (ISO codes)"
+                    value={googleMapsForm.country_code}
+                    onChange={(e) =>
+                      setGoogleMapsForm((f) => ({ ...f, country_code: e.target.value.toLowerCase() }))
+                    }
+                    placeholder="ug"
+                  />
+                </Field>
+                <p className="text-xs text-gray-500">
+                  Use a two-letter ISO country code (e.g. <code className="text-[11px]">ug</code> for Uganda).
+                  For multiple countries, separate with commas (e.g.{' '}
+                  <code className="text-[11px]">ug,ke,tz</code>). Leave blank to search globally.
+                </p>
+                <p className="text-xs text-gray-500">
+                  Enable the <strong>Maps JavaScript API</strong> and <strong>Places API</strong> for this key.
+                  The key is exposed to signed-in users for destination lookup on travel forms.
+                </p>
+                <Button
+                  {...mt}
+                  size="sm"
+                  className="rounded-sm bg-moh-green normal-case"
+                  onClick={() => saveDataSources.mutate()}
+                  loading={saveDataSources.isPending}
+                >
+                  Save Google Maps settings
+                </Button>
               </div>
             </SettingsSection>
 
