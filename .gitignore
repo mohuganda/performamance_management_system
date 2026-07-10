@@ -1,2 +1,5 @@
 deploy/.env
 deploy/docker-compose.override.yml
+
+# Runtime / persistent data (MySQL, Redis, API storage, logs) — never commit
+data/

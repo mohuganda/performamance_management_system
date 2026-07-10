@@ -27,6 +27,7 @@ interface AuthState {
   authReady: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  refreshSession: () => Promise<void>
   refreshProfile: () => Promise<void>
   setQuarter: (quarter: string) => void
   hydrateToken: () => void
@@ -123,6 +124,12 @@ export const useAuthStore = create<AuthState>()(
           permissions: [],
           staffId: null,
         })
+      },
+
+      refreshSession: async () => {
+        const result = await authService.refresh()
+        setAuthToken(result.token)
+        set({ token: result.token, isAuthenticated: true })
       },
 
       setQuarter: (quarter) => set({ quarter }),
