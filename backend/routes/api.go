@@ -127,6 +127,9 @@ func Api() {
 				lists.Put("/job-titles/{id}", listsAdminController.UpdateJobTitle)
 				lists.Post("/departments", listsAdminController.CreateDepartment)
 				lists.Post("/job-titles", listsAdminController.CreateJobTitle)
+				lists.Get("/oos-reasons", listsAdminController.ListOosReasons)
+				lists.Put("/oos-reasons/{id}", listsAdminController.UpdateOosReason)
+				lists.Post("/oos-reasons", listsAdminController.CreateOosReason)
 			})
 
 			auth.Prefix("admin/rbac").Middleware(middleware.Permission("auth.roles.manage")).Group(func(rbac route.Router) {

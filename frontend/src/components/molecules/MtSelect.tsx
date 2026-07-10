@@ -26,7 +26,7 @@ function resolveSelectedLabel(value: SelectProps['value'], children: ReactNode):
 }
 
 /** Material Tailwind Select with reliable selected-label rendering (async options, empty values). */
-export function Select({ children, value, selected, ...props }: SelectProps) {
+export function Select({ children, value, selected, menuProps, ...props }: SelectProps) {
   const labelResolver =
     typeof selected === 'function'
       ? selected
@@ -37,6 +37,19 @@ export function Select({ children, value, selected, ...props }: SelectProps) {
       {...mt}
       {...props}
       className={[props.className, 'text-ui-text'].filter(Boolean).join(' ')}
+      menuProps={{
+        ...menuProps,
+        className: [
+          'max-h-72 overflow-auto bg-white text-ui-text shadow-lg',
+          menuProps?.className,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      }}
+      labelProps={{
+        ...props.labelProps,
+        className: [props.labelProps?.className, 'text-ui-muted'].filter(Boolean).join(' '),
+      }}
       value={value}
       selected={labelResolver}
     >

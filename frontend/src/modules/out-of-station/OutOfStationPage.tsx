@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Card, Textarea, Typography } from '@material-tailwind/react'
-import { Select, Option } from '@/components/molecules/MtSelect'
+import { parseISO } from 'date-fns'
 import { FileAttachmentField } from '@/components/molecules/FileAttachmentField'
+import { DatePickerField } from '@/components/molecules/DatePickerField'
 import { PlaceAutocompleteField, type PlaceSelection } from '@/components/molecules/PlaceAutocompleteField'
+import { SearchableSelect } from '@/components/molecules/SearchableSelect'
 import { oosService } from '@/api/services/mobile'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { ProcessGuide } from '@/components/organisms/ProcessGuide'
@@ -158,6 +160,14 @@ export function OutOfStationPage() {
     Boolean(form.destination_longitude) &&
     Number(form.destination_latitude) !== 0
 
+  const reasonOptions = (Array.isArray(reasonsQuery.data) ? reasonsQuery.data : []).map(
+    (row: Record<string, unknown>) => ({
+      value: String(row.id ?? row.ID ?? ''),
+      label: String(row.reason ?? row.Reason ?? ''),
+    }),
+  )
+  const startDateValue = form.start_date ? parseISO(form.start_date) : undefined
+
   return (
     <div>
       <PageHeader
@@ -252,38 +262,33 @@ export function OutOfStationPage() {
             New out-of-station application
           </Typography>
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
-            <Select
-              {...mt}
+            <SearchableSelect
               label="Reason"
+              labelPosition="top"
               value={form.reason_id}
-              onChange={(v) => setForm((f) => ({ ...f, reason_id: v ?? '' }))}
-            >
-              {(Array.isArray(reasonsQuery.data) ? reasonsQuery.data : []).map(
-                (r: { id: number; reason: string }) => (
-                  <Option key={r.id} value={String(r.id)}>
-                    {r.reason}
-                  </Option>
-                ),
-              )}
-            </Select>
+              placeholder="Search travel reasons…"
+              emptyLabel="Select reason"
+              allowClear={false}
+              options={reasonOptions}
+              onChange={(reason_id) => setForm((f) => ({ ...f, reason_id }))}
+            />
             <PlaceAutocompleteField
               value={form.destination_name}
               onChange={(destination_name) => setForm((f) => ({ ...f, destination_name }))}
               onPlaceSelect={handlePlaceSelect}
             />
-            <input
-              type="date"
-              className="rounded-sm border border-ui-border px-3 py-2 text-sm"
+            <DatePickerField
+              label="Start date"
               value={form.start_date}
-              onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
-              aria-label="Start date"
+              onChange={(start_date) => setForm((f) => ({ ...f, start_date }))}
+              className="rounded-sm"
             />
-            <input
-              type="date"
-              className="rounded-sm border border-ui-border px-3 py-2 text-sm"
+            <DatePickerField
+              label="End date"
               value={form.end_date}
-              onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))}
-              aria-label="End date"
+              onChange={(end_date) => setForm((f) => ({ ...f, end_date }))}
+              minDate={startDateValue}
+              className="rounded-sm"
             />
             {hasDestination ? (
               <div className="md:col-span-2 rounded-sm border border-ui-border bg-ui-subtle/30 px-4 py-3 text-sm">

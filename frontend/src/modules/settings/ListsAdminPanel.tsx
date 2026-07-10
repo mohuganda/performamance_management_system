@@ -12,7 +12,7 @@ import {
   Typography,
 } from '@material-tailwind/react'
 import { Select, Option } from '@/components/molecules/MtSelect'
-import { Building2, Briefcase, Layers, MapPin, Plus, Users } from 'lucide-react'
+import { Building2, Briefcase, Layers, MapPin, Navigation, Plus, Users } from 'lucide-react'
 import {
   listsAdminService,
   type DepartmentListRow,
@@ -20,6 +20,7 @@ import {
   type FacilityListRow,
   type JobTitleListRow,
   type RegionListRow,
+  type OosReasonListRow,
 } from '@/api/services/listsAdmin'
 import { QueryState } from '@/components/organisms/QueryState'
 import { ServerPaginatedTable } from '@/components/organisms/ServerPaginatedTable'
@@ -28,7 +29,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { mt } from '@/utils/mt'
 import { notifyApiError, toast } from '@/features/toast'
 
-type ListTab = 'regions' | 'districts' | 'facilities' | 'departments' | 'job-titles'
+type ListTab = 'regions' | 'districts' | 'facilities' | 'departments' | 'job-titles' | 'oos-reasons'
 
 function apiErrorMessage(error: unknown, fallback: string) {
   if (
@@ -76,6 +77,7 @@ export function ListsAdminPanel() {
   const [editFacility, setEditFacility] = useState<FacilityListRow | null>(null)
   const [editDepartment, setEditDepartment] = useState<DepartmentListRow | null>(null)
   const [editJobTitle, setEditJobTitle] = useState<JobTitleListRow | null>(null)
+  const [editOosReason, setEditOosReason] = useState<OosReasonListRow | null>(null)
 
   const summaryQuery = useQuery({
     queryKey: ['admin', 'lists', 'summary'],
@@ -138,7 +140,17 @@ export function ListsAdminPanel() {
     enabled: tab === 'job-titles',
   })
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin', 'lists'] })
+  const oosReasonsQuery = useQuery({
+    queryKey: ['admin', 'lists', 'oos-reasons', debouncedSearch, page, pageSize],
+    queryFn: () =>
+      listsAdminService.listOosReasons({ search: debouncedSearch || undefined, page, per_page: pageSize }),
+    enabled: tab === 'oos-reasons',
+  })
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin', 'lists'] })
+    queryClient.invalidateQueries({ queryKey: ['oos', 'reasons'] })
+  }
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -178,6 +190,11 @@ export function ListsAdminPanel() {
           job_title: editJobTitle.job_title,
           external_job_id: editJobTitle.external_job_id,
         })
+      } else if (editOosReason) {
+        await listsAdminService.updateOosReason(editOosReason.id, {
+          reason: editOosReason.reason,
+          is_active: editOosReason.is_active,
+        })
       }
     },
     onSuccess: () => {
@@ -204,6 +221,8 @@ export function ListsAdminPanel() {
           job_title: createForm.name,
           external_job_id: createForm.external_id || undefined,
         })
+      } else if (tab === 'oos-reasons') {
+        await listsAdminService.createOosReason({ reason: createForm.name })
       }
     },
     onSuccess: () => {
@@ -224,6 +243,7 @@ export function ListsAdminPanel() {
     setEditFacility(null)
     setEditDepartment(null)
     setEditJobTitle(null)
+    setEditOosReason(null)
     setEditError('')
   }
 
@@ -253,7 +273,9 @@ export function ListsAdminPanel() {
           ? facilitiesQuery
           : tab === 'departments'
             ? departmentsQuery
-            : jobTitlesQuery
+            : tab === 'job-titles'
+              ? jobTitlesQuery
+              : oosReasonsQuery
 
   const toolbar = (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -296,7 +318,7 @@ export function ListsAdminPanel() {
             ))}
         </Select>
       ) : null}
-      {tab === 'departments' || tab === 'job-titles' ? (
+      {tab === 'departments' || tab === 'job-titles' || tab === 'oos-reasons' ? (
         <div className="flex items-end">
           <Button
             {...mt}
@@ -309,7 +331,12 @@ export function ListsAdminPanel() {
             }}
           >
             <Plus className="h-4 w-4" />
-            Add {tab === 'departments' ? 'department' : 'job title'}
+            Add{' '}
+            {tab === 'departments'
+              ? 'department'
+              : tab === 'job-titles'
+                ? 'job title'
+                : 'travel reason'}
           </Button>
         </div>
       ) : null}
@@ -324,16 +351,17 @@ export function ListsAdminPanel() {
         </Typography>
         <p className="mt-2 text-sm text-gray-600">
           Geography hierarchy: <strong>Region → District → Facility</strong>. Organisational lists include
-          departments and job titles synced from iHRIS. Edits here are used for data scope assignment and
-          reporting — no database constraints are enforced, keeping assignments flexible.
+          departments and job titles synced from iHRIS. Out-of-station travel reasons appear on the travel
+          application form. Edits here are used for data scope assignment and reporting.
         </p>
         {summary ? (
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
             <SummaryCard label="Regions" value={summary.regions} icon={Layers} />
             <SummaryCard label="Districts" value={summary.districts} icon={MapPin} />
             <SummaryCard label="Facilities" value={summary.facilities} icon={Building2} />
             <SummaryCard label="Departments" value={summary.departments} icon={Users} />
             <SummaryCard label="Job titles" value={summary.job_titles} icon={Briefcase} />
+            <SummaryCard label="Travel reasons" value={summary.oos_reasons ?? 0} icon={Navigation} />
           </div>
         ) : null}
       </Card>
@@ -354,6 +382,9 @@ export function ListsAdminPanel() {
           </Tab>
           <Tab {...mt} value="job-titles" onClick={() => setTab('job-titles')}>
             Job titles
+          </Tab>
+          <Tab {...mt} value="oos-reasons" onClick={() => setTab('oos-reasons')}>
+            Travel reasons
           </Tab>
         </TabsHeader>
       </Tabs>
@@ -556,9 +587,44 @@ export function ListsAdminPanel() {
             )}
           />
         ) : null}
+
+        {tab === 'oos-reasons' && oosReasonsQuery.data ? (
+          <ServerPaginatedTable
+            title="Out-of-station travel reasons"
+            description="Reasons shown on the travel application form (e.g. training, field work, meeting)"
+            columns={[
+              { key: 'reason', label: 'Reason' },
+              { key: 'status', label: 'Status' },
+              { key: 'actions', label: '' },
+            ]}
+            rows={oosReasonsQuery.data.data}
+            pagination={oosReasonsQuery.data}
+            onPageChange={setPage}
+            rowKey={(row) => row.id}
+            toolbar={toolbar}
+            renderRow={(row) => (
+              <>
+                <td className="px-3 py-2 font-medium">{row.reason}</td>
+                <td className="px-3 py-2">
+                  <Chip
+                    {...mt}
+                    size="sm"
+                    value={row.is_active ? 'Active' : 'Inactive'}
+                    className={row.is_active ? 'bg-moh-green/10 text-moh-green' : 'bg-gray-100'}
+                  />
+                </td>
+                <td className="px-3 py-2">
+                  <Button {...mt} size="sm" variant="text" onClick={() => setEditOosReason({ ...row })}>
+                    Edit
+                  </Button>
+                </td>
+              </>
+            )}
+          />
+        ) : null}
       </QueryState>
 
-      {(editRegion || editDistrict || editFacility || editDepartment || editJobTitle) && (
+      {(editRegion || editDistrict || editFacility || editDepartment || editJobTitle || editOosReason) && (
         <EditModal title="Edit list record" onClose={closeEdit}>
           {editRegion ? (
             <div className="grid gap-4 md:grid-cols-2">
@@ -616,6 +682,21 @@ export function ListsAdminPanel() {
               <Input {...mt} label="External job ID" value={editJobTitle.external_job_id} onChange={(e) => setEditJobTitle({ ...editJobTitle, external_job_id: e.target.value })} />
             </div>
           ) : null}
+          {editOosReason ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <Input
+                {...mt}
+                label="Reason"
+                value={editOosReason.reason}
+                onChange={(e) => setEditOosReason({ ...editOosReason, reason: e.target.value })}
+              />
+              <Toggle
+                label="Active"
+                checked={editOosReason.is_active}
+                onChange={(checked) => setEditOosReason({ ...editOosReason, is_active: checked })}
+              />
+            </div>
+          ) : null}
           {editError ? <p className="mt-4 text-sm text-red-600">{editError}</p> : null}
           <div className="mt-6 flex gap-3">
             <Button {...mt} size="sm" className="rounded-sm bg-moh-green" loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
@@ -628,22 +709,36 @@ export function ListsAdminPanel() {
 
       {createOpen ? (
         <EditModal
-          title={tab === 'departments' ? 'Add department' : 'Add job title'}
+          title={
+            tab === 'departments'
+              ? 'Add department'
+              : tab === 'job-titles'
+                ? 'Add job title'
+                : 'Add travel reason'
+          }
           onClose={() => setCreateOpen(false)}
         >
           <div className="grid gap-4 md:grid-cols-2">
             <Input
               {...mt}
-              label={tab === 'departments' ? 'Department name' : 'Job title'}
+              label={
+                tab === 'departments'
+                  ? 'Department name'
+                  : tab === 'job-titles'
+                    ? 'Job title'
+                    : 'Travel reason'
+              }
               value={createForm.name}
               onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
             />
-            <Input
-              {...mt}
-              label="External ID (optional)"
-              value={createForm.external_id}
-              onChange={(e) => setCreateForm((f) => ({ ...f, external_id: e.target.value }))}
-            />
+            {tab === 'departments' || tab === 'job-titles' ? (
+              <Input
+                {...mt}
+                label="External ID (optional)"
+                value={createForm.external_id}
+                onChange={(e) => setCreateForm((f) => ({ ...f, external_id: e.target.value }))}
+              />
+            ) : null}
           </div>
           {editError ? <p className="mt-4 text-sm text-red-600">{editError}</p> : null}
           <div className="mt-6 flex gap-3">

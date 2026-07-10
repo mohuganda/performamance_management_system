@@ -401,8 +401,8 @@ type LeaveBalance struct {
 
 type OutOfStationReason struct {
 	orm.Model
-	Reason   string
-	IsActive bool `gorm:"default:true"`
+	Reason   string `json:"reason"`
+	IsActive bool   `json:"is_active" gorm:"default:true"`
 }
 
 type OutOfStationRequest struct {

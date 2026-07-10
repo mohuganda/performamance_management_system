@@ -16,11 +16,12 @@ func NewListsAdminService() *ListsAdminService {
 }
 
 type ListsSummary struct {
-	Regions     int `json:"regions"`
-	Districts   int `json:"districts"`
-	Facilities  int `json:"facilities"`
-	Departments int `json:"departments"`
-	JobTitles   int `json:"job_titles"`
+	Regions      int `json:"regions"`
+	Districts    int `json:"districts"`
+	Facilities   int `json:"facilities"`
+	Departments  int `json:"departments"`
+	JobTitles    int `json:"job_titles"`
+	OosReasons   int `json:"oos_reasons"`
 }
 
 type RegionListRow struct {
@@ -73,6 +74,12 @@ type JobTitleListRow struct {
 	JobTitle      string `json:"job_title"`
 }
 
+type OosReasonListRow struct {
+	ID       uint   `json:"id"`
+	Reason   string `json:"reason"`
+	IsActive bool   `json:"is_active"`
+}
+
 type ListFilter struct {
 	Search     string
 	RegionID   uint
@@ -98,6 +105,9 @@ func (s *ListsAdminService) Summary() (ListsSummary, error) {
 	}
 	if n, err := facades.Orm().Query().Model(&models.JobTitle{}).Count(); err == nil {
 		summary.JobTitles = int(n)
+	}
+	if n, err := facades.Orm().Query().Model(&models.OutOfStationReason{}).Count(); err == nil {
+		summary.OosReasons = int(n)
 	}
 	return summary, nil
 }
@@ -577,6 +587,78 @@ func (s *ListsAdminService) CreateJobTitle(input CreateJobTitleInput) (models.Jo
 	row := models.JobTitle{JobTitle: title, ExternalJobID: extID}
 	if err := facades.Orm().Query().Create(&row); err != nil {
 		return models.JobTitle{}, err
+	}
+	return row, nil
+}
+
+func (s *ListsAdminService) ListOosReasons(filter ListFilter) (PaginatedResult[OosReasonListRow], error) {
+	page, perPage := ResolvePage(filter.Page, filter.PerPage)
+	query := facades.Orm().Query().Order("reason asc")
+	if filter.Search != "" {
+		like := "%" + strings.TrimSpace(filter.Search) + "%"
+		query = query.Where("reason LIKE ?", like)
+	}
+	var rows []models.OutOfStationReason
+	if err := query.Get(&rows); err != nil {
+		return PaginatedResult[OosReasonListRow]{}, err
+	}
+	total := len(rows)
+	start := OffsetFor(page, perPage)
+	if start > total {
+		start = total
+	}
+	end := start + perPage
+	if end > total {
+		end = total
+	}
+	pageRows := rows[start:end]
+
+	out := make([]OosReasonListRow, 0, len(pageRows))
+	for _, row := range pageRows {
+		out = append(out, OosReasonListRow{
+			ID:       row.ID,
+			Reason:   row.Reason,
+			IsActive: row.IsActive,
+		})
+	}
+	return BuildPaginatedResult(out, total, page, perPage), nil
+}
+
+type UpdateOosReasonInput struct {
+	Reason   *string `json:"reason"`
+	IsActive *bool   `json:"is_active"`
+}
+
+type CreateOosReasonInput struct {
+	Reason string `json:"reason"`
+}
+
+func (s *ListsAdminService) UpdateOosReason(id uint, input UpdateOosReasonInput) error {
+	var row models.OutOfStationReason
+	if err := facades.Orm().Query().Where("id", id).First(&row); err != nil || row.ID == 0 {
+		return fmt.Errorf("out-of-station reason not found")
+	}
+	if input.Reason != nil {
+		reason := strings.TrimSpace(*input.Reason)
+		if reason == "" {
+			return fmt.Errorf("reason is required")
+		}
+		row.Reason = reason
+	}
+	if input.IsActive != nil {
+		row.IsActive = *input.IsActive
+	}
+	return facades.Orm().Query().Save(&row)
+}
+
+func (s *ListsAdminService) CreateOosReason(input CreateOosReasonInput) (models.OutOfStationReason, error) {
+	reason := strings.TrimSpace(input.Reason)
+	if reason == "" {
+		return models.OutOfStationReason{}, fmt.Errorf("reason is required")
+	}
+	row := models.OutOfStationReason{Reason: reason, IsActive: true}
+	if err := facades.Orm().Query().Create(&row); err != nil {
+		return models.OutOfStationReason{}, err
 	}
 	return row, nil
 }

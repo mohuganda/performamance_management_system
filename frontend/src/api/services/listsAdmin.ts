@@ -8,6 +8,7 @@ export type ListsSummary = {
   facilities: number
   departments: number
   job_titles: number
+  oos_reasons: number
 }
 
 export type RegionListRow = {
@@ -60,6 +61,12 @@ export type JobTitleListRow = {
   job_title: string
 }
 
+export type OosReasonListRow = {
+  id: number
+  reason: string
+  is_active: boolean
+}
+
 export type RegionOption = { id: number; name: string; code: string }
 export type DistrictOption = { id: number; name: string; code: string; region_id?: number | null }
 
@@ -97,6 +104,10 @@ export const listsAdminService = {
     const { data } = await apiClient.get('/admin/lists/job-titles', { params })
     return unwrapPaginated<JobTitleListRow>(data) as PaginatedResponse<JobTitleListRow>
   },
+  listOosReasons: async (params: ListParams = {}) => {
+    const { data } = await apiClient.get('/admin/lists/oos-reasons', { params })
+    return unwrapPaginated<OosReasonListRow>(data) as PaginatedResponse<OosReasonListRow>
+  },
   regionOptions: async (): Promise<RegionOption[]> => {
     const { data } = await apiClient.get('/admin/lists/region-options')
     return data
@@ -132,5 +143,13 @@ export const listsAdminService = {
   createJobTitle: async (payload: { job_title: string; external_job_id?: string }) => {
     const { data } = await apiClient.post('/admin/lists/job-titles', payload)
     return data as JobTitleListRow
+  },
+  updateOosReason: async (id: number, payload: { reason?: string; is_active?: boolean }) => {
+    const { data } = await apiClient.put(`/admin/lists/oos-reasons/${id}`, payload)
+    return data
+  },
+  createOosReason: async (payload: { reason: string }) => {
+    const { data } = await apiClient.post('/admin/lists/oos-reasons', payload)
+    return data as OosReasonListRow
   },
 }

@@ -187,3 +187,38 @@ func (c *ListsAdminController) CreateJobTitle(ctx http.Context) http.Response {
 	}
 	return ctx.Response().Success().Json(row)
 }
+
+func (c *ListsAdminController) ListOosReasons(ctx http.Context) http.Response {
+	result, err := c.lists.ListOosReasons(listFilterFromRequest(ctx))
+	if err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(result)
+}
+
+func (c *ListsAdminController) UpdateOosReason(ctx http.Context) http.Response {
+	id := uint(ctx.Request().RouteInt("id"))
+	if id == 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "id required"})
+	}
+	var body services.UpdateOosReasonInput
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	if err := c.lists.UpdateOosReason(id, body); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{"message": "out-of-station reason updated"})
+}
+
+func (c *ListsAdminController) CreateOosReason(ctx http.Context) http.Response {
+	var body services.CreateOosReasonInput
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	row, err := c.lists.CreateOosReason(body)
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(row)
+}
