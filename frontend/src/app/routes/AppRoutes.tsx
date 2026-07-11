@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthStore } from '@/stores/appStore'
+import { redirectToLogin } from '@/utils/authRedirect'
+import { getTokenExpiryMs } from '@/utils/jwt'
 import { AppLayout } from '@/components/templates/AppLayout'
 import { Card } from '@/components/atoms/Card'
 import { DashboardPageSkeleton } from '@/components/molecules/PageSkeletons'
@@ -196,11 +198,20 @@ function AuthenticatedApp() {
 }
 
 export function AppRoutes() {
-  const { isAuthenticated, token, authReady, hydrateToken } = useAuthStore()
+  const { isAuthenticated, token, authReady, hydrateToken, clearSession } = useAuthStore()
 
   useEffect(() => {
     hydrateToken()
   }, [hydrateToken])
+
+  useEffect(() => {
+    if (!authReady || !token) return
+    const expiresAt = getTokenExpiryMs(token)
+    if (expiresAt != null && expiresAt <= Date.now()) {
+      clearSession()
+      redirectToLogin()
+    }
+  }, [authReady, token, clearSession])
 
   if (!authReady) {
     return (
@@ -210,9 +221,18 @@ export function AppRoutes() {
     )
   }
 
-  if (!isAuthenticated || !token) {
-    return <LoginPage />
-  }
+  const signedIn = isAuthenticated && Boolean(token)
 
-  return <AuthenticatedApp />
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={signedIn ? <Navigate to="/dashboard" replace /> : <LoginPage />}
+      />
+      <Route
+        path="/*"
+        element={signedIn ? <AuthenticatedApp /> : <Navigate to="/login" replace />}
+      />
+    </Routes>
+  )
 }

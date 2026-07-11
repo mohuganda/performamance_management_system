@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Button, Card, Typography } from '@material-tailwind/react'
 import { Clock } from 'lucide-react'
 import {
@@ -9,6 +8,7 @@ import {
   SESSION_WARNING_MS,
 } from '@/constants/session'
 import { useAuthStore } from '@/stores/appStore'
+import { redirectToLogin } from '@/utils/authRedirect'
 import { getTokenExpiryMs } from '@/utils/jwt'
 import { mt } from '@/utils/mt'
 
@@ -24,8 +24,7 @@ function formatCountdown(ms: number): string {
 }
 
 export function SessionTimeoutGuard() {
-  const navigate = useNavigate()
-  const { isAuthenticated, token, logout, refreshSession } = useAuthStore()
+  const { isAuthenticated, token, clearSession, refreshSession } = useAuthStore()
 
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState<WarningReason>('idle')
@@ -71,6 +70,11 @@ export function SessionTimeoutGuard() {
     setDeadline(Date.now() + SESSION_WARNING_MS)
   }, [])
 
+  const endSession = useCallback(() => {
+    clearSession()
+    redirectToLogin()
+  }, [clearSession])
+
   const handleStaySignedIn = async () => {
     setBusy(true)
     try {
@@ -81,27 +85,17 @@ export function SessionTimeoutGuard() {
       lastActivityRef.current = Date.now()
       scheduleIdleTimer()
     } catch {
-      await logout()
-      navigate('/login', { replace: true })
+      endSession()
     } finally {
       setBusy(false)
     }
   }
 
-  const handleSignOut = async () => {
+  const handleSignOut = () => {
     if (signingOutRef.current) return
     signingOutRef.current = true
     setBusy(true)
-    try {
-      await logout()
-      navigate('/login', { replace: true })
-    } finally {
-      setBusy(false)
-      openRef.current = false
-      signingOutRef.current = false
-      setOpen(false)
-      setDeadline(null)
-    }
+    endSession()
   }
 
   useEffect(() => {
@@ -158,7 +152,7 @@ export function SessionTimeoutGuard() {
       setRemainingMs(left)
       if (left <= 0) {
         window.clearInterval(interval)
-        void handleSignOut()
+        handleSignOut()
       }
     }
 
@@ -210,7 +204,7 @@ export function SessionTimeoutGuard() {
             variant="outlined"
             className="rounded-sm normal-case"
             disabled={busy}
-            onClick={() => void handleSignOut()}
+            onClick={handleSignOut}
           >
             Sign out
           </Button>

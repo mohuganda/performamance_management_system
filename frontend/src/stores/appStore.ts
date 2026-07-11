@@ -26,6 +26,7 @@ interface AuthState {
   isAuthenticated: boolean
   authReady: boolean
   login: (email: string, password: string) => Promise<void>
+  clearSession: () => void
   logout: () => Promise<void>
   refreshSession: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -106,14 +107,7 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout: async () => {
-        try {
-          if (get().token) {
-            await authService.logout()
-          }
-        } catch {
-          // ignore logout errors
-        }
+      clearSession: () => {
         setAuthToken(null)
         set({
           token: null,
@@ -124,6 +118,18 @@ export const useAuthStore = create<AuthState>()(
           permissions: [],
           staffId: null,
         })
+      },
+
+      logout: async () => {
+        const hadToken = Boolean(get().token)
+        if (hadToken) {
+          try {
+            await authService.logout()
+          } catch {
+            // server logout is best-effort (token may already be expired)
+          }
+        }
+        get().clearSession()
       },
 
       refreshSession: async () => {

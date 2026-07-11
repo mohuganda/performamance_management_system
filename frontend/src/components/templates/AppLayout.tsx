@@ -11,6 +11,7 @@ import { ChevronDown, LogOut } from 'lucide-react'
 import { BrandLogo } from '@/components/atoms/BrandLogo'
 import { UserAccountMenu } from '@/components/molecules/UserAccountMenu'
 import { useAuthStore } from '@/stores/appStore'
+import { redirectToLogin } from '@/utils/authRedirect'
 import {
   isGroupActive,
   type NavGroup,
@@ -149,7 +150,10 @@ export function AppLayout() {
               variant="outlined"
               size="sm"
               className="flex items-center gap-1 rounded-sm border-ui-border text-ui-text"
-              onClick={() => logout()}
+              onClick={async () => {
+                await logout()
+                redirectToLogin()
+              }}
             >
               <LogOut className="h-4 w-4" />
               Sign out

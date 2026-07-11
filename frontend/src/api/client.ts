@@ -1,5 +1,13 @@
 import axios from 'axios'
 import { useAuthStore } from '@/stores/appStore'
+import { redirectToLogin } from '@/utils/authRedirect'
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** When true, a 401 response will not trigger session clear / login redirect. */
+    skipAuthHandler?: boolean
+  }
+}
 
 let authToken: string | null = null
 
@@ -47,10 +55,12 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      const { isAuthenticated, logout } = useAuthStore.getState()
+    const config = error.config
+    if (error.response?.status === 401 && !config?.skipAuthHandler) {
+      const { isAuthenticated, clearSession } = useAuthStore.getState()
       if (isAuthenticated) {
-        await logout()
+        clearSession()
+        redirectToLogin()
       }
     }
     return Promise.reject(error)

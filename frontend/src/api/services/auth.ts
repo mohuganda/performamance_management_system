@@ -94,7 +94,7 @@ export const authService = {
     return data
   },
   logout: async () => {
-    await apiClient.post('/auth/logout')
+    await apiClient.post('/auth/logout', {}, { skipAuthHandler: true })
   },
   refresh: async (): Promise<{ token: string; token_type: string }> => {
     const { data } = await apiClient.post<{ token: string; token_type: string }>('/auth/refresh')
