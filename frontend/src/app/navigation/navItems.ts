@@ -54,6 +54,13 @@ export const navGroups: NavGroup[] = [
         ],
         anyPermission: true,
       },
+    ],
+  },
+  {
+    id: 'approvals',
+    label: 'Approvals',
+    icon: ClipboardList,
+    items: [
       {
         id: 'approvals',
         label: 'Approvals',
