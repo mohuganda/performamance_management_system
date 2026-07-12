@@ -12,12 +12,14 @@ import {
   Typography,
 } from '@material-tailwind/react'
 import { Select, Option } from '@/components/molecules/MtSelect'
-import { Building2, Briefcase, Layers, MapPin, Navigation, Plus, Users } from 'lucide-react'
+import { Building2, Briefcase, Layers, MapPin, Navigation, Plus, RefreshCw, Users } from 'lucide-react'
 import {
   listsAdminService,
   type DepartmentListRow,
   type DistrictListRow,
   type FacilityListRow,
+  type FacilityTypeListRow,
+  type InstitutionTypeListRow,
   type JobTitleListRow,
   type RegionListRow,
   type OosReasonListRow,
@@ -29,7 +31,15 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { mt } from '@/utils/mt'
 import { notifyApiError, toast } from '@/features/toast'
 
-type ListTab = 'regions' | 'districts' | 'facilities' | 'departments' | 'job-titles' | 'oos-reasons'
+type ListTab =
+  | 'regions'
+  | 'districts'
+  | 'facilities'
+  | 'facility-types'
+  | 'institution-types'
+  | 'departments'
+  | 'job-titles'
+  | 'oos-reasons'
 
 function apiErrorMessage(error: unknown, fallback: string) {
   if (
@@ -126,6 +136,20 @@ export function ListsAdminPanel() {
     enabled: tab === 'facilities',
   })
 
+  const facilityTypesQuery = useQuery({
+    queryKey: ['admin', 'lists', 'facility-types', debouncedSearch, page, pageSize],
+    queryFn: () =>
+      listsAdminService.listFacilityTypes({ search: debouncedSearch || undefined, page, per_page: pageSize }),
+    enabled: tab === 'facility-types',
+  })
+
+  const institutionTypesQuery = useQuery({
+    queryKey: ['admin', 'lists', 'institution-types', debouncedSearch, page, pageSize],
+    queryFn: () =>
+      listsAdminService.listInstitutionTypes({ search: debouncedSearch || undefined, page, per_page: pageSize }),
+    enabled: tab === 'institution-types',
+  })
+
   const departmentsQuery = useQuery({
     queryKey: ['admin', 'lists', 'departments', debouncedSearch, page, pageSize],
     queryFn: () =>
@@ -152,6 +176,17 @@ export function ListsAdminPanel() {
     queryClient.invalidateQueries({ queryKey: ['oos', 'reasons'] })
   }
 
+  const refreshCatalogMutation = useMutation({
+    mutationFn: () => listsAdminService.refreshCatalog(),
+    onSuccess: (result) => {
+      toast.success(
+        `Catalog updated: ${result.facility_types_total} facility types, ${result.institution_types_total} institution types.`,
+      )
+      invalidate()
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not refresh facility and institution types'),
+  })
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (editRegion) {
@@ -169,6 +204,7 @@ export function ListsAdminPanel() {
           region_id: editDistrict.region_id || null,
           ihris_district_id: editDistrict.ihris_district_id || null,
           iso_code: editDistrict.iso_code,
+          map_key: editDistrict.map_key || null,
           is_active: editDistrict.is_active,
         })
       } else if (editFacility) {
@@ -263,6 +299,10 @@ export function ListsAdminPanel() {
   const summary = summaryQuery.data
   const regionOptions = regionOptionsQuery.data ?? []
   const districtOptions = districtOptionsQuery.data ?? []
+  const catalogNeedsRefresh =
+    !!summary &&
+    summary.facilities > 0 &&
+    ((summary.facility_types ?? 0) === 0 || (summary.institution_types ?? 0) === 0)
 
   const activeQuery =
     tab === 'regions'
@@ -271,11 +311,15 @@ export function ListsAdminPanel() {
         ? districtsQuery
         : tab === 'facilities'
           ? facilitiesQuery
-          : tab === 'departments'
-            ? departmentsQuery
-            : tab === 'job-titles'
-              ? jobTitlesQuery
-              : oosReasonsQuery
+          : tab === 'facility-types'
+            ? facilityTypesQuery
+            : tab === 'institution-types'
+              ? institutionTypesQuery
+              : tab === 'departments'
+                ? departmentsQuery
+                : tab === 'job-titles'
+                  ? jobTitlesQuery
+                  : oosReasonsQuery
 
   const toolbar = (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -351,14 +395,54 @@ export function ListsAdminPanel() {
         </Typography>
         <p className="mt-2 text-sm text-gray-600">
           Geography hierarchy: <strong>Region → District → Facility</strong>. Organisational lists include
-          departments and job titles synced from iHRIS. Out-of-station travel reasons appear on the travel
+          departments and job titles synced from iHRIS. Facility types and institution types are populated
+          during sync; departments are shared by facility type except at MoH and national referral hospitals.
           application form. Edits here are used for data scope assignment and reporting.
         </p>
+        {summaryQuery.isError ? (
+          <p className="mt-4 text-sm text-orange-700">
+            Could not load list counts. Tables below may still be available after you sign in with list
+            management permission.
+          </p>
+        ) : null}
+        {catalogNeedsRefresh ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p>
+              Facility and institution types are empty but facilities exist. Refresh the catalog from synced
+              iHRIS facility data.
+            </p>
+            <Button
+              {...mt}
+              size="sm"
+              className="flex items-center gap-2 rounded-sm bg-moh-green normal-case"
+              onClick={() => refreshCatalogMutation.mutate()}
+              loading={refreshCatalogMutation.isPending}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh catalog
+            </Button>
+          </div>
+        ) : null}
+        <div className="mt-4 flex justify-end">
+          <Button
+            {...mt}
+            size="sm"
+            variant="outlined"
+            className="flex items-center gap-2 rounded-sm border-moh-green/30 normal-case text-moh-green"
+            onClick={() => refreshCatalogMutation.mutate()}
+            loading={refreshCatalogMutation.isPending}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Sync types from facilities
+          </Button>
+        </div>
         {summary ? (
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
             <SummaryCard label="Regions" value={summary.regions} icon={Layers} />
             <SummaryCard label="Districts" value={summary.districts} icon={MapPin} />
             <SummaryCard label="Facilities" value={summary.facilities} icon={Building2} />
+            <SummaryCard label="Facility types" value={summary.facility_types ?? 0} icon={Layers} />
+            <SummaryCard label="Institution types" value={summary.institution_types ?? 0} icon={Building2} />
             <SummaryCard label="Departments" value={summary.departments} icon={Users} />
             <SummaryCard label="Job titles" value={summary.job_titles} icon={Briefcase} />
             <SummaryCard label="Travel reasons" value={summary.oos_reasons ?? 0} icon={Navigation} />
@@ -376,6 +460,12 @@ export function ListsAdminPanel() {
           </Tab>
           <Tab {...mt} value="facilities" onClick={() => setTab('facilities')}>
             Facilities
+          </Tab>
+          <Tab {...mt} value="facility-types" onClick={() => setTab('facility-types')}>
+            Facility types
+          </Tab>
+          <Tab {...mt} value="institution-types" onClick={() => setTab('institution-types')}>
+            Institution types
           </Tab>
           <Tab {...mt} value="departments" onClick={() => setTab('departments')}>
             Departments
@@ -448,6 +538,8 @@ export function ListsAdminPanel() {
               { key: 'name', label: 'Name' },
               { key: 'code', label: 'Code' },
               { key: 'region', label: 'Region' },
+              { key: 'iso', label: 'ISO' },
+              { key: 'map', label: 'Map key' },
               { key: 'ihris', label: 'iHRIS ID' },
               { key: 'facilities', label: 'Facilities' },
               { key: 'status', label: 'Status' },
@@ -463,6 +555,8 @@ export function ListsAdminPanel() {
                 <td className="px-3 py-2 font-medium">{row.name}</td>
                 <td className="px-3 py-2">{row.code}</td>
                 <td className="px-3 py-2">{row.region_name || row.region || '—'}</td>
+                <td className="px-3 py-2 text-xs text-gray-500">{row.iso_code || '—'}</td>
+                <td className="px-3 py-2 text-xs text-gray-500">{row.map_key || '—'}</td>
                 <td className="px-3 py-2 text-xs text-gray-500">{row.ihris_district_id || '—'}</td>
                 <td className="px-3 py-2">{row.facility_count}</td>
                 <td className="px-3 py-2">
@@ -486,13 +580,14 @@ export function ListsAdminPanel() {
         {tab === 'facilities' && facilitiesQuery.data ? (
           <ServerPaginatedTable
             title="Facilities"
-            description="Health facilities linked to districts (district_ref_id)"
+            description="Health facilities with iHRIS external ID, facility type, and institution type"
             columns={[
               { key: 'name', label: 'Name' },
               { key: 'ihris', label: 'iHRIS ID' },
+              { key: 'ftype', label: 'Facility type' },
+              { key: 'itype', label: 'Institution type' },
               { key: 'district', label: 'District' },
               { key: 'region', label: 'Region' },
-              { key: 'coords', label: 'Coordinates' },
               { key: 'status', label: 'Status' },
               { key: 'actions', label: '' },
             ]}
@@ -505,13 +600,10 @@ export function ListsAdminPanel() {
               <>
                 <td className="px-3 py-2 font-medium">{row.name}</td>
                 <td className="px-3 py-2 text-xs text-gray-500">{row.ihris_facility_id}</td>
+                <td className="px-3 py-2 text-sm">{row.facility_type_name || '—'}</td>
+                <td className="px-3 py-2 text-sm">{row.institution_type_name || '—'}</td>
                 <td className="px-3 py-2">{row.district_name || '—'}</td>
                 <td className="px-3 py-2">{row.region_name || '—'}</td>
-                <td className="px-3 py-2 text-xs text-gray-500">
-                  {row.latitude != null && row.longitude != null
-                    ? `${row.latitude}, ${row.longitude}`
-                    : '—'}
-                </td>
                 <td className="px-3 py-2">
                   <Chip
                     {...mt}
@@ -530,13 +622,80 @@ export function ListsAdminPanel() {
           />
         ) : null}
 
+        {tab === 'facility-types' && facilityTypesQuery.data ? (
+          <ServerPaginatedTable
+            title="Facility types"
+            description="Unique facility types from iHRIS — departments are shared within each type"
+            columns={[
+              { key: 'name', label: 'Name' },
+              { key: 'external', label: 'External ID' },
+              { key: 'facilities', label: 'Facilities' },
+              { key: 'status', label: 'Status' },
+            ]}
+            rows={facilityTypesQuery.data.data}
+            pagination={facilityTypesQuery.data}
+            onPageChange={setPage}
+            rowKey={(row) => row.id}
+            toolbar={toolbar}
+            renderRow={(row: FacilityTypeListRow) => (
+              <>
+                <td className="px-3 py-2 font-medium">{row.name}</td>
+                <td className="px-3 py-2 text-xs text-gray-500">{row.external_system_id}</td>
+                <td className="px-3 py-2">{row.facility_count}</td>
+                <td className="px-3 py-2">
+                  <Chip
+                    {...mt}
+                    size="sm"
+                    value={row.is_active ? 'Active' : 'Inactive'}
+                    className={row.is_active ? 'bg-moh-green/10 text-moh-green' : 'bg-gray-100'}
+                  />
+                </td>
+              </>
+            )}
+          />
+        ) : null}
+
+        {tab === 'institution-types' && institutionTypesQuery.data ? (
+          <ServerPaginatedTable
+            title="Institution types"
+            description="Institution classification from iHRIS (e.g. Regional Referral, National Referral, Ministry)"
+            columns={[
+              { key: 'name', label: 'Name' },
+              { key: 'external', label: 'External ID' },
+              { key: 'facilities', label: 'Facilities' },
+              { key: 'status', label: 'Status' },
+            ]}
+            rows={institutionTypesQuery.data.data}
+            pagination={institutionTypesQuery.data}
+            onPageChange={setPage}
+            rowKey={(row) => row.id}
+            toolbar={toolbar}
+            renderRow={(row: InstitutionTypeListRow) => (
+              <>
+                <td className="px-3 py-2 font-medium">{row.name}</td>
+                <td className="px-3 py-2 text-xs text-gray-500">{row.external_system_id}</td>
+                <td className="px-3 py-2">{row.facility_count}</td>
+                <td className="px-3 py-2">
+                  <Chip
+                    {...mt}
+                    size="sm"
+                    value={row.is_active ? 'Active' : 'Inactive'}
+                    className={row.is_active ? 'bg-moh-green/10 text-moh-green' : 'bg-gray-100'}
+                  />
+                </td>
+              </>
+            )}
+          />
+        ) : null}
+
         {tab === 'departments' && departmentsQuery.data ? (
           <ServerPaginatedTable
             title="Departments"
-            description="Organisational departments linked to facilities during iHRIS sync"
+            description="Departments by facility type (shared) or by facility for MoH and national referral hospitals"
             columns={[
               { key: 'name', label: 'Name' },
-              { key: 'facility', label: 'Facility' },
+              { key: 'scope', label: 'Scope' },
+              { key: 'facility', label: 'Facility / type' },
               { key: 'external', label: 'External ID' },
               { key: 'actions', label: '' },
             ]}
@@ -548,7 +707,10 @@ export function ListsAdminPanel() {
             renderRow={(row) => (
               <>
                 <td className="px-3 py-2 font-medium">{row.name}</td>
-                <td className="px-3 py-2 text-sm text-gray-600">{row.facility_name || '—'}</td>
+                <td className="px-3 py-2 text-sm text-gray-600">{row.scope || '—'}</td>
+                <td className="px-3 py-2 text-sm text-gray-600">
+                  {row.facility_name || row.facility_type_name || '—'}
+                </td>
                 <td className="px-3 py-2 text-xs text-gray-500">{row.external_system_id}</td>
                 <td className="px-3 py-2">
                   <Button {...mt} size="sm" variant="text" onClick={() => setEditDepartment({ ...row })}>
@@ -622,6 +784,13 @@ export function ListsAdminPanel() {
             )}
           />
         ) : null}
+
+        {!activeQuery.data && !activeQuery.isLoading && !activeQuery.isError ? (
+          <div className="rounded-sm border border-gray-100 bg-white p-8 text-center text-sm text-gray-500">
+            No list data loaded for this tab yet. Try refreshing or check that your account has{' '}
+            <code className="text-xs">settings.lists.manage</code> permission.
+          </div>
+        ) : null}
       </QueryState>
 
       {(editRegion || editDistrict || editFacility || editDepartment || editJobTitle || editOosReason) && (
@@ -647,6 +816,7 @@ export function ListsAdminPanel() {
               </Select>
               <Input {...mt} label="iHRIS district ID" value={editDistrict.ihris_district_id ?? ''} onChange={(e) => setEditDistrict({ ...editDistrict, ihris_district_id: e.target.value })} />
               <Input {...mt} label="ISO code" value={editDistrict.iso_code} onChange={(e) => setEditDistrict({ ...editDistrict, iso_code: e.target.value })} />
+              <Input {...mt} label="Map key" value={editDistrict.map_key ?? ''} onChange={(e) => setEditDistrict({ ...editDistrict, map_key: e.target.value })} />
               <Toggle label="Active" checked={editDistrict.is_active} onChange={(checked) => setEditDistrict({ ...editDistrict, is_active: checked })} />
             </div>
           ) : null}

@@ -28,6 +28,7 @@ type MobileController struct {
 	attendance  *services.AttendanceService
 	approval    *services.ApprovalService
 	performance *services.PerformanceService
+	approvals   *services.ApprovalsInboxService
 }
 
 func NewMobileController() *MobileController {
@@ -37,6 +38,7 @@ func NewMobileController() *MobileController {
 		attendance:  services.NewAttendanceService(),
 		approval:    services.NewApprovalService(),
 		performance: services.NewPerformanceService(),
+		approvals:   services.NewApprovalsInboxService(),
 	}
 }
 
@@ -622,6 +624,34 @@ func (c *MobileController) ReviewPerformanceAppraisal(ctx http.Context) http.Res
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 	}
 	return jsonResponse(ctx, http.StatusOK, bundle)
+}
+
+func (c *MobileController) ApprovalsInbox(ctx http.Context) http.Response {
+	staffID, _ := staffIDFromContext(ctx)
+	if staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	payload, err := c.approvals.Inbox(staffID)
+	if err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return jsonResponse(ctx, http.StatusOK, payload)
+}
+
+func (c *MobileController) ReviewPerformancePpa(ctx http.Context) http.Response {
+	staffID, _ := staffIDFromContext(ctx)
+	if staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	var body services.PpaReviewInput
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	ppa, err := c.performance.ReviewPpa(staffID, body)
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return jsonResponse(ctx, http.StatusOK, ppa)
 }
 
 // PerformanceStatusReport godoc

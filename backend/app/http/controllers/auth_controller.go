@@ -70,6 +70,23 @@ func (c *AuthController) RequestActivation(ctx http.Context) http.Response {
 	})
 }
 
+// RequestPasswordReset godoc
+// @Summary      Request password reset email
+// @Tags         auth
+// @Router       /api/v1/auth/request-password-reset [post]
+func (c *AuthController) RequestPasswordReset(ctx http.Context) http.Response {
+	var body requestActivationBody
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	if err := c.activation.RequestPasswordReset(body.Email); err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{
+		"message": "If an account exists for this email, you will receive a password reset link within a few minutes.",
+	})
+}
+
 // PreviewActivation godoc
 // @Summary      Preview activation token
 // @Tags         auth

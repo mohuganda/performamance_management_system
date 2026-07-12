@@ -95,6 +95,7 @@ export function normalizeStaffList(value: unknown): StaffListRow[] {
       department_name: String(field<string>(row, 'department_name', 'DepartmentName') ?? ''),
       hr_department_id: field<number>(row, 'hr_department_id', 'HrDepartmentID'),
       hr_department_name: String(field<string>(row, 'hr_department_name', 'HrDepartment') ?? '') || undefined,
+      is_leave_manager: Boolean(field<boolean>(row, 'is_leave_manager', 'IsLeaveManager')),
       has_supervisor: Boolean(field<boolean>(row, 'has_supervisor', 'HasSupervisor')),
       supervisor_name: String(field<string>(row, 'supervisor_name', 'SupervisorName') ?? '') || undefined,
       supervisors: normalizeSupervisors(row.supervisors ?? row.Supervisors),
@@ -117,6 +118,7 @@ export type StaffListRow = {
   department_name: string
   hr_department_id?: number
   hr_department_name?: string
+  is_leave_manager?: boolean
   has_supervisor: boolean
   supervisor_name?: string
   supervisors?: SupervisorAssignment[]

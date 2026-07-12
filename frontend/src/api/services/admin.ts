@@ -57,6 +57,14 @@ export type AdminSettings = {
       api_key: string
       country_code?: string
     }
+    analytics?: {
+      enabled: boolean
+      connected: boolean
+      engine: string
+      database: string
+      message?: string
+      last_sync_at?: string
+    }
   }
   email: {
     driver: 'smtp' | 'exchange'
@@ -127,11 +135,13 @@ export const performanceAdminService = {
 
 export const ihrisAdminService = {
   status: async (): Promise<IhrisSyncStatus> => {
-    const { data } = await apiClient.get('/ihris/sync/status')
+    const { data } = await apiClient.get('/ihris/sync/status', { timeout: 30_000 })
     return data
   },
   syncBatch: async (opts?: { run_id?: number; start_page?: number; pages_per_batch?: number }) => {
-    const { data } = await apiClient.post<IhrisSyncBatchResult>('/ihris/sync', opts ?? {})
+    const { data } = await apiClient.post<IhrisSyncBatchResult>('/ihris/sync', opts ?? {}, {
+      timeout: 180_000,
+    })
     return data
   },
 }
@@ -149,6 +159,33 @@ export type HrmAttendSyncResult = {
 export const hrmAttendAdminService = {
   syncSummaries: async (opts?: { year_month?: string }): Promise<HrmAttendSyncResult> => {
     const { data } = await apiClient.post<HrmAttendSyncResult>('/hrm-attend/sync', opts ?? {})
+    return data
+  },
+}
+
+export type DorisAnalyticsStatus = {
+  enabled: boolean
+  connected: boolean
+  engine: string
+  database: string
+  message?: string
+  last_sync_at?: string
+}
+
+export type DorisSyncResult = {
+  tables: Record<string, number>
+  started_at: string
+  finished_at: string
+  message: string
+}
+
+export const analyticsAdminService = {
+  status: async (): Promise<DorisAnalyticsStatus> => {
+    const { data } = await apiClient.get('/admin/analytics/status')
+    return data
+  },
+  sync: async (): Promise<DorisSyncResult> => {
+    const { data } = await apiClient.post('/admin/analytics/doris/sync', {}, { timeout: 300_000 })
     return data
   },
 }
@@ -179,6 +216,7 @@ export const staffManagementService = {
       hr_email?: string
       hr_mobile?: string
       notes?: string
+      is_leave_manager?: boolean
       lock_email?: boolean
       lock_department?: boolean
       lock_mobile?: boolean

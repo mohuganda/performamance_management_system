@@ -22,6 +22,14 @@ func (c *ListsAdminController) Summary(ctx http.Context) http.Response {
 	return ctx.Response().Success().Json(summary)
 }
 
+func (c *ListsAdminController) RefreshCatalog(ctx http.Context) http.Response {
+	result, err := c.lists.RefreshCatalog()
+	if err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(result)
+}
+
 func listFilterFromRequest(ctx http.Context) services.ListFilter {
 	return services.ListFilter{
 		Search:     ctx.Request().Query("search", ""),
@@ -59,6 +67,22 @@ func (c *ListsAdminController) ListFacilities(ctx http.Context) http.Response {
 
 func (c *ListsAdminController) ListDepartments(ctx http.Context) http.Response {
 	result, err := c.lists.ListDepartments(listFilterFromRequest(ctx))
+	if err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(result)
+}
+
+func (c *ListsAdminController) ListFacilityTypes(ctx http.Context) http.Response {
+	result, err := c.lists.ListFacilityTypes(listFilterFromRequest(ctx))
+	if err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(result)
+}
+
+func (c *ListsAdminController) ListInstitutionTypes(ctx http.Context) http.Response {
+	result, err := c.lists.ListInstitutionTypes(listFilterFromRequest(ctx))
 	if err != nil {
 		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
 	}

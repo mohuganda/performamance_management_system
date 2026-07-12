@@ -13,6 +13,7 @@ func Api() {
 	configController := controllers.NewConfigController()
 	ihrisController := controllers.NewIhrisController()
 	hrmAttendController := controllers.NewHrmAttendController()
+	analyticsController := controllers.NewAnalyticsController()
 	settingsAdminController := controllers.NewSettingsAdminController()
 	uploadController := controllers.NewUploadController()
 	notificationsAdminController := controllers.NewNotificationsAdminController()
@@ -34,6 +35,7 @@ func Api() {
 		router.Post("/auth/login", authController.Login)
 		router.Post("/auth/login/totp", authController.LoginTotp)
 		router.Post("/auth/request-activation", authController.RequestActivation)
+		router.Post("/auth/request-password-reset", authController.RequestPasswordReset)
 		router.Get("/auth/activation/{token}", authController.PreviewActivation)
 		router.Post("/auth/activation/complete", authController.CompleteActivation)
 
@@ -55,6 +57,9 @@ func Api() {
 
 			auth.Middleware(middleware.Permission("ihris.sync")).Post("/ihris/sync", ihrisController.Sync)
 			auth.Middleware(middleware.Permission("ihris.sync")).Get("/ihris/sync/status", ihrisController.Status)
+
+			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Get("/admin/analytics/status", analyticsController.Status)
+			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Post("/admin/analytics/doris/sync", analyticsController.Sync)
 
 			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Post("/hrm-attend/sync", hrmAttendController.Sync)
 
@@ -121,9 +126,12 @@ func Api() {
 
 			auth.Prefix("admin/lists").Middleware(middleware.Permission("settings.manage", "settings.lists.manage")).Group(func(lists route.Router) {
 				lists.Get("/summary", listsAdminController.Summary)
+				lists.Post("/refresh-catalog", listsAdminController.RefreshCatalog)
 				lists.Get("/regions", listsAdminController.ListRegions)
 				lists.Get("/districts", listsAdminController.ListDistricts)
 				lists.Get("/facilities", listsAdminController.ListFacilities)
+				lists.Get("/facility-types", listsAdminController.ListFacilityTypes)
+				lists.Get("/institution-types", listsAdminController.ListInstitutionTypes)
 				lists.Get("/departments", listsAdminController.ListDepartments)
 				lists.Get("/job-titles", listsAdminController.ListJobTitles)
 				lists.Get("/region-options", listsAdminController.RegionOptions)
@@ -178,6 +186,7 @@ func Api() {
 				kpi.Middleware(middleware.Permission("kpi.assignments.manage")).Delete("/assignments/{id}", kpiAdminController.DeactivateAssignment)
 				kpi.Middleware(middleware.Permission("kpi.assignments.view", "kpi.assignments.manage")).Get("/jobs", kpiAdminController.ListJobs)
 				kpi.Middleware(middleware.Permission("kpi.assignments.view", "kpi.assignments.manage")).Get("/departments", kpiAdminController.ListDepartments)
+				kpi.Middleware(middleware.Permission("kpi.assignments.view", "kpi.assignments.manage")).Get("/assignment-targets", kpiAdminController.AssignmentTargets)
 				kpi.Middleware(middleware.Permission("kpi.assignments.manage")).Get("/staff-search", kpiAdminController.SearchStaff)
 			})
 
@@ -185,6 +194,8 @@ func Api() {
 			auth.Get("/files", uploadController.ServeUploadedFile)
 
 			auth.Prefix("mobile").Group(func(mobile route.Router) {
+				mobile.Get("/approvals/inbox", mobileController.ApprovalsInbox)
+
 				mobile.Middleware(middleware.Permission("leave.requests.view")).Get("/leave/config", mobileController.LeaveConfig)
 				mobile.Middleware(middleware.Permission("leave.requests.view")).Get("/leave/types", mobileController.ListLeaveTypes)
 				mobile.Middleware(middleware.Permission("leave.requests.view")).Get("/leave/balances", mobileController.ListLeaveBalances)
@@ -212,6 +223,7 @@ func Api() {
 				mobile.Middleware(middleware.Permission("performance.view")).Post("/performance/reports", mobileController.SubmitPerformanceReport)
 				mobile.Middleware(middleware.Permission("performance.view")).Post("/performance/appraisal", mobileController.SavePerformanceAppraisal)
 				mobile.Middleware(middleware.Permission("performance.view")).Get("/performance/appraisal", mobileController.GetPerformanceAppraisal)
+				mobile.Middleware(middleware.Permission("performance.view")).Post("/performance/ppa/review", mobileController.ReviewPerformancePpa)
 				mobile.Middleware(middleware.Permission("performance.view")).Get("/performance/pending-appraisals", mobileController.ListPendingAppraisalReviews)
 				mobile.Middleware(middleware.Permission("performance.view")).Post("/performance/appraisal/review", mobileController.ReviewPerformanceAppraisal)
 				mobile.Get("/performance/status-report", mobileController.PerformanceStatusReport)

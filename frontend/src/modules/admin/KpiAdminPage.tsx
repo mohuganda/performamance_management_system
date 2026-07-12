@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -13,7 +13,6 @@ import {
   Link2,
   Pencil,
   Plus,
-  Search,
   Shield,
   Target,
   Trash2,
@@ -33,8 +32,13 @@ import {
   Typography,
 } from '@material-tailwind/react'
 import { Select, Option } from '@/components/molecules/MtSelect'
-import { SearchableMultiSelect } from '@/components/molecules/SearchableMultiSelect'
-import { kpiAdminService, type KpiAssignmentRow, type KpiRow } from '@/api/services/kpiAdmin'
+import { SearchableSelect } from '@/components/molecules/SearchableSelect'
+import {
+  kpiAdminService,
+  type KpiAssignmentRow,
+  type KpiAssignmentTargetOption,
+  type KpiRow,
+} from '@/api/services/kpiAdmin'
 import { kpiCategoryLabel } from '@/utils/normalizeApi'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { ProcessGuide } from '@/components/organisms/ProcessGuide'
@@ -54,7 +58,8 @@ const KPI_STEPS = [
   },
   {
     title: 'Assign KPIs to roles',
-    description: 'Map mandatory KPIs to job titles, optional pools to departments, and individual overrides to staff.',
+    description:
+      'Map KPIs by facility type, facility, department, job title, or individual staff — each level is independent.',
     actor: 'HR Officer',
   },
   {
@@ -63,6 +68,78 @@ const KPI_STEPS = [
     actor: 'Employee',
   },
 ]
+
+type AssignLevel = 'facility_type' | 'facility' | 'department' | 'job' | 'staff'
+
+const ASSIGN_LEVELS: Array<{
+  id: AssignLevel
+  label: string
+  hint: string
+  icon: typeof Layers
+}> = [
+  {
+    id: 'facility_type',
+    label: 'Facility type',
+    hint: 'Every facility of this type (e.g. HCIII, National Referral)',
+    icon: Layers,
+  },
+  {
+    id: 'facility',
+    label: 'Facility',
+    hint: 'One specific facility',
+    icon: Building2,
+  },
+  {
+    id: 'department',
+    label: 'Department',
+    hint: 'Department pool — facility type shown for context only',
+    icon: Building2,
+  },
+  {
+    id: 'job',
+    label: 'Job title',
+    hint: 'Everyone with this job title',
+    icon: Briefcase,
+  },
+  {
+    id: 'staff',
+    label: 'Individual',
+    hint: 'One staff member',
+    icon: User,
+  },
+]
+
+function assignmentTargetLabel(row: KpiAssignmentRow) {
+  if (row.assignable_type === 'facility_type') return row.facility_type_name || '—'
+  if (row.assignable_type === 'facility') return row.facility_name || '—'
+  if (row.assignable_type === 'department') {
+    const name = row.department_name || '—'
+    return row.facility_type_name ? `${name} · ${row.facility_type_name}` : name
+  }
+  if (row.assignable_type === 'job') return row.job_title || '—'
+  return row.staff_name || '—'
+}
+
+function assignTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    facility_type: 'Facility type',
+    facility: 'Facility',
+    department: 'Department',
+    job: 'Job title',
+    staff: 'Individual',
+  }
+  return labels[type] ?? type
+}
+
+function targetOptionsToSelect(
+  items: KpiAssignmentTargetOption[] | undefined,
+): { value: string; label: string; description?: string }[] {
+  return (items ?? []).map((item) => ({
+    value: String(item.id),
+    label: item.name,
+    description: item.subtitle,
+  }))
+}
 
 const emptyKpiForm = {
   kpi_code: '',
@@ -114,12 +191,15 @@ export function KpiAdminPage() {
   const [kpiForm, setKpiForm] = useState(emptyKpiForm)
   const [assignForm, setAssignForm] = useState({
     kpi_ids: [] as string[],
-    assignable_type: 'job',
-    job_id: '',
+    assignable_type: 'facility_type' as AssignLevel,
+    facility_type_ref_id: '',
+    facility_id: '',
     department_id: '',
+    job_id: '',
     staff_id: '',
     staff_search: '',
   })
+  const [kpiAssignSearch, setKpiAssignSearch] = useState('')
 
   const permissionsQuery = useQuery({
     queryKey: ['admin', 'kpi', 'permissions'],
@@ -169,8 +249,14 @@ export function KpiAdminPage() {
       kpiAdminService.listKpis({
         active_only: true,
         page: 1,
-        per_page: 500,
+        per_page: 1000,
       }),
+    enabled: canManageAssignments,
+  })
+
+  const assignmentTargetsQuery = useQuery({
+    queryKey: ['admin', 'kpi', 'assignment-targets'],
+    queryFn: () => kpiAdminService.assignmentTargets(),
     enabled: canManageAssignments,
   })
 
@@ -184,18 +270,6 @@ export function KpiAdminPage() {
         per_page: pageSize,
       }),
     enabled: canViewAssignments,
-  })
-
-  const jobsQuery = useQuery({
-    queryKey: ['admin', 'kpi', 'jobs'],
-    queryFn: () => kpiAdminService.listJobs(),
-    enabled: canManageAssignments,
-  })
-
-  const departmentsQuery = useQuery({
-    queryKey: ['admin', 'kpi', 'departments'],
-    queryFn: () => kpiAdminService.listDepartments(),
-    enabled: canManageAssignments,
   })
 
   const staffQuery = useQuery({
@@ -253,6 +327,10 @@ export function KpiAdminPage() {
       kpiAdminService.createAssignment({
         kpi_ids: assignForm.kpi_ids.map(Number),
         assignable_type: assignForm.assignable_type,
+        facility_type_ref_id: assignForm.facility_type_ref_id
+          ? Number(assignForm.facility_type_ref_id)
+          : undefined,
+        facility_id: assignForm.facility_id ? Number(assignForm.facility_id) : undefined,
         job_id: assignForm.job_id ? Number(assignForm.job_id) : undefined,
         department_id: assignForm.department_id ? Number(assignForm.department_id) : undefined,
         staff_id: assignForm.staff_id ? Number(assignForm.staff_id) : undefined,
@@ -341,19 +419,60 @@ export function KpiAdminPage() {
   }
   const subjectAreas = subjectAreasQuery.data ?? []
   const categories = categoriesQuery.data ?? []
-  const jobs = jobsQuery.data ?? []
-  const departments = departmentsQuery.data ?? []
+  const assignmentTargets = assignmentTargetsQuery.data
   const staffOptions = staffQuery.data ?? []
   const assignmentKpis = assignmentKpisQuery.data?.data ?? []
-  const assignmentKpiOptions = assignmentKpis.map((k) => ({
-    value: String(k.id),
-    label: `${k.kpi_code} — ${k.short_name || k.indicator_statement.slice(0, 48)}`,
-    description: k.subject_area_name,
-  }))
+  const filteredAssignmentKpis = useMemo(() => {
+    const needle = kpiAssignSearch.trim().toLowerCase()
+    if (!needle) return assignmentKpis
+    return assignmentKpis.filter((kpi) => {
+      const haystack = `${kpi.kpi_code} ${kpi.short_name} ${kpi.indicator_statement} ${kpi.subject_area_name ?? ''}`.toLowerCase()
+      return haystack.includes(needle)
+    })
+  }, [assignmentKpis, kpiAssignSearch])
+
+  const toggleAssignKpi = (kpiId: string) => {
+    setAssignForm((f) => ({
+      ...f,
+      kpi_ids: f.kpi_ids.includes(kpiId)
+        ? f.kpi_ids.filter((id) => id !== kpiId)
+        : [...f.kpi_ids, kpiId],
+    }))
+  }
+
+  const selectAllKpis = () => {
+    setAssignForm((f) => ({
+      ...f,
+      kpi_ids: assignmentKpis.map((kpi) => String(kpi.id)),
+    }))
+  }
+
+  const selectFilteredKpis = () => {
+    const visibleIds = filteredAssignmentKpis.map((kpi) => String(kpi.id))
+    setAssignForm((f) => ({
+      ...f,
+      kpi_ids: Array.from(new Set([...f.kpi_ids, ...visibleIds])),
+    }))
+  }
+
+  const clearKpiSelection = () => {
+    setAssignForm((f) => ({ ...f, kpi_ids: [] }))
+  }
   const assignTargetReady =
+    (assignForm.assignable_type === 'facility_type' && Boolean(assignForm.facility_type_ref_id)) ||
+    (assignForm.assignable_type === 'facility' && Boolean(assignForm.facility_id)) ||
     (assignForm.assignable_type === 'job' && Boolean(assignForm.job_id)) ||
     (assignForm.assignable_type === 'department' && Boolean(assignForm.department_id)) ||
     (assignForm.assignable_type === 'staff' && Boolean(assignForm.staff_id))
+  const activeAssignLevel = ASSIGN_LEVELS.find((level) => level.id === assignForm.assignable_type)
+  const staffSelectOptions = staffOptions.map((s) => {
+    const parts = [s.job_title, s.department_name, s.facility_name, s.facility_type_name].filter(Boolean)
+    return {
+      value: String(s.staff_id),
+      label: s.name,
+      description: parts.length > 0 ? parts.join(' · ') : s.email,
+    }
+  })
   const canSubmitAssignment = assignForm.kpi_ids.length > 0 && assignTargetReady
   const autoKpiCode =
     kpiModalMode === 'create'
@@ -367,7 +486,7 @@ export function KpiAdminPage() {
     <div className="pb-8">
       <PageHeader
         title="KPI Management"
-        subtitle="Catalog indicators and assign them to jobs, departments, and staff"
+        subtitle="Catalog indicators and assign them across facility types, facilities, departments, jobs, and staff"
         actions={
           tab === 'catalog' && canManageCatalog ? (
             <Button
@@ -452,7 +571,6 @@ export function KpiAdminPage() {
                   label="Search KPIs"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  icon={<Search className="h-4 w-4" />}
                 />
               </div>
               <Select
@@ -809,130 +927,251 @@ export function KpiAdminPage() {
       {tab === 'assignments' && canViewAssignments ? (
         <>
           {canManageAssignments ? (
-            <Card {...mt} className="mb-4 rounded-sm border border-ui-border p-4">
-              <div className="mb-4 flex items-center gap-2">
-                <Plus className="h-4 w-4 text-moh-green" />
-                <Typography {...mt} className="text-sm font-bold uppercase text-ui-text">
-                  New assignment
-                </Typography>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <div className="md:col-span-2 lg:col-span-3">
-                  <SearchableMultiSelect
-                    label="KPIs"
-                    values={assignForm.kpi_ids}
-                    options={assignmentKpiOptions}
-                    onChange={(kpi_ids) => setAssignForm((f) => ({ ...f, kpi_ids }))}
-                    placeholder="Search KPIs to assign…"
-                    emptyLabel="— Select one or more KPIs —"
+            <Card
+              {...mt}
+              className="mb-6 overflow-hidden rounded-lg border border-moh-green/20 bg-gradient-to-br from-white via-white to-moh-green/[0.03] p-0 shadow-sm"
+            >
+              <div className="border-b border-moh-green/10 bg-moh-green/[0.04] px-5 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-moh-green text-white">
+                      <Plus className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <Typography {...mt} className="text-sm font-bold uppercase tracking-wide text-ui-text">
+                        New assignment
+                      </Typography>
+                      <Typography {...mt} className="text-xs text-gray-500">
+                        Select KPIs, pick a target level, then assign in one step
+                      </Typography>
+                    </div>
+                  </div>
+                  <Chip
+                    {...mt}
+                    value={`${assignForm.kpi_ids.length} selected`}
+                    className="rounded-full bg-white normal-case text-moh-green"
+                    variant="outlined"
                   />
-                  {assignForm.kpi_ids.length > 0 ? (
-                    <Typography {...mt} variant="small" className="mt-1 text-gray-500">
-                      {assignForm.kpi_ids.length} KPI{assignForm.kpi_ids.length === 1 ? '' : 's'} selected
-                    </Typography>
-                  ) : null}
                 </div>
-                <Select
-                  {...mt}
-                  label="Assign to"
-                  value={assignForm.assignable_type}
-                  onChange={(v) =>
-                    setAssignForm((f) => ({
-                      ...f,
-                      assignable_type: v ?? 'job',
-                      job_id: '',
-                      department_id: '',
-                      staff_id: '',
-                    }))
-                  }
-                >
-                  <Option value="job">
-                    <span className="flex items-center gap-2">
-                      <Briefcase className="h-3.5 w-3.5" />
-                      Job title (mandatory)
-                    </span>
-                  </Option>
-                  <Option value="department">
-                    <span className="flex items-center gap-2">
-                      <Building2 className="h-3.5 w-3.5" />
-                      Department pool
-                    </span>
-                  </Option>
-                  <Option value="staff">
-                    <span className="flex items-center gap-2">
-                      <User className="h-3.5 w-3.5" />
-                      Individual staff
-                    </span>
-                  </Option>
-                </Select>
-                {assignForm.assignable_type === 'job' ? (
-                  <Select
-                    {...mt}
-                    label="Job title"
-                    value={assignForm.job_id}
-                    onChange={(v) => setAssignForm((f) => ({ ...f, job_id: v ?? '' }))}
-                  >
-                    <Option value="">— Select job —</Option>
-                    {jobs.map((j) => (
-                      <Option key={j.id} value={String(j.id)}>
-                        {j.job_title}
-                      </Option>
-                    ))}
-                  </Select>
-                ) : null}
-                {assignForm.assignable_type === 'department' ? (
-                  <Select
-                    {...mt}
-                    label="Department"
-                    value={assignForm.department_id}
-                    onChange={(v) => setAssignForm((f) => ({ ...f, department_id: v ?? '' }))}
-                  >
-                    <Option value="">— Select department —</Option>
-                    {departments.map((d) => (
-                      <Option key={d.id} value={String(d.id)}>
-                        {d.name}
-                      </Option>
-                    ))}
-                  </Select>
-                ) : null}
-                {assignForm.assignable_type === 'staff' ? (
-                  <>
-                    <Input
-                      {...mt}
-                      label="Search staff"
-                      value={assignForm.staff_search}
-                      onChange={(e) =>
-                        setAssignForm((f) => ({ ...f, staff_search: e.target.value, staff_id: '' }))
-                      }
-                    />
-                    <Select
-                      {...mt}
-                      label="Staff member"
-                      value={assignForm.staff_id}
-                      onChange={(v) => setAssignForm((f) => ({ ...f, staff_id: v ?? '' }))}
-                    >
-                      <Option value="">— Select staff —</Option>
-                      {staffOptions.map((s) => (
-                        <Option key={s.staff_id} value={String(s.staff_id)}>
-                          {s.name} {s.email ? `(${s.email})` : ''}
-                        </Option>
-                      ))}
-                    </Select>
-                  </>
-                ) : null}
               </div>
-              <Button
-                {...mt}
-                size="sm"
-                className="mt-4 flex items-center gap-2 rounded-sm bg-moh-green"
-                disabled={!canSubmitAssignment || assignMutation.isPending}
-                onClick={() => assignMutation.mutate()}
-              >
-                <Link2 className="h-4 w-4" />
-                {assignForm.kpi_ids.length > 1
-                  ? `Assign ${assignForm.kpi_ids.length} KPIs`
-                  : 'Assign KPI'}
-              </Button>
+
+              <div className="grid gap-0 lg:grid-cols-2">
+                <div className="border-b border-ui-border p-5 lg:border-b-0 lg:border-r">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <Typography {...mt} className="text-sm font-semibold text-ui-text">
+                      KPI catalog
+                    </Typography>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <button
+                        type="button"
+                        className="rounded-full border border-moh-green/30 px-2.5 py-1 font-medium text-moh-green transition hover:bg-moh-green/5"
+                        onClick={selectAllKpis}
+                        disabled={assignmentKpis.length === 0}
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full border border-ui-border px-2.5 py-1 font-medium text-gray-600 transition hover:bg-ui-subtle"
+                        onClick={selectFilteredKpis}
+                        disabled={filteredAssignmentKpis.length === 0}
+                      >
+                        Select filtered
+                      </button>
+                      {assignForm.kpi_ids.length > 0 ? (
+                        <button
+                          type="button"
+                          className="rounded-full px-2.5 py-1 font-medium text-gray-500 transition hover:bg-ui-subtle"
+                          onClick={clearKpiSelection}
+                        >
+                          Clear
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                  <Input
+                    {...mt}
+                    label="Search KPIs"
+                    value={kpiAssignSearch}
+                    onChange={(e) => setKpiAssignSearch(e.target.value)}
+                    crossOrigin=""
+                  />
+                  <div className="mt-3 min-h-[20rem] max-h-[32rem] overflow-y-auto rounded-lg border border-ui-border bg-white shadow-inner">
+                    {assignmentKpisQuery.isLoading ? (
+                      <p className="px-4 py-12 text-center text-sm text-gray-500">Loading KPIs…</p>
+                    ) : filteredAssignmentKpis.length === 0 ? (
+                      <p className="px-4 py-12 text-center text-sm text-gray-500">
+                        {kpiAssignSearch.trim()
+                          ? `No KPIs match “${kpiAssignSearch.trim()}”.`
+                          : 'No active KPIs in the catalog yet.'}
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-gray-100">
+                        {filteredAssignmentKpis.map((kpi) => {
+                          const kpiId = String(kpi.id)
+                          const checked = assignForm.kpi_ids.includes(kpiId)
+                          const title = kpi.short_name || kpi.indicator_statement.slice(0, 80)
+                          return (
+                            <li key={kpiId}>
+                              <label
+                                className={`flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors ${
+                                  checked ? 'bg-moh-green/[0.08]' : 'hover:bg-moh-green/[0.04]'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleAssignKpi(kpiId)}
+                                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-moh-green focus:ring-moh-green"
+                                />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-sm font-medium text-ui-text">
+                                    <span className="font-mono text-xs text-moh-green">{kpi.kpi_code}</span>
+                                    <span className="mx-1.5 text-gray-300">·</span>
+                                    {title}
+                                  </span>
+                                  {kpi.subject_area_name ? (
+                                    <span className="mt-0.5 block text-xs text-gray-500">
+                                      {kpi.subject_area_name}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </label>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                  <Typography {...mt} className="mt-2 text-xs text-gray-500">
+                    {assignmentKpis.length} active KPI{assignmentKpis.length === 1 ? '' : 's'} in catalog
+                  </Typography>
+                </div>
+
+                <div className="p-5">
+                  <Typography {...mt} className="mb-3 text-sm font-semibold text-ui-text">
+                    Assign to
+                  </Typography>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {ASSIGN_LEVELS.map((level) => {
+                      const Icon = level.icon
+                      const active = assignForm.assignable_type === level.id
+                      return (
+                        <button
+                          key={level.id}
+                          type="button"
+                          onClick={() =>
+                            setAssignForm((f) => ({
+                              ...f,
+                              assignable_type: level.id,
+                            }))
+                          }
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                            active
+                              ? 'border-moh-green bg-moh-green text-white shadow-sm'
+                              : 'border-ui-border bg-white text-gray-600 hover:border-moh-green/40 hover:text-moh-green'
+                          }`}
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                          {level.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {activeAssignLevel ? (
+                    <p className="mb-4 rounded-md border border-dashed border-moh-green/25 bg-moh-green/[0.03] px-3 py-2 text-xs text-gray-600">
+                      {activeAssignLevel.hint}
+                    </p>
+                  ) : null}
+
+                  <div className="space-y-4">
+                    {assignForm.assignable_type === 'facility_type' ? (
+                      <SearchableSelect
+                        label="Facility type"
+                        value={assignForm.facility_type_ref_id}
+                        onChange={(v) => setAssignForm((f) => ({ ...f, facility_type_ref_id: v }))}
+                        options={targetOptionsToSelect(assignmentTargets?.facility_types)}
+                        emptyLabel="— Select facility type —"
+                        placeholder="Search facility types…"
+                      />
+                    ) : null}
+
+                    {assignForm.assignable_type === 'facility' ? (
+                      <SearchableSelect
+                        label="Facility"
+                        value={assignForm.facility_id}
+                        onChange={(v) => setAssignForm((f) => ({ ...f, facility_id: v }))}
+                        options={targetOptionsToSelect(assignmentTargets?.facilities)}
+                        emptyLabel="— Select facility —"
+                        placeholder="Search facilities…"
+                      />
+                    ) : null}
+
+                    {assignForm.assignable_type === 'department' ? (
+                      <SearchableSelect
+                        label="Department"
+                        value={assignForm.department_id}
+                        onChange={(v) => setAssignForm((f) => ({ ...f, department_id: v }))}
+                        options={targetOptionsToSelect(assignmentTargets?.departments)}
+                        emptyLabel="— Select department —"
+                        placeholder="Search departments…"
+                      />
+                    ) : null}
+
+                    {assignForm.assignable_type === 'job' ? (
+                      <SearchableSelect
+                        label="Job title"
+                        value={assignForm.job_id}
+                        onChange={(v) => setAssignForm((f) => ({ ...f, job_id: v }))}
+                        options={targetOptionsToSelect(assignmentTargets?.jobs)}
+                        emptyLabel="— Select job title —"
+                        placeholder="Search job titles…"
+                      />
+                    ) : null}
+
+                    {assignForm.assignable_type === 'staff' ? (
+                      <>
+                        <Input
+                          {...mt}
+                          label="Search staff"
+                          value={assignForm.staff_search}
+                          onChange={(e) =>
+                            setAssignForm((f) => ({ ...f, staff_search: e.target.value, staff_id: '' }))
+                          }
+                          crossOrigin=""
+                        />
+                        <SearchableSelect
+                          label="Staff member"
+                          value={assignForm.staff_id}
+                          onChange={(v) => setAssignForm((f) => ({ ...f, staff_id: v }))}
+                          options={staffSelectOptions}
+                          emptyLabel="— Select staff —"
+                          placeholder="Search staff…"
+                          disabled={staffQuery.isLoading && staffOptions.length === 0}
+                        />
+                      </>
+                    ) : null}
+                  </div>
+
+                  {assignmentTargetsQuery.isLoading ? (
+                    <p className="mt-4 text-xs text-gray-500">Loading assignment targets…</p>
+                  ) : null}
+
+                  <Button
+                    {...mt}
+                    size="md"
+                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-moh-green py-3 shadow-sm"
+                    disabled={!canSubmitAssignment || assignMutation.isPending}
+                    onClick={() => assignMutation.mutate()}
+                  >
+                    <Link2 className="h-4 w-4" />
+                    {assignForm.kpi_ids.length > 1
+                      ? `Assign ${assignForm.kpi_ids.length} KPIs`
+                      : 'Assign KPI'}
+                  </Button>
+                </div>
+              </div>
             </Card>
           ) : null}
 
@@ -947,7 +1186,6 @@ export function KpiAdminPage() {
                   setAssignmentPage(1)
                 }}
                 className="min-w-[200px] flex-1"
-                icon={<Search className="h-4 w-4" />}
               />
               <Select
                 {...mt}
@@ -960,9 +1198,11 @@ export function KpiAdminPage() {
                 className="min-w-[160px]"
               >
                 <Option value="">All types</Option>
-                <Option value="job">Job</Option>
+                <Option value="facility_type">Facility type</Option>
+                <Option value="facility">Facility</Option>
                 <Option value="department">Department</Option>
-                <Option value="staff">Individual staff</Option>
+                <Option value="job">Job title</Option>
+                <Option value="staff">Individual</Option>
               </Select>
             </div>
           </Card>
@@ -993,10 +1233,8 @@ export function KpiAdminPage() {
                     <div className="font-medium">{row.kpi_name}</div>
                     <div className="text-xs text-gray-500">{row.kpi_code}</div>
                   </td>
-                  <td className="px-3 py-2 capitalize">{row.assignable_type}</td>
-                  <td className="px-3 py-2">
-                    {row.job_title || row.department_name || row.staff_name || '—'}
-                  </td>
+                  <td className="px-3 py-2">{assignTypeLabel(row.assignable_type)}</td>
+                  <td className="px-3 py-2">{assignmentTargetLabel(row)}</td>
                   <td className="px-3 py-2">
                     {row.is_active ? (
                       <span className="text-moh-green">Active</span>

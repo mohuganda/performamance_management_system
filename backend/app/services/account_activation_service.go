@@ -251,3 +251,71 @@ func (s *AccountActivationService) SendActivationForStaff(staffID uint) error {
 	}
 	return s.RequestActivation(email)
 }
+
+// RequestPasswordReset emails a 24-hour link to set a new password for an existing account.
+func (s *AccountActivationService) RequestPasswordReset(email string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+	var user models.User
+	if err := facades.Orm().Query().Where("email", email).First(&user); err != nil || user.ID == 0 {
+		return nil
+	}
+	if !user.IsActive {
+		return nil
+	}
+
+	var staffID uint
+	if user.StaffID != nil && *user.StaffID > 0 {
+		staffID = *user.StaffID
+	} else {
+		sid, _, err := FindStaffIDByEmail(email)
+		if err != nil || sid == nil {
+			return nil
+		}
+		staffID = *sid
+	}
+
+	var staff models.Staff
+	if err := facades.Orm().Query().Where("id", staffID).First(&staff); err != nil {
+		return nil
+	}
+
+	token, err := generateSecureToken(32)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	_, _ = facades.Orm().Query().
+		Model(&models.AccountActivationToken{}).
+		Where("email = ? AND used_at IS NULL", email).
+		Update("used_at", now)
+
+	userID := user.ID
+	row := models.AccountActivationToken{
+		Token:     token,
+		Email:     email,
+		StaffID:   staffID,
+		UserID:    &userID,
+		ExpiresAt: now.Add(activationTokenTTL),
+	}
+	if err := facades.Orm().Query().Create(&row); err != nil {
+		return err
+	}
+
+	appURL := strings.TrimRight(castString(facades.Config().GetString("app.url", "")), "/")
+	if appURL == "" {
+		appURL = strings.TrimRight(castString(facades.Config().Env("APP_URL", "http://127.0.0.1:8081")), "/")
+	}
+	link := fmt.Sprintf("%s/activate?token=%s", appURL, token)
+	subject := "Reset your MoH PMS password"
+	body := fmt.Sprintf(
+		"Hello %s,\n\n"+
+			"You requested to reset your Ministry of Health Performance Management System password.\n\n"+
+			"Open this link within 24 hours to set a new password:\n%s\n\n"+
+			"If you did not request this, you can ignore this email.\n\n"+
+			"MoH PMS",
+		StaffDisplayName(staff),
+		link,
+	)
+	return s.notify.sendTo(email, subject, body)
+}

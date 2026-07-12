@@ -156,12 +156,22 @@ func (c *KpiAdminController) ListAssignments(ctx http.Context) http.Response {
 }
 
 type kpiAssignmentBody struct {
-	KpiID          uint   `json:"kpi_id"`
-	KpiIDs         []uint `json:"kpi_ids"`
-	AssignableType string `json:"assignable_type"`
-	JobID          *uint  `json:"job_id"`
-	DepartmentID   *uint  `json:"department_id"`
-	StaffID        *uint  `json:"staff_id"`
+	KpiID             uint   `json:"kpi_id"`
+	KpiIDs            []uint `json:"kpi_ids"`
+	AssignableType    string `json:"assignable_type"`
+	FacilityTypeRefID *uint  `json:"facility_type_ref_id"`
+	FacilityID        *uint  `json:"facility_id"`
+	JobID             *uint  `json:"job_id"`
+	DepartmentID      *uint  `json:"department_id"`
+	StaffID           *uint  `json:"staff_id"`
+}
+
+func (c *KpiAdminController) AssignmentTargets(ctx http.Context) http.Response {
+	targets, err := c.kpi.AssignmentTargets()
+	if err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return jsonResponse(ctx, http.StatusOK, targets)
 }
 
 func (c *KpiAdminController) CreateAssignment(ctx http.Context) http.Response {
@@ -171,11 +181,13 @@ func (c *KpiAdminController) CreateAssignment(ctx http.Context) http.Response {
 	}
 	if len(body.KpiIDs) > 0 {
 		result, err := c.kpi.CreateAssignmentsBulk(services.KpiAssignmentInput{
-			KpiIDs:         body.KpiIDs,
-			AssignableType: body.AssignableType,
-			JobID:          body.JobID,
-			DepartmentID:   body.DepartmentID,
-			StaffID:        body.StaffID,
+			KpiIDs:            body.KpiIDs,
+			AssignableType:    body.AssignableType,
+			FacilityTypeRefID: body.FacilityTypeRefID,
+			FacilityID:        body.FacilityID,
+			JobID:             body.JobID,
+			DepartmentID:      body.DepartmentID,
+			StaffID:           body.StaffID,
 		})
 		if err != nil {
 			return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{
@@ -186,11 +198,13 @@ func (c *KpiAdminController) CreateAssignment(ctx http.Context) http.Response {
 		return ctx.Response().Success().Json(result)
 	}
 	row, err := c.kpi.CreateAssignment(services.KpiAssignmentInput{
-		KpiID:          body.KpiID,
-		AssignableType: body.AssignableType,
-		JobID:          body.JobID,
-		DepartmentID:   body.DepartmentID,
-		StaffID:        body.StaffID,
+		KpiID:             body.KpiID,
+		AssignableType:    body.AssignableType,
+		FacilityTypeRefID: body.FacilityTypeRefID,
+		FacilityID:        body.FacilityID,
+		JobID:             body.JobID,
+		DepartmentID:      body.DepartmentID,
+		StaffID:           body.StaffID,
 	})
 	if err != nil {
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})

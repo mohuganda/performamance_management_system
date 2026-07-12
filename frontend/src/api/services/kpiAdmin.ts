@@ -27,7 +27,11 @@ export type KpiAssignmentRow = {
   kpi_id: number
   kpi_code: string
   kpi_name: string
-  assignable_type: 'job' | 'department' | 'staff'
+  assignable_type: 'facility_type' | 'facility' | 'job' | 'department' | 'staff'
+  facility_type_ref_id?: number
+  facility_type_name?: string
+  facility_id?: number
+  facility_name?: string
   job_id?: number
   job_title?: string
   department_id?: number
@@ -35,6 +39,22 @@ export type KpiAssignmentRow = {
   staff_id?: number
   staff_name?: string
   is_active: boolean
+}
+
+export type KpiAssignmentTargetOption = {
+  id: number
+  name: string
+  subtitle?: string
+  facility_type_name?: string
+  facility_name?: string
+  scope?: string
+}
+
+export type KpiAssignmentTargets = {
+  facility_types: KpiAssignmentTargetOption[]
+  facilities: KpiAssignmentTargetOption[]
+  departments: KpiAssignmentTargetOption[]
+  jobs: KpiAssignmentTargetOption[]
 }
 
 export type KpiPermissionInfo = {
@@ -102,6 +122,8 @@ export const kpiAdminService = {
     kpi_id?: number
     kpi_ids?: number[]
     assignable_type: string
+    facility_type_ref_id?: number
+    facility_id?: number
     job_id?: number
     department_id?: number
     staff_id?: number
@@ -123,8 +145,20 @@ export const kpiAdminService = {
     const { data } = await apiClient.get('/admin/kpi/departments')
     return asArray<{ id: number; name: string }>(data)
   },
+  assignmentTargets: async (): Promise<KpiAssignmentTargets> => {
+    const { data } = await apiClient.get('/admin/kpi/assignment-targets')
+    return data as KpiAssignmentTargets
+  },
   searchStaff: async (search?: string) => {
     const { data } = await apiClient.get('/admin/kpi/staff-search', { params: { search } })
-    return asArray<{ staff_id: number; name: string; email: string }>(data)
+    return asArray<{
+      staff_id: number
+      name: string
+      email: string
+      facility_name?: string
+      facility_type_name?: string
+      department_name?: string
+      job_title?: string
+    }>(data)
   },
 }

@@ -1,0 +1,51 @@
+# Optional Apache Doris OLAP layer for dashboard / attendance / leave analytics.
+# MySQL remains the system of record; enable in the API with ANALYTICS_DB_ENABLED=true.
+#
+# Start: docker compose -f docker-compose.analytics.yml up -d
+# MySQL protocol: localhost:9030  |  FE HTTP: localhost:8030
+services:
+  doris-fe:
+    image: apache/doris:2.1.7-fe-x86_64
+    platform: linux/amd64
+    container_name: moh-pms-doris-fe
+    restart: unless-stopped
+    environment:
+      FE_SERVERS: fe1:172.20.80.2:9010
+      FE_ID: 1
+    ports:
+      - "8030:8030"
+      - "9030:9030"
+    volumes:
+      - doris_fe_data:/opt/apache-doris/fe/doris-meta
+    networks:
+      doris_net:
+        ipv4_address: 172.20.80.2
+
+  doris-be:
+    image: apache/doris:2.1.7-be-x86_64
+    platform: linux/amd64
+    container_name: moh-pms-doris-be
+    restart: unless-stopped
+    depends_on:
+      - doris-fe
+    environment:
+      FE_SERVERS: fe1:172.20.80.2:9010
+      BE_ADDR: 172.20.80.3:9050
+    ports:
+      - "8040:8040"
+    volumes:
+      - doris_be_data:/opt/apache-doris/be/storage
+    networks:
+      doris_net:
+        ipv4_address: 172.20.80.3
+
+networks:
+  doris_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.80.0/24
+
+volumes:
+  doris_fe_data:
+  doris_be_data:

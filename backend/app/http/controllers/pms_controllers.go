@@ -81,6 +81,32 @@ func (c *HrmAttendController) Sync(ctx http.Context) http.Response {
 	return ctx.Response().Success().Json(result)
 }
 
+type AnalyticsController struct {
+	store *services.AnalyticsStore
+	sync  *services.DorisSyncService
+}
+
+func NewAnalyticsController() *AnalyticsController {
+	return &AnalyticsController{
+		store: services.NewAnalyticsStore(),
+		sync:  services.NewDorisSyncService(),
+	}
+}
+
+func (c *AnalyticsController) Status(ctx http.Context) http.Response {
+	return ctx.Response().Success().Json(c.store.Status())
+}
+
+func (c *AnalyticsController) Sync(ctx http.Context) http.Response {
+	result, err := c.sync.SyncFromOLTP()
+	if err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{
+			"message": err.Error(),
+		})
+	}
+	return ctx.Response().Success().Json(result)
+}
+
 type DashboardController struct {
 	dashboardService *services.DashboardService
 }

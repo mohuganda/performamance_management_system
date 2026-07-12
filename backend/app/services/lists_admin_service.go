@@ -16,12 +16,22 @@ func NewListsAdminService() *ListsAdminService {
 }
 
 type ListsSummary struct {
-	Regions      int `json:"regions"`
-	Districts    int `json:"districts"`
-	Facilities   int `json:"facilities"`
-	Departments  int `json:"departments"`
-	JobTitles    int `json:"job_titles"`
-	OosReasons   int `json:"oos_reasons"`
+	Regions          int `json:"regions"`
+	Districts        int `json:"districts"`
+	Facilities       int `json:"facilities"`
+	FacilityTypes    int `json:"facility_types"`
+	InstitutionTypes int `json:"institution_types"`
+	Departments      int `json:"departments"`
+	JobTitles        int `json:"job_titles"`
+	OosReasons       int `json:"oos_reasons"`
+}
+
+type CatalogRefreshResult struct {
+	FacilityTypesLinked    int `json:"facility_types_linked"`
+	InstitutionTypesLinked int `json:"institution_types_linked"`
+	DepartmentsLinked      int `json:"departments_linked"`
+	FacilityTypesTotal     int `json:"facility_types_total"`
+	InstitutionTypesTotal  int `json:"institution_types_total"`
 }
 
 type RegionListRow struct {
@@ -43,21 +53,40 @@ type DistrictListRow struct {
 	RegionName      string  `json:"region_name"`
 	IhrisDistrictID *string `json:"ihris_district_id"`
 	ISOCode         string  `json:"iso_code"`
+	MapKey          string  `json:"map_key"`
 	IsActive        bool    `json:"is_active"`
 	FacilityCount   int     `json:"facility_count"`
 }
 
 type FacilityListRow struct {
-	ID              uint     `json:"id"`
-	IhrisFacilityID string   `json:"ihris_facility_id"`
-	Name            string   `json:"name"`
-	DistrictRefID   *uint    `json:"district_ref_id"`
-	DistrictName    string   `json:"district_name"`
-	RegionID        *uint    `json:"region_id"`
-	RegionName      string   `json:"region_name"`
-	Latitude        *float64 `json:"latitude"`
-	Longitude       *float64 `json:"longitude"`
-	IsActive        bool     `json:"is_active"`
+	ID                   uint     `json:"id"`
+	IhrisFacilityID      string   `json:"ihris_facility_id"`
+	Name                 string   `json:"name"`
+	FacilityTypeName     string   `json:"facility_type_name,omitempty"`
+	InstitutionTypeName  string   `json:"institution_type_name,omitempty"`
+	DistrictRefID        *uint    `json:"district_ref_id"`
+	DistrictName         string   `json:"district_name"`
+	RegionID             *uint    `json:"region_id"`
+	RegionName           string   `json:"region_name"`
+	Latitude             *float64 `json:"latitude"`
+	Longitude            *float64 `json:"longitude"`
+	IsActive             bool     `json:"is_active"`
+}
+
+type FacilityTypeListRow struct {
+	ID               uint   `json:"id"`
+	ExternalSystemID string `json:"external_system_id"`
+	Name             string `json:"name"`
+	FacilityCount    int    `json:"facility_count"`
+	IsActive         bool   `json:"is_active"`
+}
+
+type InstitutionTypeListRow struct {
+	ID               uint   `json:"id"`
+	ExternalSystemID string `json:"external_system_id"`
+	Name             string `json:"name"`
+	FacilityCount    int    `json:"facility_count"`
+	IsActive         bool   `json:"is_active"`
 }
 
 type DepartmentListRow struct {
@@ -66,6 +95,8 @@ type DepartmentListRow struct {
 	ExternalSystemID string `json:"external_system_id"`
 	FacilityID       *uint  `json:"facility_id,omitempty"`
 	FacilityName     string `json:"facility_name,omitempty"`
+	FacilityTypeName string `json:"facility_type_name,omitempty"`
+	Scope            string `json:"scope,omitempty"`
 }
 
 type JobTitleListRow struct {
@@ -100,6 +131,12 @@ func (s *ListsAdminService) Summary() (ListsSummary, error) {
 	if n, err := facades.Orm().Query().Model(&models.Facility{}).Count(); err == nil {
 		summary.Facilities = int(n)
 	}
+	if n, err := facades.Orm().Query().Model(&models.FacilityType{}).Count(); err == nil {
+		summary.FacilityTypes = int(n)
+	}
+	if n, err := facades.Orm().Query().Model(&models.InstitutionType{}).Count(); err == nil {
+		summary.InstitutionTypes = int(n)
+	}
 	if n, err := facades.Orm().Query().Model(&models.Department{}).Count(); err == nil {
 		summary.Departments = int(n)
 	}
@@ -110,6 +147,33 @@ func (s *ListsAdminService) Summary() (ListsSummary, error) {
 		summary.OosReasons = int(n)
 	}
 	return summary, nil
+}
+
+func (s *ListsAdminService) RefreshCatalog() (CatalogRefreshResult, error) {
+	catalog := NewOrgCatalogService()
+	if err := catalog.SeedCanonicalTypes(); err != nil {
+		return CatalogRefreshResult{}, err
+	}
+	ftLinked, itLinked, err := catalog.BackfillCatalogFromFacilities()
+	if err != nil {
+		return CatalogRefreshResult{}, err
+	}
+	deptLinked, err := catalog.BackfillDepartmentTypeLinks()
+	if err != nil {
+		return CatalogRefreshResult{}, err
+	}
+
+	var result CatalogRefreshResult
+	result.FacilityTypesLinked = ftLinked
+	result.InstitutionTypesLinked = itLinked
+	result.DepartmentsLinked = deptLinked
+	if n, err := facades.Orm().Query().Model(&models.FacilityType{}).Count(); err == nil {
+		result.FacilityTypesTotal = int(n)
+	}
+	if n, err := facades.Orm().Query().Model(&models.InstitutionType{}).Count(); err == nil {
+		result.InstitutionTypesTotal = int(n)
+	}
+	return result, nil
 }
 
 func (s *ListsAdminService) ListRegions(filter ListFilter) (PaginatedResult[RegionListRow], error) {
@@ -201,6 +265,7 @@ func (s *ListsAdminService) ListDistricts(filter ListFilter) (PaginatedResult[Di
 			RegionName:      regionName,
 			IhrisDistrictID: row.IhrisDistrictID,
 			ISOCode:         row.ISOCode,
+			MapKey:          row.MapKey,
 			IsActive:        row.IsActive,
 			FacilityCount:   int(facilityCount),
 		})
@@ -228,6 +293,8 @@ func (s *ListsAdminService) ListFacilities(filter ListFilter) (PaginatedResult[F
 
 	districtNames := s.districtNameMap()
 	regionNames := s.regionNameMap()
+	facilityTypeNames := s.facilityTypeNameMap()
+	institutionTypeNames := s.institutionTypeNameMap()
 	total := len(rows)
 	start := OffsetFor(page, perPage)
 	if start > total {
@@ -251,17 +318,27 @@ func (s *ListsAdminService) ListFacilities(filter ListFilter) (PaginatedResult[F
 		if row.RegionID != nil {
 			regionName = regionNames[*row.RegionID]
 		}
+		facilityTypeName := facilityTypeNames[derefUint(row.FacilityTypeRefID)]
+		if facilityTypeName == "" {
+			facilityTypeName = ihrisRefDisplayName(row.FacilityTypeID)
+		}
+		institutionTypeName := institutionTypeNames[derefUint(row.InstitutionTypeRefID)]
+		if institutionTypeName == "" {
+			institutionTypeName = deref(row.InstitutionTypeName)
+		}
 		out = append(out, FacilityListRow{
-			ID:              row.ID,
-			IhrisFacilityID: row.IhrisFacilityID,
-			Name:            row.Name,
-			DistrictRefID:   row.DistrictRefID,
-			DistrictName:    districtName,
-			RegionID:        row.RegionID,
-			RegionName:      regionName,
-			Latitude:        row.Latitude,
-			Longitude:       row.Longitude,
-			IsActive:        row.IsActive,
+			ID:                  row.ID,
+			IhrisFacilityID:     row.IhrisFacilityID,
+			Name:                row.Name,
+			FacilityTypeName:    facilityTypeName,
+			InstitutionTypeName: institutionTypeName,
+			DistrictRefID:       row.DistrictRefID,
+			DistrictName:        districtName,
+			RegionID:            row.RegionID,
+			RegionName:          regionName,
+			Latitude:            row.Latitude,
+			Longitude:           row.Longitude,
+			IsActive:            row.IsActive,
 		})
 	}
 	return BuildPaginatedResult(out, total, page, perPage), nil
@@ -293,9 +370,13 @@ func (s *ListsAdminService) ListDepartments(filter ListFilter) (PaginatedResult[
 	pageRows := rows[start:end]
 
 	facilityIDs := make([]uint, 0, len(pageRows))
+	facilityTypeIDs := make([]uint, 0, len(pageRows))
 	for _, row := range pageRows {
 		if row.FacilityID != nil && *row.FacilityID > 0 {
 			facilityIDs = append(facilityIDs, *row.FacilityID)
+		}
+		if row.FacilityTypeRefID != nil && *row.FacilityTypeRefID > 0 {
+			facilityTypeIDs = append(facilityTypeIDs, *row.FacilityTypeRefID)
 		}
 	}
 	facilities := map[uint]models.Facility{}
@@ -306,6 +387,7 @@ func (s *ListsAdminService) ListDepartments(filter ListFilter) (PaginatedResult[
 			facilities[facility.ID] = facility
 		}
 	}
+	facilityTypeNames := s.facilityTypeNameMap()
 
 	out := make([]DepartmentListRow, 0, len(pageRows))
 	for _, row := range pageRows {
@@ -319,6 +401,12 @@ func (s *ListsAdminService) ListDepartments(filter ListFilter) (PaginatedResult[
 			if facility, ok := facilities[*row.FacilityID]; ok {
 				item.FacilityName = facility.Name
 			}
+		}
+		if row.FacilityTypeRefID != nil {
+			item.FacilityTypeName = facilityTypeNames[*row.FacilityTypeRefID]
+			item.Scope = "By facility type"
+		} else if row.FacilityID != nil {
+			item.Scope = "By facility"
 		}
 		out = append(out, item)
 	}
@@ -356,6 +444,104 @@ func (s *ListsAdminService) ListJobTitles(filter ListFilter) (PaginatedResult[Jo
 		})
 	}
 	return BuildPaginatedResult(out, total, page, perPage), nil
+}
+
+func (s *ListsAdminService) ListFacilityTypes(filter ListFilter) (PaginatedResult[FacilityTypeListRow], error) {
+	page, perPage := ResolvePage(filter.Page, filter.PerPage)
+	query := facades.Orm().Query().Order("name asc")
+	if filter.Search != "" {
+		like := "%" + strings.TrimSpace(filter.Search) + "%"
+		query = query.Where("name LIKE ? OR external_system_id LIKE ?", like, like)
+	}
+	var rows []models.FacilityType
+	if err := query.Get(&rows); err != nil {
+		return PaginatedResult[FacilityTypeListRow]{}, err
+	}
+	total := len(rows)
+	start := OffsetFor(page, perPage)
+	if start > total {
+		start = total
+	}
+	end := start + perPage
+	if end > total {
+		end = total
+	}
+	pageRows := rows[start:end]
+
+	out := make([]FacilityTypeListRow, 0, len(pageRows))
+	for _, row := range pageRows {
+		var facilityCount int64
+		if n, err := facades.Orm().Query().Model(&models.Facility{}).Where("facility_type_ref_id", row.ID).Count(); err == nil {
+			facilityCount = n
+		}
+		out = append(out, FacilityTypeListRow{
+			ID:               row.ID,
+			ExternalSystemID: row.ExternalSystemID,
+			Name:             row.Name,
+			FacilityCount:    int(facilityCount),
+			IsActive:         row.IsActive,
+		})
+	}
+	return BuildPaginatedResult(out, total, page, perPage), nil
+}
+
+func (s *ListsAdminService) ListInstitutionTypes(filter ListFilter) (PaginatedResult[InstitutionTypeListRow], error) {
+	page, perPage := ResolvePage(filter.Page, filter.PerPage)
+	query := facades.Orm().Query().Order("name asc")
+	if filter.Search != "" {
+		like := "%" + strings.TrimSpace(filter.Search) + "%"
+		query = query.Where("name LIKE ? OR external_system_id LIKE ?", like, like)
+	}
+	var rows []models.InstitutionType
+	if err := query.Get(&rows); err != nil {
+		return PaginatedResult[InstitutionTypeListRow]{}, err
+	}
+	total := len(rows)
+	start := OffsetFor(page, perPage)
+	if start > total {
+		start = total
+	}
+	end := start + perPage
+	if end > total {
+		end = total
+	}
+	pageRows := rows[start:end]
+
+	out := make([]InstitutionTypeListRow, 0, len(pageRows))
+	for _, row := range pageRows {
+		var facilityCount int64
+		if n, err := facades.Orm().Query().Model(&models.Facility{}).Where("institution_type_ref_id", row.ID).Count(); err == nil {
+			facilityCount = n
+		}
+		out = append(out, InstitutionTypeListRow{
+			ID:               row.ID,
+			ExternalSystemID: row.ExternalSystemID,
+			Name:             row.Name,
+			FacilityCount:    int(facilityCount),
+			IsActive:         row.IsActive,
+		})
+	}
+	return BuildPaginatedResult(out, total, page, perPage), nil
+}
+
+func (s *ListsAdminService) facilityTypeNameMap() map[uint]string {
+	out := map[uint]string{}
+	var rows []models.FacilityType
+	_ = facades.Orm().Query().Get(&rows)
+	for _, row := range rows {
+		out[row.ID] = row.Name
+	}
+	return out
+}
+
+func (s *ListsAdminService) institutionTypeNameMap() map[uint]string {
+	out := map[uint]string{}
+	var rows []models.InstitutionType
+	_ = facades.Orm().Query().Get(&rows)
+	for _, row := range rows {
+		out[row.ID] = row.Name
+	}
+	return out
 }
 
 func (s *ListsAdminService) regionNameMap() map[uint]string {
@@ -404,6 +590,7 @@ type UpdateDistrictInput struct {
 	RegionID        *uint   `json:"region_id"`
 	IhrisDistrictID *string `json:"ihris_district_id"`
 	ISOCode         *string `json:"iso_code"`
+	MapKey          *string `json:"map_key"`
 	IsActive        *bool   `json:"is_active"`
 }
 
@@ -484,6 +671,9 @@ func (s *ListsAdminService) UpdateDistrict(id uint, input UpdateDistrictInput) e
 	}
 	if input.ISOCode != nil {
 		row.ISOCode = strings.TrimSpace(*input.ISOCode)
+	}
+	if input.MapKey != nil {
+		row.MapKey = strings.TrimSpace(*input.MapKey)
 	}
 	if input.IsActive != nil {
 		row.IsActive = *input.IsActive

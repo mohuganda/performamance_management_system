@@ -20,7 +20,6 @@ import {
   FileText,
   Filter,
   RefreshCw,
-  Search,
   Settings,
   Users,
   X,
@@ -371,7 +370,6 @@ export function LeaveAdminPage() {
                   setBalancePage(1)
                 }}
                 className="min-w-[200px] flex-1"
-                icon={<Search className="h-4 w-4" />}
               />
               <Select
                 {...mt}
@@ -459,7 +457,6 @@ export function LeaveAdminPage() {
                   setRequestPage(1)
                 }}
                 className="min-w-[200px] flex-1"
-                icon={<Search className="h-4 w-4" />}
               />
               <Select
                 {...mt}
@@ -575,7 +572,6 @@ export function LeaveAdminPage() {
               label="Search staff"
               value={statementSearch}
               onChange={(e) => setStatementSearch(e.target.value)}
-              icon={<Search className="h-4 w-4" />}
             />
             <div className="mt-4 max-h-[420px] space-y-1 overflow-y-auto">
               {statementMatches.map((row) => (

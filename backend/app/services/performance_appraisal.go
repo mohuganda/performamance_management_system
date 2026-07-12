@@ -658,6 +658,102 @@ func (s *PerformanceService) approveAsResponsibleOfficer(supervisorStaffID uint,
 	return s.loadAppraisalBundle(report, supervisorStaffID)
 }
 
+type PendingPpaReview struct {
+	PpaID       uint    `json:"ppa_id"`
+	StaffID     uint    `json:"staff_id"`
+	StaffName   string  `json:"staff_name"`
+	Status      string  `json:"status"`
+	TotalWeight float64 `json:"total_weight"`
+	SubmittedAt string  `json:"submitted_at,omitempty"`
+}
+
+func (s *PerformanceService) ListPendingPpaReviews(supervisorStaffID uint) ([]PendingPpaReview, error) {
+	supervised := s.supervisedStaffIDs(supervisorStaffID)
+	if len(supervised) == 0 {
+		return []PendingPpaReview{}, nil
+	}
+
+	fy, err := s.currentFinancialYear()
+	if err != nil {
+		return nil, err
+	}
+
+	var ppas []models.Ppa
+	if err := facades.Orm().Query().
+		WhereIn("staff_id", toAnySlice(supervised)).
+		Where("financial_year_id", fy.ID).
+		Where("status", "supervisor_review").
+		Get(&ppas); err != nil {
+		return nil, err
+	}
+
+	staffMap := loadStaffByIDs(supervised)
+	out := make([]PendingPpaReview, 0, len(ppas))
+	for _, ppa := range ppas {
+		staff := staffMap[ppa.StaffID]
+		item := PendingPpaReview{
+			PpaID:       ppa.ID,
+			StaffID:     ppa.StaffID,
+			StaffName:   staffDisplayName(staff),
+			Status:      ppa.Status,
+			TotalWeight: ppa.TotalWeight,
+		}
+		if ppa.SubmittedAt != nil {
+			item.SubmittedAt = ppa.SubmittedAt.Format(time.RFC3339)
+		}
+		out = append(out, item)
+	}
+
+	sort.Slice(out, func(i, j int) bool { return out[i].SubmittedAt < out[j].SubmittedAt })
+	return out, nil
+}
+
+type PpaReviewInput struct {
+	PpaID    uint   `json:"ppa_id"`
+	Approve  bool   `json:"approve"`
+	Comments string `json:"comments"`
+}
+
+func (s *PerformanceService) ReviewPpa(supervisorStaffID uint, input PpaReviewInput) (models.Ppa, error) {
+	if input.PpaID == 0 {
+		return models.Ppa{}, fmt.Errorf("ppa_id is required")
+	}
+
+	var ppa models.Ppa
+	if err := facades.Orm().Query().Where("id", input.PpaID).First(&ppa); err != nil || ppa.ID == 0 {
+		return models.Ppa{}, fmt.Errorf("performance plan not found")
+	}
+	if ppa.Status != "supervisor_review" {
+		return models.Ppa{}, fmt.Errorf("PPA is not awaiting supervisor review")
+	}
+
+	supervised := s.supervisedStaffIDs(supervisorStaffID)
+	allowed := false
+	for _, id := range supervised {
+		if id == ppa.StaffID {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return models.Ppa{}, fmt.Errorf("not authorized to review this PPA")
+	}
+
+	if input.Approve {
+		now := time.Now()
+		ppa.Status = "approved"
+		ppa.ApprovedAt = &now
+	} else {
+		ppa.Status = "draft"
+		ppa.ApprovedAt = nil
+	}
+	if err := facades.Orm().Query().Save(&ppa); err != nil {
+		return models.Ppa{}, err
+	}
+	s.cache.Invalidate()
+	return ppa, nil
+}
+
 func derefStr(p *string) string {
 	if p == nil {
 		return ""

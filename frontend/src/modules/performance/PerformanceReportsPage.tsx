@@ -1,23 +1,18 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Card, Chip, Input, Typography } from '@material-tailwind/react'
-import { IconSelect, Option } from '@/components/molecules/MtSelect'
+import { Select, Option } from '@/components/molecules/MtSelect'
 import {
   BarChart3,
   BadgeCheck,
-  Briefcase,
-  Building2,
   CalendarRange,
-  ClipboardCheck,
   FileCheck,
   FileSpreadsheet,
   FileText,
   Filter,
-  Search,
   SlidersHorizontal,
   Target,
   TrendingUp,
-  User,
   Users,
   X,
 } from 'lucide-react'
@@ -205,15 +200,10 @@ export function PerformanceReportsPage() {
   }
 
   const columns = [
-    { key: 'staff', label: 'Staff', icon: User, iconClassName: 'bg-slate-100 text-slate-700' },
-    { key: 'ppa', label: 'PPA', icon: ClipboardCheck, iconClassName: 'bg-indigo-100 text-indigo-700' },
-    ...PERIODS.map((p) => ({
-      key: p.id,
-      label: p.label,
-      icon: p.icon,
-      iconClassName: p.accent,
-    })),
-    { key: 'overall', label: 'Overall', icon: TrendingUp, iconClassName: 'bg-emerald-100 text-emerald-800' },
+    { key: 'staff', label: 'Staff' },
+    { key: 'ppa', label: 'PPA' },
+    ...PERIODS.map((p) => ({ key: p.id, label: p.label })),
+    { key: 'overall', label: 'Overall' },
   ]
 
   return (
@@ -346,15 +336,13 @@ export function PerformanceReportsPage() {
                       label="Search"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      icon={<Search className="h-4 w-4 text-sky-600" />}
                       crossOrigin=""
                     />
-                    <IconSelect
+                    <Select
                       {...mt}
                       label="Facility"
                       value={facilityFilter}
                       onChange={(v) => setFacilityFilter((v as string) ?? '')}
-                      icon={<Building2 className="text-blue-600" />}
                     >
                       <Option value="">All facilities</Option>
                       {facilityOptions.map((name) => (
@@ -362,13 +350,12 @@ export function PerformanceReportsPage() {
                           {name}
                         </Option>
                       ))}
-                    </IconSelect>
-                    <IconSelect
+                    </Select>
+                    <Select
                       {...mt}
                       label="Department"
                       value={departmentFilter}
                       onChange={(v) => setDepartmentFilter((v as string) ?? '')}
-                      icon={<Briefcase className="text-violet-600" />}
                     >
                       <Option value="">All departments</Option>
                       {departmentOptions.map((name) => (
@@ -376,33 +363,31 @@ export function PerformanceReportsPage() {
                           {name}
                         </Option>
                       ))}
-                    </IconSelect>
-                    <IconSelect
+                    </Select>
+                    <Select
                       {...mt}
                       label="PPA status"
                       value={ppaFilter}
                       onChange={(v) => setPpaFilter((v as string) ?? '')}
-                      icon={<ClipboardCheck className="text-indigo-600" />}
                     >
                       {PPA_FILTER_OPTIONS.map((opt) => (
                         <Option key={opt.value || 'all'} value={opt.value}>
                           {opt.label}
                         </Option>
                       ))}
-                    </IconSelect>
-                    <IconSelect
+                    </Select>
+                    <Select
                       {...mt}
                       label="Overall score"
                       value={scoreFilter}
                       onChange={(v) => setScoreFilter((v as string) ?? '')}
-                      icon={<TrendingUp className="text-emerald-600" />}
                     >
                       {SCORE_FILTER_OPTIONS.map((opt) => (
                         <Option key={opt.value || 'all'} value={opt.value}>
                           {opt.label}
                         </Option>
                       ))}
-                    </IconSelect>
+                    </Select>
                   </div>
                 </div>
               }

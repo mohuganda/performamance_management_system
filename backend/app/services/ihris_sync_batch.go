@@ -178,6 +178,9 @@ func (s *IhrisSyncService) SyncFromAPI(opts SyncBatchOptions) (SyncBatchResult, 
 	if run.Status == "completed" {
 		_, _ = NewGeographyService().BackfillFacilityDistrictLinks()
 		_, _ = BackfillDepartmentFacilityLinks()
+		catalog := NewOrgCatalogService()
+		_, _, _ = catalog.BackfillCatalogFromFacilities()
+		_, _ = catalog.BackfillDepartmentTypeLinks()
 	}
 
 	totalPages := uint(0)
@@ -351,6 +354,7 @@ type StaffListRow struct {
 	DepartmentName  string `json:"department_name"`
 	HrDepartmentID  *uint  `json:"hr_department_id,omitempty"`
 	HrDepartment    string `json:"hr_department_name,omitempty"`
+	IsLeaveManager  bool   `json:"is_leave_manager"`
 	HasSupervisor   bool                   `json:"has_supervisor"`
 	SupervisorName  string                 `json:"supervisor_name,omitempty"`
 	Supervisors     []SupervisorAssignment `json:"supervisors,omitempty"`
@@ -458,6 +462,7 @@ func (s *StaffAdminService) buildStaffListRow(st models.Staff, supervisionMap ma
 		if profile.HrEmail != nil {
 			row.Email = *profile.HrEmail
 		}
+		row.IsLeaveManager = profile.IsLeaveManager
 	}
 
 	if sup, ok := supervisionMap[st.ID]; ok {
@@ -557,13 +562,14 @@ func (s *StaffAdminService) GetStaffProfile(staffID uint) (*StaffProfileDetail, 
 }
 
 type StaffHrProfileInput struct {
-	HrDepartmentID  *uint
-	HrEmail         string
-	HrMobile        string
-	Notes           string
-	LockEmail       bool
-	LockDepartment  bool
-	LockMobile      bool
+	HrDepartmentID *uint
+	HrEmail        string
+	HrMobile       string
+	Notes          string
+	IsLeaveManager *bool
+	LockEmail      bool
+	LockDepartment bool
+	LockMobile     bool
 }
 
 func (s *StaffAdminService) UpdateHrProfile(staffID uint, userID uint, input StaffHrProfileInput) error {
@@ -588,6 +594,9 @@ func (s *StaffAdminService) UpdateHrProfile(staffID uint, userID uint, input Sta
 	if input.Notes != "" {
 		profile.Notes = strPtr(input.Notes)
 	}
+	if input.IsLeaveManager != nil {
+		profile.IsLeaveManager = *input.IsLeaveManager
+	}
 	lockStr := string(encoded)
 	profile.LockedFields = &lockStr
 	profile.UpdatedByUserID = &userID
@@ -604,6 +613,23 @@ func (s *StaffAdminService) UpdateHrProfile(staffID uint, userID uint, input Sta
 		}
 	}
 
+	s.cache.Invalidate()
+	return nil
+}
+
+func (s *StaffAdminService) SetLeaveManager(staffID uint, userID uint, enabled bool) error {
+	var profile models.StaffHrProfile
+	if err := facades.Orm().Query().Where("staff_id", staffID).FirstOr(&profile, func() error {
+		profile = models.StaffHrProfile{StaffID: staffID}
+		return facades.Orm().Query().Create(&profile)
+	}); err != nil {
+		return err
+	}
+	profile.IsLeaveManager = enabled
+	profile.UpdatedByUserID = &userID
+	if err := facades.Orm().Query().Save(&profile); err != nil {
+		return err
+	}
 	s.cache.Invalidate()
 	return nil
 }

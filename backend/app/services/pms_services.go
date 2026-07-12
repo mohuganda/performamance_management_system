@@ -78,6 +78,9 @@ func (s *IhrisSyncService) SyncFromDemoTable() (SyncResult, error) {
 	NewStaffCacheService().Invalidate()
 	_, _ = NewGeographyService().BackfillFacilityDistrictLinks()
 	_, _ = BackfillDepartmentFacilityLinks()
+	catalog := NewOrgCatalogService()
+	_, _, _ = catalog.BackfillCatalogFromFacilities()
+	_, _ = catalog.BackfillDepartmentTypeLinks()
 
 	return result, nil
 }
@@ -143,22 +146,34 @@ func (s *IhrisSyncService) upsertFacility(row models.IhrisData) (uint, error) {
 		districtName = geo.DistrictName
 	}
 
+	catalog := NewOrgCatalogService()
+	facilityTypeRefID, _ := catalog.UpsertFacilityType(
+		ihrisRefExternalID(row.FacilityTypeID),
+		resolveFacilityTypeName(row.FacilityTypeID),
+	)
+	institutionTypeRefID, _ := catalog.UpsertInstitutionType(
+		resolveInstitutionTypeExternalID(row.InstitutionTypeID, row.InstitutionTypeName),
+		strings.TrimSpace(row.InstitutionTypeName),
+	)
+
 	payload := models.Facility{
-		IhrisFacilityID:     extID,
-		Nfrid:               nfrid,
-		DhisFacilityID:      row.DhisFacilityID,
-		Name:                name,
-		FacilityTypeID:      row.FacilityTypeID,
-		DistrictID:          districtID,
-		DistrictName:        districtName,
-		DistrictRefID:       geo.DistrictRefID,
-		RegionID:            geo.RegionID,
-		RegionCode:          geo.RegionCode,
-		Latitude:            geo.Latitude,
-		Longitude:           geo.Longitude,
-		InstitutionTypeID:   row.InstitutionTypeID,
-		InstitutionTypeName: strPtr(row.InstitutionTypeName),
-		IsActive:            true,
+		IhrisFacilityID:      extID,
+		Nfrid:                nfrid,
+		DhisFacilityID:       row.DhisFacilityID,
+		Name:                 name,
+		FacilityTypeID:       row.FacilityTypeID,
+		FacilityTypeRefID:    facilityTypeRefID,
+		DistrictID:           districtID,
+		DistrictName:         districtName,
+		DistrictRefID:        geo.DistrictRefID,
+		RegionID:             geo.RegionID,
+		RegionCode:           geo.RegionCode,
+		Latitude:             geo.Latitude,
+		Longitude:            geo.Longitude,
+		InstitutionTypeID:    row.InstitutionTypeID,
+		InstitutionTypeName:  strPtr(row.InstitutionTypeName),
+		InstitutionTypeRefID: institutionTypeRefID,
+		IsActive:             true,
 	}
 
 	if err != nil {
@@ -183,16 +198,38 @@ func (s *IhrisSyncService) upsertDepartment(row models.IhrisData, facilityID uin
 		return 0, nil
 	}
 
-	var dept models.Department
-	err := facades.Orm().Query().Where("external_system_id", extID).First(&dept)
-	var facID *uint
+	var facility models.Facility
 	if facilityID > 0 {
-		facID = &facilityID
+		_ = facades.Orm().Query().Where("id", facilityID).First(&facility)
 	}
+
+	instName := strings.TrimSpace(row.InstitutionTypeName)
+	if instName == "" {
+		instName = deref(facility.InstitutionTypeName)
+	}
+	scopedByFacility := InstitutionUsesFacilityScopedDepartments(instName)
+
+	var dept models.Department
+	query := facades.Orm().Query().Where("external_system_id", extID)
+	if scopedByFacility && facilityID > 0 {
+		query = query.Where("facility_id", facilityID)
+	} else if facility.FacilityTypeRefID != nil {
+		query = query.Where("facility_type_ref_id", *facility.FacilityTypeRefID)
+	}
+	err := query.First(&dept)
+
 	payload := models.Department{
 		ExternalSystemID: extID,
 		Name:             name,
-		FacilityID:       facID,
+	}
+	if scopedByFacility && facilityID > 0 {
+		facID := facilityID
+		payload.FacilityID = &facID
+	} else if facility.FacilityTypeRefID != nil {
+		payload.FacilityTypeRefID = facility.FacilityTypeRefID
+	} else if facilityID > 0 {
+		facID := facilityID
+		payload.FacilityID = &facID
 	}
 	if err != nil {
 		if createErr := facades.Orm().Query().Create(&payload); createErr != nil {

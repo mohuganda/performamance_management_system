@@ -138,6 +138,7 @@ type updateHrProfileBody struct {
 	HrEmail        string `json:"hr_email"`
 	HrMobile       string `json:"hr_mobile"`
 	Notes          string `json:"notes"`
+	IsLeaveManager *bool  `json:"is_leave_manager"`
 	LockEmail      bool   `json:"lock_email"`
 	LockDepartment bool   `json:"lock_department"`
 	LockMobile     bool   `json:"lock_mobile"`
@@ -158,6 +159,7 @@ func (c *StaffAdminController) UpdateHrProfile(ctx http.Context) http.Response {
 		HrEmail:        body.HrEmail,
 		HrMobile:       body.HrMobile,
 		Notes:          body.Notes,
+		IsLeaveManager: body.IsLeaveManager,
 		LockEmail:      body.LockEmail,
 		LockDepartment: body.LockDepartment,
 		LockMobile:     body.LockMobile,

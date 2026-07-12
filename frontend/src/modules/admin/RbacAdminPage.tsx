@@ -331,6 +331,23 @@ export function RbacAdminPage() {
     onSuccess: invalidateUsers,
   })
 
+  const toggleLeaveManagerMutation = useMutation({
+    mutationFn: ({ id, is_leave_manager }: { id: number; is_leave_manager: boolean }) =>
+      rbacAdminService.updateUser(id, { is_leave_manager }),
+    onSuccess: (_data, variables) => {
+      invalidateUsers()
+      setManageUser((prev) =>
+        prev && prev.id === variables.id ? { ...prev, is_leave_manager: variables.is_leave_manager } : prev,
+      )
+      toast.success(
+        variables.is_leave_manager
+          ? 'User marked as leave management lead.'
+          : 'Leave management flag removed.',
+      )
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not update leave management flag'),
+  })
+
   const assignMutation = useMutation({
     mutationFn: () => rbacAdminService.assignRole(manageUser!.id, assignRoleCode),
     onSuccess: () => {
@@ -506,6 +523,9 @@ export function RbacAdminPage() {
             <div>{formatDate(row.last_login_at)}</div>
             {row.totp_enabled ? (
               <span className="text-[10px] font-medium text-moh-green">2FA on</span>
+            ) : null}
+            {row.is_leave_manager ? (
+              <span className="text-[10px] font-medium text-sky-700">Leave HR</span>
             ) : null}
           </td>
           <td className="px-4 py-3 text-right">
@@ -1035,6 +1055,40 @@ export function RbacAdminPage() {
                         Link selected staff
                       </Button>
                     </div>
+                  </section>
+
+                  <section className="rounded-sm border border-sky-200 bg-sky-50/40 p-4">
+                    <Typography {...mt} className="mb-3 text-xs font-bold uppercase text-sky-800">
+                      Leave management
+                    </Typography>
+                    {manageUser.staff_id ? (
+                      <Switch
+                        {...mt}
+                        checked={Boolean(manageUser.is_leave_manager)}
+                        disabled={toggleLeaveManagerMutation.isPending}
+                        onChange={() =>
+                          toggleLeaveManagerMutation.mutate({
+                            id: manageUser.id,
+                            is_leave_manager: !manageUser.is_leave_manager,
+                          })
+                        }
+                        label={
+                          <div>
+                            <span className="text-sm font-medium text-ui-text">
+                              In charge of leave management
+                            </span>
+                            <p className="mt-0.5 text-xs text-ui-muted">
+                              Designates this HR user as the leave approver for their facility during the
+                              approval workflow.
+                            </p>
+                          </div>
+                        }
+                      />
+                    ) : (
+                      <p className="text-sm text-ui-muted">
+                        Link a staff record first to assign leave management responsibility.
+                      </p>
+                    )}
                   </section>
 
                   <section className="rounded-sm border border-ui-border bg-ui-subtle/40 p-4">

@@ -196,6 +196,7 @@ func (s *StaffAdminService) buildStaffListRowsBatch(
 			if profile.HrEmail != nil && *profile.HrEmail != "" {
 				row.Email = *profile.HrEmail
 			}
+			row.IsLeaveManager = profile.IsLeaveManager
 		}
 
 		if sup, ok := supervisionMap[st.ID]; ok {

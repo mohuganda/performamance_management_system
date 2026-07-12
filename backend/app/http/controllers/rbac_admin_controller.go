@@ -18,6 +18,7 @@ type RbacAdminController struct {
 	audit      *services.AuditService
 	totp       *services.TotpService
 	activation *services.AccountActivationService
+	staffAdmin *services.StaffAdminService
 }
 
 func NewRbacAdminController() *RbacAdminController {
@@ -28,6 +29,7 @@ func NewRbacAdminController() *RbacAdminController {
 		audit:      services.NewAuditService(),
 		totp:       services.NewTotpService(),
 		activation: services.NewAccountActivationService(),
+		staffAdmin: services.NewStaffAdminService(),
 	}
 }
 
@@ -94,6 +96,7 @@ type updateUserBody struct {
 	IsActive           *bool   `json:"is_active"`
 	StaffID            *uint   `json:"staff_id"`
 	UnlinkStaff        *bool   `json:"unlink_staff"`
+	IsLeaveManager     *bool   `json:"is_leave_manager"`
 	ScopeLevel         *string `json:"scope_level"`
 	ScopeDistrictID    *string `json:"scope_district_id"`
 	ScopeFacilityID    *uint   `json:"scope_facility_id"`
@@ -112,6 +115,7 @@ func (c *RbacAdminController) UpdateUser(ctx http.Context) http.Response {
 		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
 	}
 	if body.Name == nil && body.IsActive == nil && body.StaffID == nil && body.UnlinkStaff == nil &&
+		body.IsLeaveManager == nil &&
 		body.ScopeLevel == nil && body.ScopeDistrictID == nil && body.ScopeFacilityID == nil && body.ScopeAssignments == nil {
 		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "no fields to update"})
 	}
@@ -141,6 +145,19 @@ func (c *RbacAdminController) UpdateUser(ctx http.Context) http.Response {
 	} else if body.StaffID != nil {
 		user, err = c.rbac.SetUserStaffID(uint(userID), body.StaffID)
 		if err != nil {
+			return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+		}
+	}
+
+	if body.IsLeaveManager != nil {
+		staffID := user.StaffID
+		if staffID == nil || *staffID == 0 {
+			return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{
+				"message": "link a staff record before assigning leave management responsibility",
+			})
+		}
+		actorID, _ := authctx.UserID(ctx)
+		if err := c.staffAdmin.SetLeaveManager(*staffID, actorID, *body.IsLeaveManager); err != nil {
 			return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 		}
 	}

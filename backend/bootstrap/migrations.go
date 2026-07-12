@@ -32,5 +32,11 @@ func Migrations() []schema.Migration {
 		&migrations.M20260725000001StaffAttendanceMonthlySummaries{},
 		&migrations.M20260726000001UserActivationTotp{},
 		&migrations.M20260727000001LeavePolicyOosDeliverables{},
+		&migrations.M20260728000001OrgCatalogTypes{},
+		&migrations.M20260729000001BackfillDistrictsCatalog{},
+		&migrations.M20260730000001BackfillOrgCatalogFromFacilities{},
+		&migrations.M20260731000001SeedOrgCatalog{},
+		&migrations.M20260732000001KpiAssignmentOrgTargets{},
+		&migrations.M20260733000001StaffLeaveManagerFlag{},
 	}
 }

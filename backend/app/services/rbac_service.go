@@ -29,6 +29,7 @@ type RbacUserRow struct {
 	IsSuperAdmin    bool       `json:"is_super_admin"`
 	StaffID         *uint      `json:"staff_id,omitempty"`
 	StaffName       string     `json:"staff_name,omitempty"`
+	IsLeaveManager  bool       `json:"is_leave_manager"`
 	PrimaryRole     string     `json:"primary_role"`
 	Roles           []string   `json:"roles"`
 	AccountCategory string     `json:"account_category"`
@@ -578,6 +579,22 @@ func loadStaffNamesByIDs(ids []uint) map[uint]string {
 	return out
 }
 
+func loadLeaveManagerFlags(ids []uint) map[uint]bool {
+	out := map[uint]bool{}
+	if len(ids) == 0 {
+		return out
+	}
+	var profiles []models.StaffHrProfile
+	_ = facades.Orm().Query().
+		Where("staff_id IN ?", ids).
+		Where("is_leave_manager", true).
+		Get(&profiles)
+	for _, profile := range profiles {
+		out[profile.StaffID] = true
+	}
+	return out
+}
+
 func collectStaffIDs(users []models.User) []uint {
 	ids := make([]uint, 0)
 	seen := map[uint]struct{}{}
@@ -911,6 +928,7 @@ func (s *RbacService) buildUserRows(
 	}
 	facilities := loadFacilitiesByIDs(facilityIDs)
 	staffNames := loadStaffNamesByIDs(collectStaffIDs(users))
+	leaveManagers := loadLeaveManagerFlags(collectStaffIDs(users))
 
 	rows := make([]RbacUserRow, 0, len(users))
 	for _, user := range users {
@@ -953,6 +971,7 @@ func (s *RbacService) buildUserRows(
 			if name, ok := staffNames[*user.StaffID]; ok {
 				row.StaffName = name
 			}
+			row.IsLeaveManager = leaveManagers[*user.StaffID]
 		}
 		rows = append(rows, row)
 	}

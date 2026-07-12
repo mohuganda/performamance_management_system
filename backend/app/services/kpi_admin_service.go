@@ -53,27 +53,49 @@ type KpiInput struct {
 }
 
 type KpiAssignmentRow struct {
-	ID               uint   `json:"id"`
-	KpiID            uint   `json:"kpi_id"`
-	KpiCode          string `json:"kpi_code"`
-	KpiName          string `json:"kpi_name"`
-	AssignableType   string `json:"assignable_type"`
-	JobID            *uint  `json:"job_id,omitempty"`
-	JobTitle         string `json:"job_title,omitempty"`
-	DepartmentID     *uint  `json:"department_id,omitempty"`
-	DepartmentName   string `json:"department_name,omitempty"`
-	StaffID          *uint  `json:"staff_id,omitempty"`
-	StaffName        string `json:"staff_name,omitempty"`
-	IsActive         bool   `json:"is_active"`
+	ID                 uint   `json:"id"`
+	KpiID              uint   `json:"kpi_id"`
+	KpiCode            string `json:"kpi_code"`
+	KpiName            string `json:"kpi_name"`
+	AssignableType     string `json:"assignable_type"`
+	FacilityTypeRefID  *uint  `json:"facility_type_ref_id,omitempty"`
+	FacilityTypeName   string `json:"facility_type_name,omitempty"`
+	FacilityID         *uint  `json:"facility_id,omitempty"`
+	FacilityName       string `json:"facility_name,omitempty"`
+	JobID              *uint  `json:"job_id,omitempty"`
+	JobTitle           string `json:"job_title,omitempty"`
+	DepartmentID       *uint  `json:"department_id,omitempty"`
+	DepartmentName     string `json:"department_name,omitempty"`
+	StaffID            *uint  `json:"staff_id,omitempty"`
+	StaffName          string `json:"staff_name,omitempty"`
+	IsActive           bool   `json:"is_active"`
 }
 
 type KpiAssignmentInput struct {
-	KpiID          uint
-	KpiIDs         []uint
-	AssignableType string
-	JobID          *uint
-	DepartmentID   *uint
-	StaffID        *uint
+	KpiID             uint
+	KpiIDs            []uint
+	AssignableType    string
+	FacilityTypeRefID *uint
+	FacilityID        *uint
+	JobID             *uint
+	DepartmentID      *uint
+	StaffID           *uint
+}
+
+type KpiAssignmentTargetOption struct {
+	ID               uint   `json:"id"`
+	Name             string `json:"name"`
+	Subtitle         string `json:"subtitle,omitempty"`
+	FacilityTypeName string `json:"facility_type_name,omitempty"`
+	FacilityName     string `json:"facility_name,omitempty"`
+	Scope            string `json:"scope,omitempty"`
+}
+
+type KpiAssignmentTargets struct {
+	FacilityTypes []KpiAssignmentTargetOption `json:"facility_types"`
+	Facilities    []KpiAssignmentTargetOption `json:"facilities"`
+	Departments   []KpiAssignmentTargetOption `json:"departments"`
+	Jobs          []KpiAssignmentTargetOption `json:"jobs"`
 }
 
 type KpiBulkAssignmentResult struct {
@@ -387,13 +409,15 @@ func (s *KpiAdminService) ListAssignmentsPaginated(
 	allRows := make([]KpiAssignmentRow, 0, len(assignments))
 	for _, a := range assignments {
 		row := KpiAssignmentRow{
-			ID:             a.ID,
-			KpiID:          a.KpiID,
-			AssignableType: a.AssignableType,
-			JobID:          a.JobID,
-			DepartmentID:   a.DepartmentID,
-			StaffID:        a.StaffID,
-			IsActive:       a.IsActive,
+			ID:                a.ID,
+			KpiID:             a.KpiID,
+			AssignableType:    a.AssignableType,
+			JobID:             a.JobID,
+			DepartmentID:      a.DepartmentID,
+			FacilityTypeRefID: a.FacilityTypeRefID,
+			FacilityID:        a.FacilityID,
+			StaffID:           a.StaffID,
+			IsActive:          a.IsActive,
 		}
 
 		var kpi models.Kpi
@@ -414,6 +438,18 @@ func (s *KpiAdminService) ListAssignmentsPaginated(
 			var dept models.Department
 			if err := facades.Orm().Query().Where("id", *a.DepartmentID).First(&dept); err == nil && dept.ID > 0 {
 				row.DepartmentName = dept.Name
+			}
+		}
+		if a.FacilityTypeRefID != nil {
+			var ft models.FacilityType
+			if err := facades.Orm().Query().Where("id", *a.FacilityTypeRefID).First(&ft); err == nil && ft.ID > 0 {
+				row.FacilityTypeName = ft.Name
+			}
+		}
+		if a.FacilityID != nil {
+			var facility models.Facility
+			if err := facades.Orm().Query().Where("id", *a.FacilityID).First(&facility); err == nil && facility.ID > 0 {
+				row.FacilityName = facility.Name
 			}
 		}
 		if a.StaffID != nil {
@@ -441,6 +477,14 @@ func (s *KpiAdminService) CreateAssignment(input KpiAssignmentInput) (models.Kpi
 		return models.KpiAssignment{}, fmt.Errorf("kpi_id is required")
 	}
 	switch input.AssignableType {
+	case "facility_type":
+		if input.FacilityTypeRefID == nil || *input.FacilityTypeRefID == 0 {
+			return models.KpiAssignment{}, fmt.Errorf("facility_type_ref_id is required for facility type assignments")
+		}
+	case "facility":
+		if input.FacilityID == nil || *input.FacilityID == 0 {
+			return models.KpiAssignment{}, fmt.Errorf("facility_id is required for facility assignments")
+		}
 	case "job":
 		if input.JobID == nil || *input.JobID == 0 {
 			return models.KpiAssignment{}, fmt.Errorf("job_id is required for job assignments")
@@ -454,12 +498,18 @@ func (s *KpiAdminService) CreateAssignment(input KpiAssignmentInput) (models.Kpi
 			return models.KpiAssignment{}, fmt.Errorf("staff_id is required for individual assignments")
 		}
 	default:
-		return models.KpiAssignment{}, fmt.Errorf("assignable_type must be job, department, or staff")
+		return models.KpiAssignment{}, fmt.Errorf("assignable_type must be facility_type, facility, job, department, or staff")
 	}
 
 	query := facades.Orm().Query().
 		Where("kpi_id", input.KpiID).
 		Where("assignable_type", input.AssignableType)
+	if input.FacilityTypeRefID != nil {
+		query = query.Where("facility_type_ref_id", *input.FacilityTypeRefID)
+	}
+	if input.FacilityID != nil {
+		query = query.Where("facility_id", *input.FacilityID)
+	}
 	if input.JobID != nil {
 		query = query.Where("job_id", *input.JobID)
 	}
@@ -481,12 +531,14 @@ func (s *KpiAdminService) CreateAssignment(input KpiAssignmentInput) (models.Kpi
 	}
 
 	row := models.KpiAssignment{
-		KpiID:          input.KpiID,
-		AssignableType: input.AssignableType,
-		JobID:          input.JobID,
-		DepartmentID:   input.DepartmentID,
-		StaffID:        input.StaffID,
-		IsActive:       true,
+		KpiID:             input.KpiID,
+		AssignableType:    input.AssignableType,
+		FacilityTypeRefID: input.FacilityTypeRefID,
+		FacilityID:        input.FacilityID,
+		JobID:             input.JobID,
+		DepartmentID:      input.DepartmentID,
+		StaffID:           input.StaffID,
+		IsActive:          true,
 	}
 	if err := facades.Orm().Query().Create(&row); err != nil {
 		return row, err
@@ -518,6 +570,12 @@ func (s *KpiAdminService) CreateAssignmentsBulk(input KpiAssignmentInput) (KpiBu
 		if input.DepartmentID != nil {
 			query = query.Where("department_id", *input.DepartmentID)
 		}
+		if input.FacilityTypeRefID != nil {
+			query = query.Where("facility_type_ref_id", *input.FacilityTypeRefID)
+		}
+		if input.FacilityID != nil {
+			query = query.Where("facility_id", *input.FacilityID)
+		}
 		if input.StaffID != nil {
 			query = query.Where("staff_id", *input.StaffID)
 		}
@@ -525,11 +583,13 @@ func (s *KpiAdminService) CreateAssignmentsBulk(input KpiAssignmentInput) (KpiBu
 		hadExisting := query.First(&existing) == nil && existing.ID > 0
 
 		row, err := s.CreateAssignment(KpiAssignmentInput{
-			KpiID:          kpiID,
-			AssignableType: input.AssignableType,
-			JobID:          input.JobID,
-			DepartmentID:   input.DepartmentID,
-			StaffID:        input.StaffID,
+			KpiID:             kpiID,
+			AssignableType:    input.AssignableType,
+			FacilityTypeRefID: input.FacilityTypeRefID,
+			FacilityID:        input.FacilityID,
+			JobID:             input.JobID,
+			DepartmentID:      input.DepartmentID,
+			StaffID:           input.StaffID,
 		})
 		if err != nil {
 			result.Failed++
@@ -568,6 +628,84 @@ func (s *KpiAdminService) ListJobs() ([]models.JobTitle, error) {
 	return rows, err
 }
 
+func (s *KpiAdminService) AssignmentTargets() (KpiAssignmentTargets, error) {
+	out := KpiAssignmentTargets{
+		FacilityTypes: []KpiAssignmentTargetOption{},
+		Facilities:    []KpiAssignmentTargetOption{},
+		Departments:   []KpiAssignmentTargetOption{},
+		Jobs:          []KpiAssignmentTargetOption{},
+	}
+
+	var facilityTypes []models.FacilityType
+	_ = facades.Orm().Query().Where("is_active", true).Order("name asc").Get(&facilityTypes)
+	facilityTypeNames := map[uint]string{}
+	for _, row := range facilityTypes {
+		facilityTypeNames[row.ID] = row.Name
+		out.FacilityTypes = append(out.FacilityTypes, KpiAssignmentTargetOption{
+			ID:       row.ID,
+			Name:     row.Name,
+			Subtitle: "All facilities of this type",
+		})
+	}
+
+	var facilities []models.Facility
+	_ = facades.Orm().Query().Where("is_active", true).Order("name asc").Get(&facilities)
+	facilityNames := map[uint]string{}
+	for _, row := range facilities {
+		facilityNames[row.ID] = row.Name
+		subtitle := ""
+		if row.FacilityTypeRefID != nil {
+			subtitle = "Facility type: " + facilityTypeNames[*row.FacilityTypeRefID]
+		}
+		out.Facilities = append(out.Facilities, KpiAssignmentTargetOption{
+			ID:               row.ID,
+			Name:             row.Name,
+			Subtitle:         subtitle,
+			FacilityTypeName: facilityTypeNames[derefUint(row.FacilityTypeRefID)],
+		})
+	}
+
+	var departments []models.Department
+	_ = facades.Orm().Query().Order("name asc").Get(&departments)
+	for _, row := range departments {
+		opt := KpiAssignmentTargetOption{
+			ID:   row.ID,
+			Name: row.Name,
+		}
+		if row.FacilityTypeRefID != nil {
+			opt.FacilityTypeName = facilityTypeNames[*row.FacilityTypeRefID]
+			opt.Subtitle = "Facility type: " + opt.FacilityTypeName
+			opt.Scope = "Shared by facility type"
+		}
+		if row.FacilityID != nil {
+			opt.FacilityName = facilityNames[*row.FacilityID]
+			if opt.Subtitle != "" {
+				opt.Subtitle += " · "
+			}
+			opt.Subtitle += "Facility: " + opt.FacilityName
+			opt.Scope = "Facility-specific"
+		}
+		if opt.Subtitle == "" {
+			opt.Subtitle = "Organisation-wide department pool"
+		}
+		out.Departments = append(out.Departments, opt)
+	}
+
+	jobs, err := s.ListJobs()
+	if err != nil {
+		return out, err
+	}
+	for _, row := range jobs {
+		out.Jobs = append(out.Jobs, KpiAssignmentTargetOption{
+			ID:       row.ID,
+			Name:     row.JobTitle,
+			Subtitle: "Mandatory for all staff with this job title",
+		})
+	}
+
+	return out, nil
+}
+
 func (s *KpiAdminService) ListDepartments() ([]models.Department, error) {
 	var rows []models.Department
 	err := facades.Orm().Query().Order("name asc").Get(&rows)
@@ -595,11 +733,38 @@ func (s *KpiAdminService) SearchStaff(search string, limit int) ([]map[string]an
 	}
 	out := make([]map[string]any, 0, len(staffRows))
 	for _, st := range staffRows {
-		out = append(out, map[string]any{
+		item := map[string]any{
 			"staff_id": st.ID,
 			"name":     staffDisplayName(st),
 			"email":    deref(st.Email),
-		})
+		}
+		var contract models.StaffContract
+		if err := facades.Orm().Query().
+			Where("staff_id", st.ID).
+			Where("contract_status", "active").
+			First(&contract); err == nil && contract.ID > 0 {
+			var facility models.Facility
+			if err := facades.Orm().Query().Where("id", contract.FacilityID).First(&facility); err == nil && facility.ID > 0 {
+				item["facility_name"] = facility.Name
+				if facility.FacilityTypeRefID != nil {
+					var ft models.FacilityType
+					if err := facades.Orm().Query().Where("id", *facility.FacilityTypeRefID).First(&ft); err == nil && ft.ID > 0 {
+						item["facility_type_name"] = ft.Name
+					}
+				}
+			}
+			if contract.DepartmentID != nil {
+				var dept models.Department
+				if err := facades.Orm().Query().Where("id", *contract.DepartmentID).First(&dept); err == nil && dept.ID > 0 {
+					item["department_name"] = dept.Name
+				}
+			}
+			var job models.JobTitle
+			if err := facades.Orm().Query().Where("id", contract.JobID).First(&job); err == nil && job.ID > 0 {
+				item["job_title"] = job.JobTitle
+			}
+		}
+		out = append(out, item)
 	}
 	s.cache.Put(cacheKey, out)
 	return out, nil

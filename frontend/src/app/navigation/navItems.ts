@@ -54,6 +54,13 @@ export const navGroups: NavGroup[] = [
         ],
         anyPermission: true,
       },
+      {
+        id: 'approvals',
+        label: 'Approvals',
+        path: '/approvals',
+        icon: ClipboardList,
+        description: 'Pending leave, out-of-station, and performance approvals',
+      },
     ],
   },
   {
@@ -68,20 +75,6 @@ export const navGroups: NavGroup[] = [
         icon: BarChart3,
         description: 'PPA, KPIs, and quarterly reporting',
         permission: 'performance.view',
-      },
-    ],
-  },
-  {
-    id: 'performance-reports',
-    label: 'Reports',
-    icon: ClipboardList,
-    items: [
-      {
-        id: 'performance-reports',
-        label: 'Reports',
-        path: '/performance/reports',
-        icon: ClipboardList,
-        description: 'PPA and quarterly status with scores — scoped to your access level',
       },
     ],
   },
@@ -128,6 +121,20 @@ export const navGroups: NavGroup[] = [
         path: '/settings',
         icon: Settings,
         description: 'Preferences, reference lists, and system configuration',
+      },
+    ],
+  },
+  {
+    id: 'performance-reports',
+    label: 'Reports',
+    icon: ClipboardList,
+    items: [
+      {
+        id: 'performance-reports',
+        label: 'Reports',
+        path: '/performance/reports',
+        icon: ClipboardList,
+        description: 'PPA and quarterly status with scores — scoped to your access level',
       },
     ],
   },
@@ -234,8 +241,32 @@ export function visibleNavGroups(permissions: string[]): NavGroup[] {
     .filter((group) => group.items.length > 0)
 }
 
-export function isGroupActive(group: NavGroup, pathname: string): boolean {
-  return group.items.some((item) => pathname.startsWith(item.path))
+export function isGroupActive(group: NavGroup, pathname: string, allPaths?: string[]): boolean {
+  return group.items.some((item) => isNavPathActive(pathname, item.path, allPaths))
+}
+
+/** Prefer the most specific matching nav path (e.g. /performance/reports over /performance). */
+export function resolveActiveNavPath(pathname: string, navPaths: string[]): string | null {
+  const matches = navPaths.filter(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  )
+  if (matches.length === 0) return null
+  return matches.sort((a, b) => b.length - a.length)[0]
+}
+
+export function collectNavPaths(groups: NavGroup[]): string[] {
+  return groups.flatMap((group) => group.items.map((item) => item.path))
+}
+
+export function isNavPathActive(
+  pathname: string,
+  itemPath: string,
+  allPaths?: string[],
+): boolean {
+  if (!allPaths || allPaths.length === 0) {
+    return pathname === itemPath || pathname.startsWith(`${itemPath}/`)
+  }
+  return resolveActiveNavPath(pathname, allPaths) === itemPath
 }
 
 export function resolveDashboardPermission(permissions: string[]): string {

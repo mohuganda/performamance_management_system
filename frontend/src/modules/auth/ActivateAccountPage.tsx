@@ -18,6 +18,7 @@ export function ActivateAccountPage() {
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [staffName, setStaffName] = useState('')
   const [email, setEmail] = useState('')
+  const [hasAccount, setHasAccount] = useState(false)
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -36,6 +37,7 @@ export function ActivateAccountPage() {
         setStaffName(preview.staff_name)
         setEmail(preview.email)
         setName(preview.staff_name)
+        setHasAccount(preview.has_account)
         setPreviewError(null)
       })
       .catch((err: unknown) => {
@@ -85,10 +87,12 @@ export function ActivateAccountPage() {
           className="w-full max-w-lg rounded-sm border border-ui-border bg-ui-surface p-8 shadow-sm"
         >
           <Typography {...mt} variant="h5" className="font-semibold text-ui-text">
-            Activate your account
+            {hasAccount ? 'Reset your password' : 'Activate your account'}
           </Typography>
           <Typography {...mt} className="mb-6 mt-1 text-sm text-ui-muted">
-            Set your password to access MoH Performance Management System.
+            {hasAccount
+              ? 'Choose a new password for your MoH Performance Management System account.'
+              : 'Set your password to access MoH Performance Management System.'}
           </Typography>
 
           {loading ? (
@@ -110,7 +114,8 @@ export function ActivateAccountPage() {
           ) : (
             <form className="space-y-4" onSubmit={handleSubmit}>
               <p className="rounded-sm border border-moh-green/20 bg-moh-green/5 px-3 py-2 text-sm text-ui-text">
-                Activating account for <strong>{staffName}</strong>
+                {hasAccount ? 'Resetting password for' : 'Activating account for'}{' '}
+                <strong>{staffName}</strong>
                 {email ? (
                   <>
                     {' '}
@@ -158,7 +163,7 @@ export function ActivateAccountPage() {
                 className="rounded-sm bg-uganda-black normal-case hover:bg-ui-text"
                 disabled={submitting}
               >
-                {submitting ? 'Activating…' : 'Activate and continue'}
+                {submitting ? 'Saving…' : hasAccount ? 'Update password and continue' : 'Activate and continue'}
               </Button>
               <p className="text-center text-xs text-ui-muted">
                 After activation you can update your profile and optionally enable an authenticator

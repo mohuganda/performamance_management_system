@@ -13,7 +13,9 @@ import { UserAccountMenu } from '@/components/molecules/UserAccountMenu'
 import { useAuthStore } from '@/stores/appStore'
 import { redirectToLogin } from '@/utils/authRedirect'
 import {
+  collectNavPaths,
   isGroupActive,
+  isNavPathActive,
   type NavGroup,
   type NavItem,
   visibleNavGroups,
@@ -24,17 +26,19 @@ import { cn } from '@/utils/cn'
 function NavGroupMenu({
   group,
   pathname,
+  navPaths,
 }: {
   group: NavGroup
   pathname: string
+  navPaths: string[]
 }) {
-  const active = isGroupActive(group, pathname)
+  const active = isGroupActive(group, pathname, navPaths)
   const GroupIcon = group.icon
 
   if (group.items.length === 1) {
     const item = group.items[0]
     const Icon = item.icon
-    const itemActive = pathname.startsWith(item.path)
+    const itemActive = isNavPathActive(pathname, item.path, navPaths)
     return (
       <NavLink to={item.path}>
         <Button
@@ -76,16 +80,24 @@ function NavGroupMenu({
       </MenuHandler>
       <MenuList {...mt} className="min-w-[240px] rounded-sm border border-ui-border p-1.5 shadow-lg">
         {group.items.map((item) => (
-          <NavGroupMenuItem key={item.id} item={item} pathname={pathname} />
+          <NavGroupMenuItem key={item.id} item={item} pathname={pathname} navPaths={navPaths} />
         ))}
       </MenuList>
     </Menu>
   )
 }
 
-function NavGroupMenuItem({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavGroupMenuItem({
+  item,
+  pathname,
+  navPaths,
+}: {
+  item: NavItem
+  pathname: string
+  navPaths: string[]
+}) {
   const Icon = item.icon
-  const active = pathname.startsWith(item.path)
+  const active = isNavPathActive(pathname, item.path, navPaths)
   return (
     <NavLink to={item.path}>
       <MenuItem
@@ -114,6 +126,7 @@ export function AppLayout() {
   const location = useLocation()
 
   const groups = visibleNavGroups(permissions)
+  const navPaths = collectNavPaths(groups)
   const roleLabel = roles[0]?.replace(/_/g, ' ') ?? 'User'
 
   return (
@@ -139,7 +152,7 @@ export function AppLayout() {
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2 py-2">
           <nav className="hidden items-center gap-0.5 lg:flex">
             {groups.map((group) => (
-              <NavGroupMenu key={group.id} group={group} pathname={location.pathname} />
+              <NavGroupMenu key={group.id} group={group} pathname={location.pathname} navPaths={navPaths} />
             ))}
           </nav>
 
@@ -169,7 +182,7 @@ export function AppLayout() {
               </p>
               <div className="flex flex-wrap gap-1">
                 {group.items.map((item) => {
-                  const active = location.pathname.startsWith(item.path)
+                  const active = isNavPathActive(location.pathname, item.path, navPaths)
                   return (
                     <NavLink key={item.id} to={item.path}>
                       <Button

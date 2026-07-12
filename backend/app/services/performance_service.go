@@ -319,6 +319,36 @@ func (s *PerformanceService) resolveAssignedKpis(ctx staffContext) (map[uint]res
 					continue
 				}
 			}
+		case "facility":
+			if a.FacilityID != nil {
+				var contract models.StaffContract
+				if err := facades.Orm().Query().
+					Where("staff_id", ctx.StaffID).
+					Where("contract_status", "active").
+					First(&contract); err == nil && contract.ID > 0 && contract.FacilityID == *a.FacilityID {
+					_, ok := out[a.KpiID]
+					if !ok {
+						out[a.KpiID] = resolvedKpi{KpiID: a.KpiID, Source: "facility", IsMandatory: false}
+					}
+				}
+			}
+		case "facility_type":
+			if a.FacilityTypeRefID != nil {
+				var contract models.StaffContract
+				if err := facades.Orm().Query().
+					Where("staff_id", ctx.StaffID).
+					Where("contract_status", "active").
+					First(&contract); err == nil && contract.ID > 0 {
+					var facility models.Facility
+					if err := facades.Orm().Query().Where("id", contract.FacilityID).First(&facility); err == nil && facility.ID > 0 &&
+						facility.FacilityTypeRefID != nil && *facility.FacilityTypeRefID == *a.FacilityTypeRefID {
+						_, ok := out[a.KpiID]
+						if !ok {
+							out[a.KpiID] = resolvedKpi{KpiID: a.KpiID, Source: "facility_type", IsMandatory: false}
+						}
+					}
+				}
+			}
 		case "staff":
 			if a.StaffID != nil && *a.StaffID == ctx.StaffID {
 				out[a.KpiID] = resolvedKpi{KpiID: a.KpiID, Source: "individual", IsMandatory: true}
@@ -737,6 +767,8 @@ func (s *PerformanceService) SubmitPpa(staffID uint) error {
 	}
 
 	ppa.Status = "supervisor_review"
+	now := time.Now()
+	ppa.SubmittedAt = &now
 	if err := facades.Orm().Query().Save(&ppa); err != nil {
 		return err
 	}

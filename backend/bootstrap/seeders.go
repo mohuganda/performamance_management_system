@@ -13,6 +13,7 @@ func Seeders() []seeder.Seeder {
 		&seeders.PerformanceConfigSeeder{},
 		&seeders.SystemConfigSeeder{},
 		&seeders.DistrictsSeeder{},
+		&seeders.OrgCatalogSeeder{},
 		&seeders.AttendanceModuleSeeder{},
 		&seeders.PmsSeeder{},
 		&seeders.DemoAccountsSeeder{},

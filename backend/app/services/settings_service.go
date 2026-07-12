@@ -138,6 +138,7 @@ func (s *SettingsService) dataSourcesConfig() map[string]any {
 			"api_key":      s.GetString("google_maps.api_key", ""),
 			"country_code": s.GetString("google_maps.country_code", "ug"),
 		},
+		"analytics": NewAnalyticsStore().Status(),
 	}
 }
 

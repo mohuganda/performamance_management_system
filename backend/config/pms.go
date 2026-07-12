@@ -70,6 +70,14 @@ func init() {
 			"api_base_url": config.Env("HRM_ATTEND_API_URL", "http://localhost/attend"),
 			"enabled":      true,
 		},
+		"analytics": map[string]any{
+			"enabled":  config.Env("ANALYTICS_DB_ENABLED", false),
+			"host":     config.Env("ANALYTICS_DB_HOST", "127.0.0.1"),
+			"port":     config.Env("ANALYTICS_DB_PORT", "9030"),
+			"database": config.Env("ANALYTICS_DB_DATABASE", "moh_pms_analytics"),
+			"username": config.Env("ANALYTICS_DB_USERNAME", "root"),
+			"password": config.Env("ANALYTICS_DB_PASSWORD", ""),
+		},
 		"dashboard": map[string]any{
 			"export_formats": []string{"excel", "pdf", "ppt", "print"},
 			"cache_ttl_seconds": 300,

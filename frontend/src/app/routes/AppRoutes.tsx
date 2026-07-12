@@ -13,6 +13,7 @@ import { DepartmentHeadDashboard } from '@/modules/dashboard/DepartmentHeadDashb
 import { HRManagerDashboard } from '@/modules/dashboard/HRManagerDashboard'
 import { LoginPage } from '@/modules/auth/LoginPage'
 import { ActivateAccountPage } from '@/modules/auth/ActivateAccountPage'
+import { ApprovalsPage } from '@/modules/approvals/ApprovalsPage'
 import { LeavePage } from '@/modules/leave/LeavePage'
 import { OutOfStationPage } from '@/modules/out-of-station/OutOfStationPage'
 import { AttendancePage } from '@/modules/attendance/AttendancePage'
@@ -107,6 +108,7 @@ function AuthenticatedApp() {
       <Route element={<AppLayout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardRouter />} />
+        <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="performance" element={<PerformancePage />} />
         <Route path="performance/reports" element={<PerformanceReportsPage />} />
         <Route

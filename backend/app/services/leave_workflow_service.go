@@ -231,6 +231,12 @@ func (s *LeaveWorkflowService) resolveJobHolderApprover(placement StaffPlacement
 		scope = "facility"
 	}
 
+	if managerID, err := s.findLeaveManagerAtScope(placement, scope); err != nil {
+		return 0, err
+	} else if managerID > 0 {
+		return managerID, nil
+	}
+
 	var contracts []models.StaffContract
 	query := facades.Orm().Query().
 		Where("contract_status", "active").
@@ -293,6 +299,62 @@ func (s *LeaveWorkflowService) resolveJobHolderApprover(placement StaffPlacement
 	}
 
 	return 0, nil
+}
+
+func (s *LeaveWorkflowService) findLeaveManagerAtScope(placement StaffPlacement, scope string) (uint, error) {
+	var profiles []models.StaffHrProfile
+	if err := facades.Orm().Query().Where("is_leave_manager", true).Get(&profiles); err != nil {
+		return 0, err
+	}
+	if len(profiles) == 0 {
+		return 0, nil
+	}
+
+	managerIDs := make([]uint, 0, len(profiles))
+	for _, profile := range profiles {
+		if profile.StaffID > 0 && profile.StaffID != placement.StaffID {
+			managerIDs = append(managerIDs, profile.StaffID)
+		}
+	}
+	if len(managerIDs) == 0 {
+		return 0, nil
+	}
+
+	var contracts []models.StaffContract
+	query := facades.Orm().Query().
+		Where("contract_status", "active").
+		Where("staff_id IN ?", managerIDs)
+
+	switch scope {
+	case "facility":
+		query = query.Where("facility_id", placement.FacilityID)
+	case "district":
+		if placement.DistrictRefID == nil || *placement.DistrictRefID == 0 {
+			return 0, nil
+		}
+		var facilityIDs []uint
+		var facilities []models.Facility
+		_ = facades.Orm().Query().Where("district_ref_id", *placement.DistrictRefID).Get(&facilities)
+		for _, f := range facilities {
+			facilityIDs = append(facilityIDs, f.ID)
+		}
+		if len(facilityIDs) == 0 {
+			return 0, nil
+		}
+		query = query.Where("facility_id IN ?", facilityIDs)
+	case "ministry":
+		// Ministry-wide: any flagged leave manager with an active contract.
+	default:
+		query = query.Where("facility_id", placement.FacilityID)
+	}
+
+	if err := query.Get(&contracts); err != nil {
+		return 0, err
+	}
+	if len(contracts) == 0 {
+		return 0, nil
+	}
+	return contracts[0].StaffID, nil
 }
 
 func (s *LeaveWorkflowService) HrFinalizeStageCodes() []string {

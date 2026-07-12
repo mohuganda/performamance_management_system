@@ -41,6 +41,7 @@ export type RbacUserRow = {
   is_super_admin: boolean
   staff_id?: number
   staff_name?: string
+  is_leave_manager?: boolean
   primary_role: string
   roles: string[]
   account_category: RoleCategory
@@ -189,6 +190,7 @@ export const rbacAdminService = {
       is_active?: boolean
       staff_id?: number
       unlink_staff?: boolean
+      is_leave_manager?: boolean
       scope_level?: string
       scope_district_id?: string
       scope_facility_id?: number

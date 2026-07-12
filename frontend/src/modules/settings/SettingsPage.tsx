@@ -19,7 +19,7 @@ import {
 } from '@material-tailwind/react'
 import { Select, Option } from '@/components/molecules/MtSelect'
 import { Link } from 'react-router-dom'
-import { adminSettingsService, hrmAttendAdminService, ihrisAdminService, performanceAdminService } from '@/api/services/admin'
+import { adminSettingsService, analyticsAdminService, hrmAttendAdminService, ihrisAdminService, performanceAdminService } from '@/api/services/admin'
 import { kpiAdminService } from '@/api/services/kpiAdmin'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
@@ -248,7 +248,7 @@ export function SettingsPage() {
       while (hasMore) {
         const result = await ihrisAdminService.syncBatch({
           run_id: runId,
-          pages_per_batch: 3,
+          pages_per_batch: 1,
         })
         runId = result.run_id
         hasMore = result.has_more ?? false
@@ -271,6 +271,18 @@ export function SettingsPage() {
     },
     onError: (error: unknown) => notifyApiError(error, 'HRM Attend sync failed'),
   })
+
+  const dorisSyncMutation = useMutation({
+    mutationFn: () => analyticsAdminService.sync(),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+      const total = Object.values(result.tables ?? {}).reduce((sum, n) => sum + n, 0)
+      toast.success(result.message ?? `Replicated ${total} rows to Doris.`)
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Doris analytics sync failed'),
+  })
+
+  const analyticsStatus = settingsQuery.data?.data_sources.analytics
 
   const sendReminders = useMutation({
     mutationFn: () => adminSettingsService.sendReminders(),
@@ -565,6 +577,57 @@ export function SettingsPage() {
                     Save a non-localhost HRM base URL before running sync on this server.
                   </p>
                 ) : null}
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
+              title="Apache Doris analytics (optional)"
+              description="OLAP read replica for faster attendance, leave, and dashboard reports. MySQL remains the system of record for all writes."
+              accent="blue"
+            >
+              <div className="space-y-4">
+                <div className="rounded-sm border border-gray-100 bg-gray-50/80 p-3 text-sm text-gray-700">
+                  <p>
+                    Status:{' '}
+                    <span className="font-semibold">
+                      {analyticsStatus?.enabled
+                        ? analyticsStatus.connected
+                          ? 'Connected'
+                          : 'Enabled but unreachable'
+                        : 'Disabled'}
+                    </span>
+                  </p>
+                  {analyticsStatus?.message ? (
+                    <p className="mt-1 text-xs text-gray-500">{analyticsStatus.message}</p>
+                  ) : null}
+                  {analyticsStatus?.database ? (
+                    <p className="mt-1 text-xs text-gray-500">Database: {analyticsStatus.database}</p>
+                  ) : null}
+                  {analyticsStatus?.last_sync_at ? (
+                    <p className="mt-1 text-xs text-gray-500">Last OLTP sync: {analyticsStatus.last_sync_at}</p>
+                  ) : null}
+                </div>
+                {!analyticsStatus?.enabled ? (
+                  <p className="text-xs text-gray-500">
+                    Set <code className="text-[11px]">ANALYTICS_DB_ENABLED=true</code> on the API server and start
+                    Doris (see <code className="text-[11px]">docker-compose.analytics.yml</code>). Dashboards
+                    automatically fall back to MySQL when Doris is off.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      {...mt}
+                      size="sm"
+                      variant="outlined"
+                      className="rounded-sm normal-case"
+                      onClick={() => dorisSyncMutation.mutate()}
+                      loading={dorisSyncMutation.isPending}
+                      disabled={!analyticsStatus.connected}
+                    >
+                      Sync OLTP data to Doris
+                    </Button>
+                  </div>
+                )}
               </div>
             </SettingsSection>
 

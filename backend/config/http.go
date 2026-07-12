@@ -26,8 +26,8 @@ func init() {
 		"host": config.Env("APP_HOST", "127.0.0.1"),
 		// HTTP Port
 		"port": config.Env("APP_PORT", "3030"),
-		// HTTP Timeout, default is 3 seconds
-		"request_timeout": 3,
+		// HTTP Timeout for incoming requests (seconds). Sync batches need several minutes.
+		"request_timeout": config.Env("HTTP_REQUEST_TIMEOUT", 300),
 		// HTTPS Configuration
 		"tls": map[string]any{
 			// HTTPS Host

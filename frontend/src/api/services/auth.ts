@@ -122,6 +122,10 @@ export const authService = {
     const { data } = await apiClient.post<{ message: string }>('/auth/request-activation', { email })
     return data
   },
+  requestPasswordReset: async (email: string) => {
+    const { data } = await apiClient.post<{ message: string }>('/auth/request-password-reset', { email })
+    return data
+  },
   previewActivation: async (token: string): Promise<ActivationPreview> => {
     const { data } = await apiClient.get<ActivationPreview>(`/auth/activation/${encodeURIComponent(token)}`)
     return data

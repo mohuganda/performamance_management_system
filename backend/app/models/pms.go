@@ -22,7 +22,31 @@ type Facility struct {
 	Longitude           *float64
 	InstitutionTypeID   *string
 	InstitutionTypeName *string
+	FacilityTypeRefID   *uint `gorm:"column:facility_type_ref_id"`
+	InstitutionTypeRefID *uint `gorm:"column:institution_type_ref_id"`
 	IsActive            bool
+}
+
+type FacilityType struct {
+	orm.Model
+	ExternalSystemID string `gorm:"column:external_system_id;uniqueIndex"`
+	Name             string `gorm:"column:name"`
+	IsActive         bool   `gorm:"column:is_active;default:true"`
+}
+
+func (FacilityType) TableName() string {
+	return "facility_types"
+}
+
+type InstitutionType struct {
+	orm.Model
+	ExternalSystemID string `gorm:"column:external_system_id;uniqueIndex"`
+	Name             string `gorm:"column:name"`
+	IsActive         bool   `gorm:"column:is_active;default:true"`
+}
+
+func (InstitutionType) TableName() string {
+	return "institution_types"
 }
 
 type Region struct {
@@ -58,10 +82,12 @@ func (District) TableName() string {
 
 type Department struct {
 	orm.Model
-	Name             string `json:"name"`
-	ExternalSystemID string `json:"external_system_id" gorm:"column:external_system_id;uniqueIndex"`
-	FacilityID       *uint  `json:"facility_id,omitempty" gorm:"column:facility_id"`
-	Facility         *Facility `json:"facility,omitempty" gorm:"foreignKey:FacilityID"`
+	Name               string    `json:"name"`
+	ExternalSystemID   string    `json:"external_system_id" gorm:"column:external_system_id;uniqueIndex"`
+	FacilityID         *uint     `json:"facility_id,omitempty" gorm:"column:facility_id"`
+	FacilityTypeRefID  *uint     `json:"facility_type_ref_id,omitempty" gorm:"column:facility_type_ref_id"`
+	Facility           *Facility `json:"facility,omitempty" gorm:"foreignKey:FacilityID"`
+	FacilityType       *FacilityType `json:"facility_type,omitempty" gorm:"foreignKey:FacilityTypeRefID"`
 }
 
 type JobTitle struct {
@@ -129,7 +155,8 @@ type StaffHrProfile struct {
 	HrMobile         *string `gorm:"column:hr_mobile"`
 	LockedFields     *string `gorm:"column:locked_fields"`
 	Notes            *string
-	UpdatedByUserID  *uint `gorm:"column:updated_by_user_id"`
+	IsLeaveManager   bool    `gorm:"column:is_leave_manager;default:false"`
+	UpdatedByUserID  *uint   `gorm:"column:updated_by_user_id"`
 	Department       *Department `gorm:"foreignKey:HrDepartmentID"`
 }
 
@@ -218,15 +245,17 @@ type Objective struct {
 
 type KpiAssignment struct {
 	orm.Model
-	KpiID          uint
-	AssignableType string `gorm:"column:assignable_type"`
-	DepartmentID   *uint
-	JobID          *uint
-	StaffID        *uint
-	ObjectiveID    *uint
-	EffectiveFrom  *time.Time
-	EffectiveTo    *time.Time
-	IsActive       bool `gorm:"default:true"`
+	KpiID              uint
+	AssignableType     string `gorm:"column:assignable_type"`
+	FacilityTypeRefID  *uint  `gorm:"column:facility_type_ref_id"`
+	FacilityID         *uint  `gorm:"column:facility_id"`
+	DepartmentID       *uint
+	JobID              *uint
+	StaffID            *uint
+	ObjectiveID        *uint
+	EffectiveFrom      *time.Time
+	EffectiveTo        *time.Time
+	IsActive           bool `gorm:"default:true"`
 }
 
 type Ppa struct {

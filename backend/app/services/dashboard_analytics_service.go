@@ -10,11 +10,15 @@ import (
 )
 
 type DashboardAnalyticsService struct {
-	hrm *HrmAttendService
+	hrm   *HrmAttendService
+	doris *DorisAnalyticsService
 }
 
 func NewDashboardAnalyticsService() *DashboardAnalyticsService {
-	return &DashboardAnalyticsService{hrm: NewHrmAttendService()}
+	return &DashboardAnalyticsService{
+		hrm:   NewHrmAttendService(),
+		doris: NewDorisAnalyticsService(),
+	}
 }
 
 type DistrictCoverageRow struct {
@@ -239,6 +243,13 @@ func (s *DashboardAnalyticsService) demoDistrictCoverage() []DistrictCoverageRow
 }
 
 func (s *DashboardAnalyticsService) oosRatesByDistrict() map[string]float64 {
+	if s.doris.Available() {
+		since := time.Now().AddDate(0, -3, 0)
+		if rates, err := s.doris.OosRatesByDistrict(since); err == nil && len(rates) > 0 {
+			return rates
+		}
+	}
+
 	out := map[string]float64{}
 	type bucket struct{ verified, total int }
 	counts := map[string]*bucket{}
@@ -287,7 +298,21 @@ func (s *DashboardAnalyticsService) AttendanceTrends(months int) map[string]any 
 	if months <= 0 {
 		months = 4
 	}
+
 	hrmRows := s.hrm.MonthlySummaries(months)
+	monthlyOos := map[string]float64{}
+	source := "mysql"
+
+	if s.doris.Available() {
+		if dorisRows, err := s.doris.AttendanceMonthlyTrends(months); err == nil && len(dorisRows) > 0 {
+			hrmRows = dorisRows
+			source = "doris"
+		}
+		if rates, err := s.doris.MonthlyOosRates(months); err == nil && len(rates) > 0 {
+			monthlyOos = rates
+		}
+	}
+
 	labels := make([]string, 0, len(hrmRows))
 	hrmSeries := make([]float64, 0, len(hrmRows))
 	oosSeries := make([]float64, 0, len(hrmRows))
@@ -297,9 +322,12 @@ func (s *DashboardAnalyticsService) AttendanceTrends(months int) map[string]any 
 	for i, row := range hrmRows {
 		labels = append(labels, row.Month)
 		hrmSeries = append(hrmSeries, row.DutyStationPercent)
-		oos := oosBase + float64(i%3) - 1
-		if oos < 70 {
-			oos = 70
+		oos := monthlyOos[row.Month]
+		if oos == 0 {
+			oos = oosBase + float64(i%3) - 1
+			if oos < 70 {
+				oos = 70
+			}
 		}
 		oosSeries = append(oosSeries, math.Round(oos*10)/10)
 		combined = append(combined, math.Round((oos*0.35+row.DutyStationPercent*0.65)*10)/10)
@@ -308,15 +336,23 @@ func (s *DashboardAnalyticsService) AttendanceTrends(months int) map[string]any 
 	return map[string]any{
 		"labels": labels,
 		"series": map[string]any{
-			"hrm_duty_station":    hrmSeries,
-			"pms_out_of_station":  oosSeries,
+			"hrm_duty_station":     hrmSeries,
+			"pms_out_of_station":   oosSeries,
 			"combined_full_record": combined,
 		},
-		"target": s.AttendanceTarget(),
+		"target":  s.AttendanceTarget(),
+		"source":  source,
 	}
 }
 
 func (s *DashboardAnalyticsService) nationalOosRate() float64 {
+	if s.doris.Available() {
+		since := time.Now().AddDate(0, -1, 0)
+		if rate, total, err := s.doris.NationalOosRate(since); err == nil && total > 0 {
+			return math.Round(rate*10) / 10
+		}
+	}
+
 	var total, verified int64
 	since := time.Now().AddDate(0, -1, 0)
 	var clocks []models.AttendanceClock

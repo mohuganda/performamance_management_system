@@ -43,7 +43,7 @@ export function SearchableMultiSelect({
     })
   }, [options, query])
 
-  const fieldState = open ? 'open' : values.length > 0 ? 'withValue' : 'close'
+  const labelFloated = open || values.length > 0 || (!open && Boolean(emptyLabel))
 
   useEffect(() => {
     if (!open) return
@@ -101,7 +101,7 @@ export function SearchableMultiSelect({
           className={cn(
             'peer min-h-10 w-full rounded-[7px] border border-blue-gray-200 bg-transparent px-3 py-2 font-sans text-sm font-normal text-blue-gray-700 outline outline-0 transition-all',
             open && 'border-2 border-gray-900 border-t-transparent',
-            fieldState === 'withValue' && !open && 'border-t-transparent',
+            labelFloated && !open && 'border-t-transparent',
             disabled && 'cursor-not-allowed bg-blue-gray-50',
             !open && 'cursor-pointer',
           )}
@@ -168,13 +168,13 @@ export function SearchableMultiSelect({
         <label
           className={cn(
             'pointer-events-none absolute left-0 flex h-full w-full select-none font-normal text-blue-gray-400 transition-all',
-            fieldState === 'close'
+            !labelFloated
               ? 'text-sm leading-[3.75] peer-disabled:text-blue-gray-400 before:border-t-transparent after:border-t-transparent'
               : 'text-[11px] leading-tight before:border-t-2 after:border-t-2',
-            fieldState === 'withValue' && 'text-[11px] leading-tight before:border-t after:border-t',
-            '-top-1.5 before:mr-1 before:block before:h-1.5 before:w-2.5 before:rounded-tl-md before:border-l before:border-blue-gray-200 before:transition-all after:ml-1 after:block after:h-1.5 after:flex-grow after:rounded-tr-md after:border-r after:border-blue-gray-200 after:transition-all',
+            labelFloated && 'text-[11px] leading-tight before:border-t after:border-t',
+            '-top-1.5 before:mr-1 before:ml-1 before:block before:h-1.5 before:w-2.5 before:rounded-tl-md before:border-l before:border-blue-gray-200 before:transition-all after:ml-1 after:block after:h-1.5 after:flex-grow after:rounded-tr-md after:border-r after:border-blue-gray-200 after:transition-all',
             open && 'text-[11px] leading-tight text-gray-900 before:border-l-2 before:border-blue-gray-200 after:border-r-2 after:border-blue-gray-200',
-            fieldState === 'withValue' && !open && 'text-[11px] text-blue-gray-400',
+            labelFloated && !open && 'text-[11px] text-blue-gray-400',
           )}
         >
           {label}

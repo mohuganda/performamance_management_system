@@ -6,6 +6,8 @@ export type ListsSummary = {
   regions: number
   districts: number
   facilities: number
+  facility_types: number
+  institution_types: number
   departments: number
   job_titles: number
   oos_reasons: number
@@ -30,6 +32,7 @@ export type DistrictListRow = {
   region_name: string
   ihris_district_id?: string | null
   iso_code: string
+  map_key?: string
   is_active: boolean
   facility_count: number
 }
@@ -38,6 +41,8 @@ export type FacilityListRow = {
   id: number
   ihris_facility_id: string
   name: string
+  facility_type_name?: string
+  institution_type_name?: string
   district_ref_id?: number | null
   district_name: string
   region_id?: number | null
@@ -47,12 +52,30 @@ export type FacilityListRow = {
   is_active: boolean
 }
 
+export type FacilityTypeListRow = {
+  id: number
+  external_system_id: string
+  name: string
+  facility_count: number
+  is_active: boolean
+}
+
+export type InstitutionTypeListRow = {
+  id: number
+  external_system_id: string
+  name: string
+  facility_count: number
+  is_active: boolean
+}
+
 export type DepartmentListRow = {
   id: number
   name: string
   external_system_id: string
   facility_id?: number | null
   facility_name?: string
+  facility_type_name?: string
+  scope?: string
 }
 
 export type JobTitleListRow = {
@@ -79,9 +102,21 @@ type ListParams = {
   per_page?: number
 }
 
+export type CatalogRefreshResult = {
+  facility_types_linked: number
+  institution_types_linked: number
+  departments_linked: number
+  facility_types_total: number
+  institution_types_total: number
+}
+
 export const listsAdminService = {
   summary: async (): Promise<ListsSummary> => {
     const { data } = await apiClient.get('/admin/lists/summary')
+    return data
+  },
+  refreshCatalog: async (): Promise<CatalogRefreshResult> => {
+    const { data } = await apiClient.post('/admin/lists/refresh-catalog')
     return data
   },
   listRegions: async (params: ListParams = {}) => {
@@ -95,6 +130,14 @@ export const listsAdminService = {
   listFacilities: async (params: ListParams = {}) => {
     const { data } = await apiClient.get('/admin/lists/facilities', { params })
     return unwrapPaginated<FacilityListRow>(data) as PaginatedResponse<FacilityListRow>
+  },
+  listFacilityTypes: async (params: ListParams = {}) => {
+    const { data } = await apiClient.get('/admin/lists/facility-types', { params })
+    return unwrapPaginated<FacilityTypeListRow>(data) as PaginatedResponse<FacilityTypeListRow>
+  },
+  listInstitutionTypes: async (params: ListParams = {}) => {
+    const { data } = await apiClient.get('/admin/lists/institution-types', { params })
+    return unwrapPaginated<InstitutionTypeListRow>(data) as PaginatedResponse<InstitutionTypeListRow>
   },
   listDepartments: async (params: ListParams = {}) => {
     const { data } = await apiClient.get('/admin/lists/departments', { params })

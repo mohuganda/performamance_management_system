@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Card, Chip, Input, Typography } from '@material-tailwind/react'
+import { Button, Card, Chip, Input, Switch, Typography } from '@material-tailwind/react'
 import { Select, Option } from '@/components/molecules/MtSelect'
 import { staffManagementService } from '@/api/services/admin'
 import type { StaffListRow } from '@/utils/normalizeApi'
@@ -59,6 +59,7 @@ export function StaffManagementPage() {
     hr_email: '',
     hr_mobile: '',
     notes: '',
+    is_leave_manager: false,
   })
 
   const listQuery = useQuery({
@@ -110,6 +111,7 @@ export function StaffManagementPage() {
         hr_email: hrForm.hr_email,
         hr_mobile: hrForm.hr_mobile,
         notes: hrForm.notes,
+        is_leave_manager: hrForm.is_leave_manager,
       })
       await staffManagementService.setSupervisors(staffId, slots)
     },
@@ -151,6 +153,7 @@ export function StaffManagementPage() {
       hr_email: row.email ?? '',
       hr_mobile: row.mobile ?? '',
       notes: '',
+      is_leave_manager: row.is_leave_manager ?? false,
     })
   }
 
@@ -348,7 +351,17 @@ export function StaffManagementPage() {
             <>
               <td className="px-3 py-2">
                 <div className="font-medium">{row.name}</div>
-                <div className="text-xs text-gray-500">{row.ihris_pid}</div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-gray-500">{row.ihris_pid}</span>
+                  {row.is_leave_manager ? (
+                    <Chip
+                      {...mt}
+                      size="sm"
+                      value="Leave HR"
+                      className="rounded-full bg-sky-50 text-[10px] normal-case text-sky-800"
+                    />
+                  ) : null}
+                </div>
               </td>
               <td className="px-3 py-2">{row.email || '—'}</td>
               <td className="px-3 py-2">
@@ -443,6 +456,25 @@ export function StaffManagementPage() {
                   label="Notes"
                   value={hrForm.notes}
                   onChange={(e) => setHrForm((f) => ({ ...f, notes: e.target.value }))}
+                />
+              </div>
+
+              <div className="mt-5 rounded-md border border-sky-200 bg-sky-50/60 p-4">
+                <Switch
+                  {...mt}
+                  checked={hrForm.is_leave_manager}
+                  onChange={() =>
+                    setHrForm((f) => ({ ...f, is_leave_manager: !f.is_leave_manager }))
+                  }
+                  label={
+                    <div>
+                      <span className="text-sm font-medium text-ui-text">In charge of leave management</span>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        Flag this HR officer as the designated leave approver at their facility. Leave
+                        requests will route to flagged staff before falling back to job-title matching.
+                      </p>
+                    </div>
+                  }
                 />
               </div>
             </div>
