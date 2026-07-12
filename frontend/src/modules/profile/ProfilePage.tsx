@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Card, Chip, Typography, Button, Alert } from '@material-tailwind/react'
 import { Briefcase, Camera, Contact, PenLine, Shield, UserCircle } from 'lucide-react'
 import { authService } from '@/api/services/auth'
 import { leaveService } from '@/api/services/mobile'
+import { AuthenticatorSetupCard } from '@/components/molecules/AuthenticatorSetupCard'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
 import { UserAvatar } from '@/components/atoms/UserAvatar'
@@ -68,6 +70,8 @@ function ProfileFieldGrid({ children }: { children: ReactNode }) {
 }
 
 export function ProfilePage() {
+  const [searchParams] = useSearchParams()
+  const setupMode = searchParams.get('setup') === '1'
   const { displayName, email, roles, permissions, staffId, refreshProfile, hasPermission } =
     useAuthStore()
   const queryClient = useQueryClient()
@@ -136,6 +140,13 @@ export function ProfilePage() {
         title="My Profile"
         subtitle="Your iHRIS staff record, account details, and approval assets"
       />
+
+      {setupMode ? (
+        <Alert {...mt} color="amber" className="mb-4 rounded-sm">
+          Welcome! Review your profile details below and optionally enable an authenticator app for
+          stronger sign-in security.
+        </Alert>
+      ) : null}
 
       {statusMessage ? (
         <Alert
@@ -356,6 +367,10 @@ export function ProfilePage() {
             </Typography>
           ) : null}
         </Card>
+
+        <div className="mt-6">
+          <AuthenticatorSetupCard highlight={setupMode} />
+        </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <ProfileSection title="Roles" icon={Shield}>

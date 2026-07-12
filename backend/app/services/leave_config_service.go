@@ -16,24 +16,30 @@ func NewLeaveConfigService() *LeaveConfigService {
 }
 
 type LeavePolicySettings struct {
-	AdvanceNoticeDays    int               `json:"advance_notice_days"`
-	WorkHours            map[string]string `json:"work_hours"`
-	CarryOverDeadline    string            `json:"carry_over_deadline"`
-	ClockWindowMorning   string            `json:"clock_window_morning"`
-	AllowCarryOver       bool              `json:"allow_carry_over"`
-	VestingMonth         int               `json:"vesting_month"`
-	VestingDay           int               `json:"vesting_day"`
+	AdvanceNoticeDays              int               `json:"advance_notice_days"`
+	EnforceAdvanceNotice           bool              `json:"enforce_advance_notice"`
+	BlockPastDates                 bool              `json:"block_past_dates"`
+	ExemptSickLeaveAdvanceNotice   bool              `json:"exempt_sick_leave_advance_notice"`
+	WorkHours                      map[string]string `json:"work_hours"`
+	CarryOverDeadline              string            `json:"carry_over_deadline"`
+	ClockWindowMorning             string            `json:"clock_window_morning"`
+	AllowCarryOver                 bool              `json:"allow_carry_over"`
+	VestingMonth                   int               `json:"vesting_month"`
+	VestingDay                     int               `json:"vesting_day"`
 }
 
 func (s *LeaveConfigService) defaultSettings() LeavePolicySettings {
 	return LeavePolicySettings{
-		AdvanceNoticeDays:  14,
-		WorkHours:          map[string]string{"morning": "08:00-12:45", "afternoon": "14:00-17:00"},
-		CarryOverDeadline:  "12-15",
-		ClockWindowMorning: "08:00-08:30",
-		AllowCarryOver:     true,
-		VestingMonth:       1,
-		VestingDay:         1,
+		AdvanceNoticeDays:            14,
+		EnforceAdvanceNotice:         true,
+		BlockPastDates:               true,
+		ExemptSickLeaveAdvanceNotice: true,
+		WorkHours:                    map[string]string{"morning": "08:00-12:45", "afternoon": "14:00-17:00"},
+		CarryOverDeadline:            "12-15",
+		ClockWindowMorning:           "08:00-08:30",
+		AllowCarryOver:               true,
+		VestingMonth:                 1,
+		VestingDay:                   1,
 	}
 }
 
@@ -49,6 +55,21 @@ func (s *LeaveConfigService) LoadSettings() (LeavePolicySettings, error) {
 			var v int
 			if json.Unmarshal([]byte(cfg.Value), &v) == nil {
 				settings.AdvanceNoticeDays = v
+			}
+		case "enforce_advance_notice":
+			var v bool
+			if json.Unmarshal([]byte(cfg.Value), &v) == nil {
+				settings.EnforceAdvanceNotice = v
+			}
+		case "block_past_dates":
+			var v bool
+			if json.Unmarshal([]byte(cfg.Value), &v) == nil {
+				settings.BlockPastDates = v
+			}
+		case "exempt_sick_leave_advance_notice":
+			var v bool
+			if json.Unmarshal([]byte(cfg.Value), &v) == nil {
+				settings.ExemptSickLeaveAdvanceNotice = v
 			}
 		case "work_hours":
 			var v map[string]string
@@ -320,6 +341,11 @@ func (s *LeaveConfigService) EntitlementForStaff(staffID uint, leaveTypeID uint)
 	return &entitlement, nil
 }
 
+func startOfDay(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+}
+
 func (s *LeaveConfigService) ValidateRequest(leaveType models.LeaveType, staffID uint, startDate, endDate time.Time, medicalReportURL string) error {
 	if !leaveType.IsActive {
 		return fmt.Errorf("leave type is not active")
@@ -330,19 +356,32 @@ func (s *LeaveConfigService) ValidateRequest(leaveType models.LeaveType, staffID
 		return err
 	}
 
-	days := int(endDate.Sub(startDate).Hours()/24) + 1
+	startDay := startOfDay(startDate)
+	endDay := startOfDay(endDate)
+	today := startOfDay(time.Now())
+
+	days := int(endDay.Sub(startDay).Hours()/24) + 1
 	if days < 1 {
 		return fmt.Errorf("invalid leave duration")
 	}
 
-	advanceDays := settings.AdvanceNoticeDays
-	if leaveType.AdvanceNoticeDays != nil {
-		advanceDays = *leaveType.AdvanceNoticeDays
+	if settings.BlockPastDates {
+		if startDay.Before(today) || endDay.Before(today) {
+			return fmt.Errorf("leave cannot be applied for past dates")
+		}
 	}
-	if advanceDays > 0 {
-		notice := startDate.Sub(time.Now())
-		if notice < time.Duration(advanceDays)*24*time.Hour {
-			return fmt.Errorf("leave must be requested at least %d days in advance", advanceDays)
+
+	skipAdvanceNotice := leaveType.Code == "sick" && settings.ExemptSickLeaveAdvanceNotice
+	if settings.EnforceAdvanceNotice && !skipAdvanceNotice {
+		advanceDays := settings.AdvanceNoticeDays
+		if leaveType.AdvanceNoticeDays != nil {
+			advanceDays = *leaveType.AdvanceNoticeDays
+		}
+		if advanceDays > 0 {
+			earliestStart := today.AddDate(0, 0, advanceDays)
+			if startDay.Before(earliestStart) {
+				return fmt.Errorf("leave must be requested at least %d days in advance", advanceDays)
+			}
 		}
 	}
 

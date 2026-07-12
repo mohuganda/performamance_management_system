@@ -17,6 +17,9 @@ import {
   Shield,
   UserCog,
   Users,
+  Link2,
+  Mail,
+  Smartphone,
 } from 'lucide-react'
 import {
   rbacAdminService,
@@ -33,6 +36,8 @@ import { QueryState } from '@/components/organisms/QueryState'
 import { ServerPaginatedTable } from '@/components/organisms/ServerPaginatedTable'
 import { RolePermissionsPanel, UserPermissionsPanel } from '@/modules/admin/RbacPermissionsPanel'
 import { SegmentedTabs } from '@/components/molecules/SegmentedTabs'
+import { SearchableSelect } from '@/components/molecules/SearchableSelect'
+import { staffManagementService } from '@/api/services/admin'
 import { useAdminPageSize } from '@/hooks/useAdminPageSize'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { mt } from '@/utils/mt'
@@ -170,6 +175,9 @@ export function RbacAdminPage() {
   const [auditPage, setAuditPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
   const [manageUser, setManageUser] = useState<RbacUserRow | null>(null)
+  const [manageStaffId, setManageStaffId] = useState('')
+  const [staffLinkSearch, setStaffLinkSearch] = useState('')
+  const debouncedStaffLinkSearch = useDebouncedValue(staffLinkSearch, 400)
   const [assignRoleCode, setAssignRoleCode] = useState('')
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -179,6 +187,18 @@ export function RbacAdminPage() {
     ...emptyScopeForm(),
   })
   const [manageScope, setManageScope] = useState<ScopeFormState>(emptyScopeForm())
+
+  const staffLinkOptionsQuery = useQuery({
+    queryKey: ['admin', 'rbac', 'staff-link-options', debouncedStaffLinkSearch],
+    queryFn: () =>
+      staffManagementService.list({
+        search: debouncedStaffLinkSearch || undefined,
+        per_page: 25,
+        page: 1,
+      }),
+    enabled: !!manageUser,
+    staleTime: 30_000,
+  })
   const [selectedRoleCode, setSelectedRoleCode] = useState('admin')
 
   const rolesQuery = useQuery({
@@ -332,6 +352,63 @@ export function RbacAdminPage() {
     onError: (error: unknown) => notifyApiError(error, 'Could not remove role'),
   })
 
+  const resetAuthenticatorMutation = useMutation({
+    mutationFn: (userId: number) => rbacAdminService.resetAuthenticator(userId),
+    onSuccess: () => {
+      invalidateUsers()
+      toast.success('Authenticator reset for this user.')
+      usersQuery.refetch().then((result) => {
+        const refreshed = result.data?.data.find((u) => u.id === manageUser?.id)
+        if (refreshed) setManageUser(refreshed)
+      })
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not reset authenticator'),
+  })
+
+  const linkStaffByEmailMutation = useMutation({
+    mutationFn: (userId: number) => rbacAdminService.linkStaffByEmail(userId),
+    onSuccess: (user) => {
+      invalidateUsers()
+      setManageUser((prev) => (prev ? { ...prev, staff_id: user.staff_id, staff_name: user.staff_name } : prev))
+      if (user.staff_id) setManageStaffId(String(user.staff_id))
+      toast.success('Staff record linked by email.')
+      usersQuery.refetch()
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not link staff by email'),
+  })
+
+  const linkStaffManualMutation = useMutation({
+    mutationFn: ({ userId, staffId }: { userId: number; staffId: number }) =>
+      rbacAdminService.updateUser(userId, { staff_id: staffId }),
+    onSuccess: (user) => {
+      invalidateUsers()
+      setManageUser((prev) =>
+        prev ? { ...prev, staff_id: user.staff_id, staff_name: user.staff_name } : prev,
+      )
+      toast.success('Staff record linked.')
+      usersQuery.refetch()
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not link staff record'),
+  })
+
+  const unlinkStaffMutation = useMutation({
+    mutationFn: (userId: number) => rbacAdminService.updateUser(userId, { unlink_staff: true }),
+    onSuccess: () => {
+      invalidateUsers()
+      setManageUser((prev) => (prev ? { ...prev, staff_id: undefined, staff_name: undefined } : prev))
+      setManageStaffId('')
+      toast.success('Staff link removed.')
+      usersQuery.refetch()
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not unlink staff'),
+  })
+
+  const sendActivationMutation = useMutation({
+    mutationFn: (userId: number) => rbacAdminService.sendActivation(userId),
+    onSuccess: () => toast.success('Activation email sent when a matching staff record exists.'),
+    onError: (error: unknown) => notifyApiError(error, 'Could not send activation email'),
+  })
+
   const recoverMutation = useMutation({
     mutationFn: (id: number) => rbacAdminService.recoverAuditLog(id),
     onSuccess: () => {
@@ -425,9 +502,36 @@ export function RbacAdminPage() {
               }
             />
           </td>
-          <td className="px-4 py-3 text-xs text-gray-500">{formatDate(row.last_login_at)}</td>
+          <td className="px-4 py-3 text-xs text-gray-500">
+            <div>{formatDate(row.last_login_at)}</div>
+            {row.totp_enabled ? (
+              <span className="text-[10px] font-medium text-moh-green">2FA on</span>
+            ) : null}
+          </td>
           <td className="px-4 py-3 text-right">
-            <Button
+            <div className="flex flex-wrap justify-end gap-2">
+              {row.totp_enabled ? (
+                <Button
+                  {...mt}
+                  size="sm"
+                  variant="outlined"
+                  color="amber"
+                  className="rounded-sm normal-case"
+                  disabled={resetAuthenticatorMutation.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Reset authenticator for ${row.name}? They will need to enroll again.`,
+                      )
+                    ) {
+                      resetAuthenticatorMutation.mutate(row.id)
+                    }
+                  }}
+                >
+                  Reset 2FA
+                </Button>
+              ) : null}
+              <Button
               {...mt}
               size="sm"
               variant="outlined"
@@ -435,10 +539,13 @@ export function RbacAdminPage() {
               onClick={() => {
                 setManageUser(row)
                 setManageScope(scopeFormFromUser(row))
+                setManageStaffId(row.staff_id ? String(row.staff_id) : '')
+                setStaffLinkSearch('')
               }}
             >
               Manage
             </Button>
+            </div>
           </td>
         </>
       )}
@@ -809,85 +916,250 @@ export function RbacAdminPage() {
       )}
 
       {manageUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <Card {...mt} className="max-h-[90vh] w-full max-w-xl overflow-y-auto space-y-4 rounded-sm p-6">
-            <Typography {...mt} className="text-lg font-bold text-moh-green">
-              Manage {manageUser.name}
-            </Typography>
-            <p className="text-sm text-gray-600">{manageUser.email}</p>
-            <CategoryBadge category={manageUser.account_category} />
-
-            <ScopeFieldsForm
-              value={manageScope}
-              options={scopeOptions}
-              onChange={(patch) => setManageScope((s) => ({ ...s, ...patch }))}
-            />
-            <Button
-              {...mt}
-              size="sm"
-              className="rounded-sm bg-moh-green normal-case"
-              disabled={updateScopeMutation.isPending}
-              onClick={() => updateScopeMutation.mutate()}
-            >
-              Save data scope
-            </Button>
-
-            <div>
-              <Typography {...mt} className="mb-2 text-xs font-bold uppercase text-gray-500">
-                Assigned roles
-              </Typography>
-              <div className="flex flex-wrap gap-2">
-                {manageUser.roles.map((code) => (
-                  <Button
-                    key={code}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-6">
+          <Card
+            {...mt}
+            className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-sm shadow-xl"
+          >
+            <div className="border-b border-ui-border px-6 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <Typography {...mt} className="text-xl font-bold text-moh-green">
+                    Manage user
+                  </Typography>
+                  <p className="mt-1 text-sm font-medium text-ui-text">{manageUser.name}</p>
+                  <p className="text-sm text-ui-muted">{manageUser.email}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CategoryBadge category={manageUser.account_category} />
+                  <Chip
                     {...mt}
                     size="sm"
-                    variant="outlined"
-                    color="red"
-                    className="rounded-sm normal-case"
-                    disabled={code === 'super_admin' || revokeMutation.isPending}
-                    onClick={() => revokeMutation.mutate(code)}
-                  >
-                    Remove {rolesByCode.get(code)?.name ?? code}
-                  </Button>
-                ))}
+                    value={manageUser.is_active ? 'Active' : 'Inactive'}
+                    className={cn(
+                      'rounded-sm',
+                      manageUser.is_active ? 'bg-green-50 text-green-800' : 'bg-gray-100 text-gray-600',
+                    )}
+                  />
+                  {manageUser.totp_enabled ? (
+                    <Chip
+                      {...mt}
+                      size="sm"
+                      value="2FA on"
+                      className="rounded-sm bg-moh-green/10 text-moh-green"
+                      icon={<Smartphone className="h-3 w-3" />}
+                    />
+                  ) : null}
+                </div>
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <Select
-                {...mt}
-                label="Add role"
-                value={assignRoleCode}
-                onChange={(v) => setAssignRoleCode((v as string) ?? '')}
-              >
-                {roles
-                  .filter((r) => r.code !== 'super_admin' && !manageUser.roles.includes(r.code))
-                  .map((r) => (
-                    <Option key={r.id} value={r.code}>
-                      {r.name}
-                    </Option>
-                  ))}
-              </Select>
-              <Button
-                {...mt}
-                className="mt-6 shrink-0 bg-moh-green"
-                disabled={!assignRoleCode || assignMutation.isPending}
-                onClick={() => assignMutation.mutate()}
-              >
-                Assign
-              </Button>
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="space-y-5">
+                  <section className="rounded-sm border border-ui-border bg-ui-subtle/40 p-4">
+                    <Typography {...mt} className="mb-3 text-xs font-bold uppercase text-gray-500">
+                      Staff record link
+                    </Typography>
+                    <div className="mb-3 grid gap-2 text-sm sm:grid-cols-2">
+                      <div>
+                        <span className="text-ui-muted">Linked staff</span>
+                        <p className="font-medium text-ui-text">
+                          {manageUser.staff_name ?? (manageUser.staff_id ? `ID ${manageUser.staff_id}` : 'Not linked')}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-ui-muted">Staff ID</span>
+                        <p className="font-mono text-sm text-ui-text">{manageUser.staff_id ?? '—'}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        {...mt}
+                        size="sm"
+                        className="rounded-sm bg-moh-green normal-case"
+                        disabled={linkStaffByEmailMutation.isPending}
+                        onClick={() => linkStaffByEmailMutation.mutate(manageUser.id)}
+                      >
+                        <Link2 className="mr-1.5 h-4 w-4" />
+                        Link by email
+                      </Button>
+                      {manageUser.staff_id ? (
+                        <Button
+                          {...mt}
+                          size="sm"
+                          variant="outlined"
+                          color="red"
+                          className="rounded-sm normal-case"
+                          disabled={unlinkStaffMutation.isPending}
+                          onClick={() => unlinkStaffMutation.mutate(manageUser.id)}
+                        >
+                          Unlink staff
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      <Input
+                        {...mt}
+                        label="Search staff to link manually"
+                        value={staffLinkSearch}
+                        onChange={(e) => setStaffLinkSearch(e.target.value)}
+                        crossOrigin=""
+                      />
+                      <SearchableSelect
+                        label="Staff member"
+                        labelPosition="top"
+                        value={manageStaffId}
+                        placeholder="Search by name, email, or ID…"
+                        emptyLabel="Select staff record"
+                        options={(staffLinkOptionsQuery.data?.data ?? []).map((row) => ({
+                          value: String(row.staff_id),
+                          label: row.name,
+                          description: [row.email, row.job_title, row.ihris_pid].filter(Boolean).join(' · '),
+                        }))}
+                        onChange={setManageStaffId}
+                      />
+                      <Button
+                        {...mt}
+                        size="sm"
+                        variant="outlined"
+                        className="rounded-sm normal-case"
+                        disabled={!manageStaffId || linkStaffManualMutation.isPending}
+                        onClick={() =>
+                          linkStaffManualMutation.mutate({
+                            userId: manageUser.id,
+                            staffId: Number(manageStaffId),
+                          })
+                        }
+                      >
+                        Link selected staff
+                      </Button>
+                    </div>
+                  </section>
+
+                  <section className="rounded-sm border border-ui-border bg-ui-subtle/40 p-4">
+                    <Typography {...mt} className="mb-3 text-xs font-bold uppercase text-gray-500">
+                      Authenticator app (2FA)
+                    </Typography>
+                    <p className="mb-3 text-sm text-ui-muted">
+                      {manageUser.totp_enabled
+                        ? 'This user must enter an authenticator code when signing in.'
+                        : 'Authenticator is not enabled. The user can enable it from their profile after signing in.'}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {manageUser.totp_enabled ? (
+                        <Button
+                          {...mt}
+                          size="sm"
+                          variant="outlined"
+                          color="amber"
+                          className="rounded-sm normal-case"
+                          disabled={resetAuthenticatorMutation.isPending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Reset authenticator for ${manageUser.name}? They must enroll again from their profile.`,
+                              )
+                            ) {
+                              resetAuthenticatorMutation.mutate(manageUser.id)
+                            }
+                          }}
+                        >
+                          <RotateCcw className="mr-1.5 h-4 w-4" />
+                          Reset authenticator
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-ui-muted">No authenticator enrolled.</span>
+                      )}
+                      <Button
+                        {...mt}
+                        size="sm"
+                        variant="outlined"
+                        className="rounded-sm normal-case"
+                        disabled={sendActivationMutation.isPending}
+                        onClick={() => sendActivationMutation.mutate(manageUser.id)}
+                      >
+                        <Mail className="mr-1.5 h-4 w-4" />
+                        Send activation email
+                      </Button>
+                    </div>
+                  </section>
+
+                  <section className="rounded-sm border border-ui-border p-4">
+                    <Typography {...mt} className="mb-3 text-xs font-bold uppercase text-gray-500">
+                      Assigned roles
+                    </Typography>
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {manageUser.roles.map((code) => (
+                        <Button
+                          key={code}
+                          {...mt}
+                          size="sm"
+                          variant="outlined"
+                          color="red"
+                          className="rounded-sm normal-case"
+                          disabled={code === 'super_admin' || revokeMutation.isPending}
+                          onClick={() => revokeMutation.mutate(code)}
+                        >
+                          Remove {rolesByCode.get(code)?.name ?? code}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <Select
+                        {...mt}
+                        label="Add role"
+                        value={assignRoleCode}
+                        onChange={(v) => setAssignRoleCode((v as string) ?? '')}
+                      >
+                        {roles
+                          .filter((r) => r.code !== 'super_admin' && !manageUser.roles.includes(r.code))
+                          .map((r) => (
+                            <Option key={r.id} value={r.code}>
+                              {r.name}
+                            </Option>
+                          ))}
+                      </Select>
+                      <Button
+                        {...mt}
+                        className="mt-6 shrink-0 bg-moh-green sm:mt-0 sm:self-end"
+                        disabled={!assignRoleCode || assignMutation.isPending}
+                        onClick={() => assignMutation.mutate()}
+                      >
+                        Assign
+                      </Button>
+                    </div>
+                  </section>
+                </div>
+
+                <div className="space-y-5">
+                  <ScopeFieldsForm
+                    value={manageScope}
+                    options={scopeOptions}
+                    onChange={(patch) => setManageScope((s) => ({ ...s, ...patch }))}
+                  />
+                  <Button
+                    {...mt}
+                    size="sm"
+                    className="rounded-sm bg-moh-green normal-case"
+                    disabled={updateScopeMutation.isPending}
+                    onClick={() => updateScopeMutation.mutate()}
+                  >
+                    Save data scope
+                  </Button>
+
+                  {permissions.length > 0 ? (
+                    <UserPermissionsPanel
+                      userId={manageUser.id}
+                      permissions={permissions}
+                      rolePermissionCodes={manageRolePermsQuery.data ?? []}
+                    />
+                  ) : null}
+                </div>
+              </div>
             </div>
 
-            {permissions.length > 0 ? (
-              <UserPermissionsPanel
-                userId={manageUser.id}
-                permissions={permissions}
-                rolePermissionCodes={manageRolePermsQuery.data ?? []}
-              />
-            ) : null}
-
-            <div className="flex justify-end">
+            <div className="flex justify-end border-t border-ui-border px-6 py-4">
               <Button {...mt} variant="text" onClick={() => setManageUser(null)}>
                 Close
               </Button>

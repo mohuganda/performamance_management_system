@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Card, Textarea, Typography } from '@material-tailwind/react'
-import { differenceInCalendarDays } from 'date-fns'
+import { differenceInCalendarDays, format, parseISO } from 'date-fns'
 import { getApiErrorMessage } from '@/api/client'
 import { FileAttachmentField } from '@/components/molecules/FileAttachmentField'
 import { SearchableSelect } from '@/components/molecules/SearchableSelect'
@@ -16,20 +16,25 @@ import { useAuthStore } from '@/stores/appStore'
 import { serializeAttachments, type AttachmentMeta } from '@/utils/attachments'
 import { normalizeLeaveTypes } from '@/utils/normalizeApi'
 import { mt } from '@/utils/mt'
-import { parseISO } from 'date-fns'
+import { minLeaveStartDate, validateLeaveDates, type LeavePolicyConfig } from '@/utils/leavePolicy'
 
 type FormAlert = { type: FormStatusType; message: string; title?: string }
 
-function validateLeaveForm(form: {
-  leave_type_id: string
-  start_date: string
-  end_date: string
-  reason: string
-}): string | null {
+function validateLeaveForm(
+  form: {
+    leave_type_id: string
+    start_date: string
+    end_date: string
+    reason: string
+  },
+  policy: LeavePolicyConfig | undefined,
+  leaveType: { code?: string; advance_notice_days?: number | null } | undefined,
+): string | null {
   if (!form.leave_type_id) return 'Select a leave type before continuing.'
   if (!form.start_date) return 'Enter a start date.'
   if (!form.end_date) return 'Enter an end date.'
-  if (form.end_date < form.start_date) return 'End date cannot be before the start date.'
+  const dateError = validateLeaveDates(form, policy, leaveType)
+  if (dateError) return dateError
   if (!form.reason.trim()) return 'Provide a reason for your leave request.'
   return null
 }
@@ -43,7 +48,7 @@ const LEAVE_STEPS = [
   {
     title: 'Submit application',
     description:
-      'Fill in leave type, dates, and reason. Submit at least 14 days before annual leave starts. Sick leave over 2 days needs a medical report.',
+      'Fill in leave type, dates, and reason. Most leave types require advance notice (configurable by HR). Sick leave may be exempt. Past dates are not allowed.',
     actor: 'Employee',
   },
   {
@@ -87,6 +92,14 @@ export function LeavePage() {
     queryKey: ['leave', 'types'],
     queryFn: () => leaveService.listTypes(),
   })
+
+  const configQuery = useQuery({
+    queryKey: ['leave', 'config'],
+    queryFn: () => leaveService.getConfig(),
+    staleTime: 60_000,
+  })
+
+  const leavePolicy = (configQuery.data as { settings?: LeavePolicyConfig } | undefined)?.settings
 
   const requestsQuery = useQuery({
     queryKey: ['leave', 'requests'],
@@ -155,7 +168,7 @@ export function LeavePage() {
   })
 
   const handleCreate = (submit: boolean) => {
-    const validationError = validateLeaveForm(form)
+    const validationError = validateLeaveForm(form, leavePolicy, selectedLeaveType)
     if (validationError) {
       setFormAlert({ type: 'warning', title: 'Check the form', message: validationError })
       toast.warning(validationError, 'Leave form')
@@ -183,6 +196,13 @@ export function LeavePage() {
     selectedLeaveType?.medical_report_after_days != null &&
     leaveDays > selectedLeaveType.medical_report_after_days
   const startDateValue = form.start_date ? parseISO(form.start_date) : undefined
+  const minLeaveDate = minLeaveStartDate(leavePolicy, selectedLeaveType)
+  const advanceNoticeDays =
+    selectedLeaveType?.advance_notice_days ?? leavePolicy?.advance_notice_days ?? 14
+  const sickExempt =
+    leavePolicy?.exempt_sick_leave_advance_notice !== false && selectedLeaveType?.code === 'sick'
+  const showAdvanceNotice =
+    leavePolicy?.enforce_advance_notice !== false && !sickExempt && advanceNoticeDays > 0
 
   return (
     <div>
@@ -355,6 +375,16 @@ export function LeavePage() {
                 className="mb-4"
               />
             ) : null}
+            {showAdvanceNotice ? (
+              <p className="mb-4 rounded-sm border border-ui-border bg-ui-subtle/40 px-3 py-2 text-sm text-ui-muted">
+                Apply at least <strong>{advanceNoticeDays} days</strong> before your leave starts.
+                Earliest start date: <strong>{format(minLeaveDate, 'dd MMM yyyy')}</strong>.
+              </p>
+            ) : leavePolicy?.block_past_dates !== false ? (
+              <p className="mb-4 rounded-sm border border-ui-border bg-ui-subtle/40 px-3 py-2 text-sm text-ui-muted">
+                Past dates cannot be selected for leave applications.
+              </p>
+            ) : null}
             <form
               className="grid gap-4 md:grid-cols-2"
               onSubmit={(e) => {
@@ -379,13 +409,14 @@ export function LeavePage() {
                 label="Start date"
                 value={form.start_date}
                 onChange={(start_date) => setForm((f) => ({ ...f, start_date }))}
+                minDate={minLeaveDate}
                 className="rounded-sm"
               />
               <DatePickerField
                 label="End date"
                 value={form.end_date}
                 onChange={(end_date) => setForm((f) => ({ ...f, end_date }))}
-                minDate={startDateValue}
+                minDate={startDateValue && startDateValue > minLeaveDate ? startDateValue : minLeaveDate}
                 className="rounded-sm"
               />
               <div className="md:col-span-2">

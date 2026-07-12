@@ -125,6 +125,22 @@ export function StaffManagementPage() {
     },
   })
 
+  const sendActivationMutation = useMutation({
+    mutationFn: (staffId: number) => staffManagementService.sendActivation(staffId),
+    onSuccess: () => {
+      toast.success('Activation email sent.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not send activation email'),
+  })
+
+  const resetStaffAuthenticatorMutation = useMutation({
+    mutationFn: (staffId: number) => staffManagementService.resetAuthenticator(staffId),
+    onSuccess: () => {
+      toast.success('Authenticator reset for linked user account.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not reset authenticator'),
+  })
+
   const openStaffModal = (row: StaffListRow) => {
     setActiveStaff(row)
     setFormError('')
@@ -428,6 +444,49 @@ export function StaffManagementPage() {
                   value={hrForm.notes}
                   onChange={(e) => setHrForm((f) => ({ ...f, notes: e.target.value }))}
                 />
+              </div>
+            </div>
+
+            <div className="mt-8 border-t border-gray-200 pt-6">
+              <Typography {...mt} className="text-sm font-bold uppercase tracking-wide text-moh-green">
+                Account activation
+              </Typography>
+              <Typography {...mt} className="mt-1 text-xs text-gray-500">
+                Send a 24-hour activation link when this staff member has an email on record. If a user
+                account already exists with the same email, it will be linked automatically.
+              </Typography>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  {...mt}
+                  size="sm"
+                  className="rounded-sm bg-moh-green normal-case"
+                  disabled={
+                    sendActivationMutation.isPending ||
+                    !(hrForm.hr_email.trim() || activeStaff.email)
+                  }
+                  onClick={() => sendActivationMutation.mutate(activeStaff.staff_id)}
+                >
+                  Send activation email
+                </Button>
+                <Button
+                  {...mt}
+                  size="sm"
+                  variant="outlined"
+                  color="amber"
+                  className="rounded-sm normal-case"
+                  disabled={resetStaffAuthenticatorMutation.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        'Reset authenticator for the linked user account? They will need to enroll again.',
+                      )
+                    ) {
+                      resetStaffAuthenticatorMutation.mutate(activeStaff.staff_id)
+                    }
+                  }}
+                >
+                  Reset authenticator (admin)
+                </Button>
               </div>
             </div>
 

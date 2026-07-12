@@ -5,24 +5,29 @@ import (
 
 	"github.com/goravel/framework/contracts/http"
 
+	"goravel/app/facades"
 	"goravel/app/http/authctx"
 	"goravel/app/models"
 	"goravel/app/services"
 )
 
 type RbacAdminController struct {
-	auth  *services.AuthService
-	rbac  *services.RbacService
-	scope *services.ScopeService
-	audit *services.AuditService
+	auth       *services.AuthService
+	rbac       *services.RbacService
+	scope      *services.ScopeService
+	audit      *services.AuditService
+	totp       *services.TotpService
+	activation *services.AccountActivationService
 }
 
 func NewRbacAdminController() *RbacAdminController {
 	return &RbacAdminController{
-		auth:  services.NewAuthService(),
-		rbac:  services.NewRbacService(),
-		scope: services.NewScopeService(),
-		audit: services.NewAuditService(),
+		auth:       services.NewAuthService(),
+		rbac:       services.NewRbacService(),
+		scope:      services.NewScopeService(),
+		audit:      services.NewAuditService(),
+		totp:       services.NewTotpService(),
+		activation: services.NewAccountActivationService(),
 	}
 }
 
@@ -85,8 +90,10 @@ func (c *RbacAdminController) ListUsers(ctx http.Context) http.Response {
 }
 
 type updateUserBody struct {
-	Name            *string `json:"name"`
-	IsActive        *bool   `json:"is_active"`
+	Name               *string `json:"name"`
+	IsActive           *bool   `json:"is_active"`
+	StaffID            *uint   `json:"staff_id"`
+	UnlinkStaff        *bool   `json:"unlink_staff"`
 	ScopeLevel         *string `json:"scope_level"`
 	ScopeDistrictID    *string `json:"scope_district_id"`
 	ScopeFacilityID    *uint   `json:"scope_facility_id"`
@@ -104,7 +111,8 @@ func (c *RbacAdminController) UpdateUser(ctx http.Context) http.Response {
 	if err := ctx.Request().Bind(&body); err != nil {
 		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
 	}
-	if body.Name == nil && body.IsActive == nil && body.ScopeLevel == nil && body.ScopeDistrictID == nil && body.ScopeFacilityID == nil && body.ScopeAssignments == nil {
+	if body.Name == nil && body.IsActive == nil && body.StaffID == nil && body.UnlinkStaff == nil &&
+		body.ScopeLevel == nil && body.ScopeDistrictID == nil && body.ScopeFacilityID == nil && body.ScopeAssignments == nil {
 		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "no fields to update"})
 	}
 
@@ -123,6 +131,18 @@ func (c *RbacAdminController) UpdateUser(ctx http.Context) http.Response {
 	user, err := c.rbac.UpdateUser(uint(userID), body.Name, body.IsActive, scopePtr)
 	if err != nil {
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+
+	if body.UnlinkStaff != nil && *body.UnlinkStaff {
+		user, err = c.rbac.SetUserStaffID(uint(userID), nil)
+		if err != nil {
+			return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+		}
+	} else if body.StaffID != nil {
+		user, err = c.rbac.SetUserStaffID(uint(userID), body.StaffID)
+		if err != nil {
+			return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+		}
 	}
 
 	if body.IsActive != nil && !*body.IsActive {
@@ -252,6 +272,67 @@ func (c *RbacAdminController) CreateUser(ctx http.Context) http.Response {
 		IsDangerous: false, IsRecoverable: false,
 	})
 	return ctx.Response().Status(http.StatusCreated).Json(user)
+}
+
+// ResetUserAuthenticator godoc
+// @Summary      Admin override — reset user authenticator
+// @Tags         admin-rbac
+// @Security     BearerAuth
+// @Router       /api/v1/admin/rbac/users/{id}/reset-authenticator [post]
+func (c *RbacAdminController) ResetUserAuthenticator(ctx http.Context) http.Response {
+	userID, _ := strconv.ParseUint(ctx.Request().Route("id"), 10, 64)
+	if userID == 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "user id required"})
+	}
+	if err := c.totp.AdminReset(uint(userID)); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	c.logAudit(ctx, services.AuditEntry{
+		Module: "rbac", Action: "user.totp.reset", EntityType: "user", EntityID: ptrUint(uint(userID)),
+		Summary: "Reset authenticator for user #" + strconv.FormatUint(userID, 10),
+		IsDangerous: true, IsRecoverable: false,
+	})
+	return ctx.Response().Success().Json(http.Json{"message": "authenticator reset"})
+}
+
+// LinkUserStaffByEmail godoc
+// @Summary      Link user to staff record by matching email
+// @Tags         admin-rbac
+// @Security     BearerAuth
+// @Router       /api/v1/admin/rbac/users/{id}/link-staff-by-email [post]
+func (c *RbacAdminController) LinkUserStaffByEmail(ctx http.Context) http.Response {
+	userID, _ := strconv.ParseUint(ctx.Request().Route("id"), 10, 64)
+	if userID == 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "user id required"})
+	}
+	user, err := c.rbac.LinkUserStaffByEmail(uint(userID))
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	c.logAudit(ctx, services.AuditEntry{
+		Module: "rbac", Action: "user.staff.linked", EntityType: "user", EntityID: ptrUint(uint(userID)),
+		Summary: "Linked user #" + strconv.FormatUint(userID, 10) + " to staff by email",
+		Metadata: map[string]any{"staff_id": user.StaffID, "email": user.Email},
+		IsDangerous: false, IsRecoverable: true,
+	})
+	return ctx.Response().Success().Json(user)
+}
+
+// SendUserActivation godoc
+// @Summary      Send account activation email for linked staff
+// @Tags         admin-rbac
+// @Security     BearerAuth
+// @Router       /api/v1/admin/rbac/users/{id}/send-activation [post]
+func (c *RbacAdminController) SendUserActivation(ctx http.Context) http.Response {
+	userID, _ := strconv.ParseUint(ctx.Request().Route("id"), 10, 64)
+	var user models.User
+	if err := facades.Orm().Query().Where("id", userID).First(&user); err != nil || user.ID == 0 {
+		return ctx.Response().Status(http.StatusNotFound).Json(http.Json{"message": "user not found"})
+	}
+	if err := c.activation.RequestActivation(user.Email); err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{"message": "activation email sent when staff record exists for this email"})
 }
 
 // ListScopeOptions godoc

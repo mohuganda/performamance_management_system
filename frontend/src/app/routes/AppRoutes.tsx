@@ -12,6 +12,7 @@ import { SupervisorDashboard } from '@/modules/dashboard/SupervisorDashboard'
 import { DepartmentHeadDashboard } from '@/modules/dashboard/DepartmentHeadDashboard'
 import { HRManagerDashboard } from '@/modules/dashboard/HRManagerDashboard'
 import { LoginPage } from '@/modules/auth/LoginPage'
+import { ActivateAccountPage } from '@/modules/auth/ActivateAccountPage'
 import { LeavePage } from '@/modules/leave/LeavePage'
 import { OutOfStationPage } from '@/modules/out-of-station/OutOfStationPage'
 import { AttendancePage } from '@/modules/attendance/AttendancePage'
@@ -228,6 +229,10 @@ export function AppRoutes() {
       <Route
         path="/login"
         element={signedIn ? <Navigate to="/dashboard" replace /> : <LoginPage />}
+      />
+      <Route
+        path="/activate"
+        element={signedIn ? <Navigate to="/profile" replace /> : <ActivateAccountPage />}
       />
       <Route
         path="/*"

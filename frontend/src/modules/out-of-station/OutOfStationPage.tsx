@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Card, Textarea, Typography } from '@material-tailwind/react'
-import { parseISO } from 'date-fns'
+import { parseISO, startOfDay } from 'date-fns'
 import { FileAttachmentField } from '@/components/molecules/FileAttachmentField'
 import { DatePickerField } from '@/components/molecules/DatePickerField'
 import { PlaceAutocompleteField, type PlaceSelection } from '@/components/molecules/PlaceAutocompleteField'
@@ -51,6 +51,7 @@ export function OutOfStationPage() {
     start_date: '',
     end_date: '',
     remarks: '',
+    expected_deliverables: '',
     destination_name: '',
     destination_address: '',
     destination_latitude: '',
@@ -83,6 +84,7 @@ export function OutOfStationPage() {
       start_date: '',
       end_date: '',
       remarks: '',
+      expected_deliverables: '',
       destination_name: '',
       destination_address: '',
       destination_latitude: '',
@@ -99,6 +101,7 @@ export function OutOfStationPage() {
         start_date: form.start_date,
         end_date: form.end_date,
         remarks: form.remarks,
+        expected_deliverables: form.expected_deliverables,
         attachment_url: serializeAttachments(attachments),
         destination_name: form.destination_name,
         destination_address: form.destination_address,
@@ -140,12 +143,27 @@ export function OutOfStationPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    const today = startOfDay(new Date())
     if (!form.reason_id) {
       toast.warning('Select a travel reason.', 'Travel form')
       return
     }
     if (!form.start_date || !form.end_date) {
       toast.warning('Enter start and end dates.', 'Travel form')
+      return
+    }
+    const start = parseISO(form.start_date)
+    const end = parseISO(form.end_date)
+    if (start < today || end < today) {
+      toast.warning('Out-of-station requests cannot use past dates.', 'Travel form')
+      return
+    }
+    if (end < start) {
+      toast.warning('End date cannot be before the start date.', 'Travel form')
+      return
+    }
+    if (!form.expected_deliverables.trim()) {
+      toast.warning('Describe the expected deliverables for this trip.', 'Travel form')
       return
     }
     if (!form.destination_name || !form.destination_latitude || !form.destination_longitude) {
@@ -167,6 +185,7 @@ export function OutOfStationPage() {
     }),
   )
   const startDateValue = form.start_date ? parseISO(form.start_date) : undefined
+  const minTravelDate = startOfDay(new Date())
 
   return (
     <div>
@@ -281,13 +300,14 @@ export function OutOfStationPage() {
               label="Start date"
               value={form.start_date}
               onChange={(start_date) => setForm((f) => ({ ...f, start_date }))}
+              minDate={minTravelDate}
               className="rounded-sm"
             />
             <DatePickerField
               label="End date"
               value={form.end_date}
               onChange={(end_date) => setForm((f) => ({ ...f, end_date }))}
-              minDate={startDateValue}
+              minDate={startDateValue && startDateValue > minTravelDate ? startDateValue : minTravelDate}
               className="rounded-sm"
             />
             {hasDestination ? (
@@ -310,6 +330,15 @@ export function OutOfStationPage() {
                 </a>
               </div>
             ) : null}
+            <div className="md:col-span-2">
+              <Textarea
+                {...mt}
+                label="Expected deliverables"
+                value={form.expected_deliverables}
+                onChange={(e) => setForm((f) => ({ ...f, expected_deliverables: e.target.value }))}
+                placeholder="Describe outputs, reports, or outcomes expected from this out-of-station assignment."
+              />
+            </div>
             <div className="md:col-span-2">
               <Textarea
                 {...mt}

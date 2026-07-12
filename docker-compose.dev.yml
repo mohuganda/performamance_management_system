@@ -1,0 +1,36 @@
+# Development overrides — hot reload for backend (Air) and frontend (Vite HMR).
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+# Or:    ./scripts/dev.sh
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    restart: "no"
+    volumes:
+      - ./backend:/app
+      - backend_go_mod:/go/pkg/mod
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:3030
+      GIN_MODE: debug
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: "no"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      VITE_API_BASE_URL: http://localhost:3030/api/v1
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      VITE_DEV_API_PROXY: http://backend:3030
+
+volumes:
+  backend_go_mod:
+  frontend_node_modules:

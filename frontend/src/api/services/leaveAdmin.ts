@@ -6,6 +6,9 @@ import { normalizeLeaveTypes } from '@/utils/normalizeApi'
 
 export type LeavePolicySettings = {
   advance_notice_days: number
+  enforce_advance_notice: boolean
+  block_past_dates: boolean
+  exempt_sick_leave_advance_notice: boolean
   work_hours: Record<string, string>
   carry_over_deadline: string
   clock_window_morning: string

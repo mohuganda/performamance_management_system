@@ -39,13 +39,16 @@ func (c *LeaveAdminController) ShowSettings(ctx http.Context) http.Response {
 }
 
 type leaveSettingsBody struct {
-	AdvanceNoticeDays  *int              `json:"advance_notice_days"`
-	WorkHours          map[string]string `json:"work_hours"`
-	CarryOverDeadline  *string           `json:"carry_over_deadline"`
-	ClockWindowMorning *string           `json:"clock_window_morning"`
-	AllowCarryOver     *bool             `json:"allow_carry_over"`
-	VestingMonth       *int              `json:"vesting_month"`
-	VestingDay         *int              `json:"vesting_day"`
+	AdvanceNoticeDays            *int              `json:"advance_notice_days"`
+	EnforceAdvanceNotice         *bool             `json:"enforce_advance_notice"`
+	BlockPastDates               *bool             `json:"block_past_dates"`
+	ExemptSickLeaveAdvanceNotice *bool             `json:"exempt_sick_leave_advance_notice"`
+	WorkHours                    map[string]string `json:"work_hours"`
+	CarryOverDeadline            *string           `json:"carry_over_deadline"`
+	ClockWindowMorning           *string           `json:"clock_window_morning"`
+	AllowCarryOver               *bool             `json:"allow_carry_over"`
+	VestingMonth                 *int              `json:"vesting_month"`
+	VestingDay                   *int              `json:"vesting_day"`
 }
 
 // UpdateSettings godoc
@@ -64,6 +67,15 @@ func (c *LeaveAdminController) UpdateSettings(ctx http.Context) http.Response {
 
 	if body.AdvanceNoticeDays != nil {
 		_ = c.config.SaveSetting("advance_notice_days", *body.AdvanceNoticeDays, "Minimum days before leave start", true)
+	}
+	if body.EnforceAdvanceNotice != nil {
+		_ = c.config.SaveSetting("enforce_advance_notice", *body.EnforceAdvanceNotice, "Require advance notice before leave start", true)
+	}
+	if body.BlockPastDates != nil {
+		_ = c.config.SaveSetting("block_past_dates", *body.BlockPastDates, "Disallow leave applications for past dates", true)
+	}
+	if body.ExemptSickLeaveAdvanceNotice != nil {
+		_ = c.config.SaveSetting("exempt_sick_leave_advance_notice", *body.ExemptSickLeaveAdvanceNotice, "Exempt sick leave from advance notice policy", true)
 	}
 	if body.WorkHours != nil {
 		_ = c.config.SaveSetting("work_hours", body.WorkHours, "Official work hours", true)

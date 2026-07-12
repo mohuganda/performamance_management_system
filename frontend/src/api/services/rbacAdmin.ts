@@ -40,6 +40,7 @@ export type RbacUserRow = {
   is_active: boolean
   is_super_admin: boolean
   staff_id?: number
+  staff_name?: string
   primary_role: string
   roles: string[]
   account_category: RoleCategory
@@ -51,6 +52,7 @@ export type RbacUserRow = {
   scope_facility_name?: string
   scope_district_name?: string
   scope_assignments?: ScopeAssignmentInput[]
+  totp_enabled?: boolean
 }
 
 export type ScopeOptions = {
@@ -185,6 +187,8 @@ export const rbacAdminService = {
     payload: {
       name?: string
       is_active?: boolean
+      staff_id?: number
+      unlink_staff?: boolean
       scope_level?: string
       scope_district_id?: string
       scope_facility_id?: number
@@ -193,6 +197,21 @@ export const rbacAdminService = {
   ) => {
     const { data } = await apiClient.patch(`/admin/rbac/users/${id}`, payload)
     return data as RbacUserRow
+  },
+
+  resetAuthenticator: async (userId: number) => {
+    const { data } = await apiClient.post(`/admin/rbac/users/${userId}/reset-authenticator`)
+    return data as { message: string }
+  },
+
+  linkStaffByEmail: async (userId: number) => {
+    const { data } = await apiClient.post(`/admin/rbac/users/${userId}/link-staff-by-email`)
+    return data as RbacUserRow
+  },
+
+  sendActivation: async (userId: number) => {
+    const { data } = await apiClient.post(`/admin/rbac/users/${userId}/send-activation`)
+    return data as { message: string }
   },
 
   assignRole: async (userId: number, roleCode: string) => {

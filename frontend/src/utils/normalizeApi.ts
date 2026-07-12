@@ -14,6 +14,7 @@ export type LeaveTypeOption = {
   id: number
   name: string
   code: string
+  advance_notice_days?: number | null
   medical_report_after_days?: number | null
 }
 
@@ -26,11 +27,13 @@ export function normalizeLeaveTypes(value: unknown): LeaveTypeOption[] {
       const name = String(field<string>(row, 'name', 'Name') ?? '')
       const code = String(field<string>(row, 'code', 'Code') ?? '')
       const medicalRaw = field<number>(row, 'medical_report_after_days', 'MedicalReportAfterDays')
+      const advanceRaw = field<number>(row, 'advance_notice_days', 'AdvanceNoticeDays')
       if (!id || !name) return null
       return {
         id,
         name,
         code,
+        advance_notice_days: advanceRaw != null ? Number(advanceRaw) : undefined,
         medical_report_after_days: medicalRaw != null ? Number(medicalRaw) : undefined,
       }
     })

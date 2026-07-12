@@ -413,6 +413,7 @@ type OutOfStationRequest struct {
 	StartDate                time.Time
 	EndDate                  time.Time
 	Remarks                  *string
+	ExpectedDeliverables     *string `json:"expected_deliverables"`
 	AttachmentURL            *string
 	DestinationName          string
 	DestinationAddress       *string
@@ -496,6 +497,24 @@ type User struct {
 	ScopeLevel           *string    `json:"scope_level,omitempty" gorm:"column:scope_level"`
 	ScopeDistrictID      *string    `json:"scope_district_id,omitempty" gorm:"column:scope_district_id"`
 	ScopeFacilityID      *uint      `json:"scope_facility_id,omitempty" gorm:"column:scope_facility_id"`
+	TotpSecret           *string    `json:"-" gorm:"column:totp_secret"`
+	TotpEnabled          bool       `json:"totp_enabled" gorm:"column:totp_enabled;default:false"`
+	TotpConfirmedAt      *time.Time `json:"totp_confirmed_at,omitempty" gorm:"column:totp_confirmed_at"`
+	ActivationCompletedAt *time.Time `json:"activation_completed_at,omitempty" gorm:"column:activation_completed_at"`
+}
+
+type AccountActivationToken struct {
+	orm.Model
+	Token     string     `gorm:"column:token;uniqueIndex"`
+	Email     string     `gorm:"column:email;index"`
+	StaffID   uint       `gorm:"column:staff_id;index"`
+	UserID    *uint      `gorm:"column:user_id"`
+	ExpiresAt time.Time  `gorm:"column:expires_at"`
+	UsedAt    *time.Time `gorm:"column:used_at"`
+}
+
+func (AccountActivationToken) TableName() string {
+	return "account_activation_tokens"
 }
 
 type UserScopeAssignment struct {

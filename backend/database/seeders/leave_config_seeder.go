@@ -33,6 +33,9 @@ func (s *LeaveConfigSeeder) seedSettings() error {
 		description string
 	}{
 		{"advance_notice_days", 14, "Minimum days before leave start"},
+		{"enforce_advance_notice", true, "Require advance notice before leave start"},
+		{"block_past_dates", true, "Disallow leave applications for past dates"},
+		{"exempt_sick_leave_advance_notice", true, "Exempt sick leave from advance notice policy"},
 		{"work_hours", map[string]string{"morning": "08:00-12:45", "afternoon": "14:00-17:00"}, "Official work hours"},
 		{"carry_over_deadline", "12-15", "Carry-over request deadline (MM-DD)"},
 		{"clock_window_morning", "08:00-08:30", "Morning clock-in window"},

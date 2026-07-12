@@ -21,13 +21,15 @@ func NewAuthService() *AuthService {
 }
 
 type LoginResult struct {
-	Token        string              `json:"token"`
-	TokenType    string              `json:"token_type"`
-	ExpiresIn    int                 `json:"expires_in_minutes"`
-	User         models.User         `json:"user"`
-	Roles        []string            `json:"roles"`
-	Permissions  []string            `json:"permissions"`
-	MustChangePassword bool          `json:"must_change_password"`
+	Token              string       `json:"token,omitempty"`
+	TokenType          string       `json:"token_type,omitempty"`
+	ExpiresIn          int          `json:"expires_in_minutes,omitempty"`
+	User               models.User  `json:"user,omitempty"`
+	Roles              []string     `json:"roles,omitempty"`
+	Permissions        []string     `json:"permissions,omitempty"`
+	MustChangePassword bool         `json:"must_change_password"`
+	RequiresTotp       bool         `json:"requires_totp"`
+	LoginChallenge     string       `json:"login_challenge,omitempty"`
 }
 
 func (s *AuthService) Login(ctx http.Context, email, password string) (LoginResult, error) {
@@ -60,18 +62,35 @@ func (s *AuthService) Login(ctx http.Context, email, password string) (LoginResu
 		return LoginResult{}, fmt.Errorf("invalid credentials")
 	}
 
+	if user.TotpEnabled {
+		challenge, err := s.createLoginChallenge(user.ID)
+		if err != nil {
+			return LoginResult{}, err
+		}
+		user.Password = ""
+		return LoginResult{
+			RequiresTotp:   true,
+			LoginChallenge: challenge,
+			User:           user,
+		}, nil
+	}
+
+	return s.issueLoginResult(ctx, &user)
+}
+
+func (s *AuthService) issueLoginResult(ctx http.Context, user *models.User) (LoginResult, error) {
 	now := time.Now()
 	user.FailedLoginAttempts = 0
 	user.LockedUntil = nil
 	user.LastLoginAt = &now
-	_ = facades.Orm().Query().Save(&user)
+	_ = facades.Orm().Query().Save(user)
 
-	token, err := facades.Auth(ctx).Login(&user)
+	token, err := facades.Auth(ctx).Login(user)
 	if err != nil {
 		return LoginResult{}, err
 	}
 
-	principal, err := s.rbac.LoadPrincipal(user)
+	principal, err := s.rbac.LoadPrincipal(*user)
 	if err != nil {
 		return LoginResult{}, err
 	}
@@ -88,11 +107,50 @@ func (s *AuthService) Login(ctx http.Context, email, password string) (LoginResu
 		Token:              token,
 		TokenType:          "Bearer",
 		ExpiresIn:          ttl,
-		User:               user,
+		User:               *user,
 		Roles:              principal.Roles,
 		Permissions:        perms,
 		MustChangePassword: user.MustChangePassword,
 	}, nil
+}
+
+func (s *AuthService) createLoginChallenge(userID uint) (string, error) {
+	challenge, err := generateSecureToken(24)
+	if err != nil {
+		return "", err
+	}
+	key := fmt.Sprintf("auth:login_challenge:%s", challenge)
+	if err := facades.Cache().Put(key, userID, 5*time.Minute); err != nil {
+		return "", err
+	}
+	return challenge, nil
+}
+
+func (s *AuthService) CompleteTotpLogin(ctx http.Context, challenge, code string) (LoginResult, error) {
+	challenge = strings.TrimSpace(challenge)
+	code = strings.TrimSpace(code)
+	if challenge == "" || code == "" {
+		return LoginResult{}, fmt.Errorf("challenge and authenticator code are required")
+	}
+	key := fmt.Sprintf("auth:login_challenge:%s", challenge)
+	raw := facades.Cache().Get(key, nil)
+	userID := cacheUint(raw)
+	if userID == 0 {
+		return LoginResult{}, fmt.Errorf("login challenge expired; sign in again")
+	}
+
+	var user models.User
+	if err := facades.Orm().Query().Where("id", userID).First(&user); err != nil {
+		return LoginResult{}, fmt.Errorf("user not found")
+	}
+	if !user.IsActive {
+		return LoginResult{}, fmt.Errorf("account is disabled")
+	}
+	if err := NewTotpService().Verify(user.ID, code); err != nil {
+		return LoginResult{}, err
+	}
+	_ = facades.Cache().Forget(key)
+	return s.issueLoginResult(ctx, &user)
 }
 
 func (s *AuthService) registerFailedLogin(user *models.User) {
@@ -214,9 +272,18 @@ func (s *AuthService) CreateUser(input models.User, roleCodes []string, plainPas
 	input.IsSuperAdmin = false
 	now := time.Now()
 	input.PasswordChangedAt = &now
+	input.ActivationCompletedAt = &now
 
 	if err := facades.Orm().Query().Create(&input); err != nil {
 		return models.User{}, err
+	}
+
+	_ = LinkUserToStaffByEmail(&input)
+	if input.StaffID == nil {
+		var refreshed models.User
+		if err := facades.Orm().Query().Where("id", input.ID).First(&refreshed); err == nil {
+			input.StaffID = refreshed.StaffID
+		}
 	}
 
 	for _, code := range roleCodes {
@@ -318,4 +385,29 @@ func castString(v any) string {
 		return s
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+func cacheUint(raw any) uint {
+	switch v := raw.(type) {
+	case uint:
+		return v
+	case int:
+		if v > 0 {
+			return uint(v)
+		}
+	case int64:
+		if v > 0 {
+			return uint(v)
+		}
+	case float64:
+		if v > 0 {
+			return uint(v)
+		}
+	case string:
+		var parsed uint64
+		if _, err := fmt.Sscanf(v, "%d", &parsed); err == nil {
+			return uint(parsed)
+		}
+	}
+	return 0
 }

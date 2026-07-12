@@ -28,10 +28,13 @@ type RbacUserRow struct {
 	IsActive        bool       `json:"is_active"`
 	IsSuperAdmin    bool       `json:"is_super_admin"`
 	StaffID         *uint      `json:"staff_id,omitempty"`
+	StaffName       string     `json:"staff_name,omitempty"`
 	PrimaryRole     string     `json:"primary_role"`
 	Roles           []string   `json:"roles"`
 	AccountCategory string     `json:"account_category"`
 	LastLoginAt     *time.Time `json:"last_login_at,omitempty"`
+	TotpEnabled     bool       `json:"totp_enabled"`
+	CreatedAt       string     `json:"created_at"`
 	ScopeLevel      string     `json:"scope_level,omitempty"`
 	ScopeDistrictID string     `json:"scope_district_id,omitempty"`
 	ScopeFacilityID *uint      `json:"scope_facility_id,omitempty"`
@@ -524,6 +527,71 @@ func (s *RbacService) UpdateUser(userID uint, name *string, isActive *bool, scop
 	return user, nil
 }
 
+func (s *RbacService) LinkUserStaffByEmail(userID uint) (models.User, error) {
+	var user models.User
+	if err := facades.Orm().Query().Where("id", userID).First(&user); err != nil || user.ID == 0 {
+		return models.User{}, fmt.Errorf("user not found")
+	}
+	if err := LinkUserToStaffByEmail(&user); err != nil {
+		return models.User{}, err
+	}
+	if user.StaffID == nil || *user.StaffID == 0 {
+		return models.User{}, fmt.Errorf("no staff record matches this user's email")
+	}
+	s.InvalidateUserCache(userID)
+	user.Password = ""
+	return user, nil
+}
+
+func (s *RbacService) SetUserStaffID(userID uint, staffID *uint) (models.User, error) {
+	var user models.User
+	if err := facades.Orm().Query().Where("id", userID).First(&user); err != nil || user.ID == 0 {
+		return models.User{}, fmt.Errorf("user not found")
+	}
+	if staffID == nil || *staffID == 0 {
+		user.StaffID = nil
+	} else {
+		var staff models.Staff
+		if err := facades.Orm().Query().Where("id", *staffID).First(&staff); err != nil || staff.ID == 0 {
+			return models.User{}, fmt.Errorf("staff not found")
+		}
+		user.StaffID = staffID
+	}
+	if err := facades.Orm().Query().Save(&user); err != nil {
+		return models.User{}, err
+	}
+	s.InvalidateUserCache(userID)
+	user.Password = ""
+	return user, nil
+}
+
+func loadStaffNamesByIDs(ids []uint) map[uint]string {
+	out := map[uint]string{}
+	if len(ids) == 0 {
+		return out
+	}
+	var staff []models.Staff
+	_ = facades.Orm().Query().Where("id IN ?", ids).Get(&staff)
+	for _, row := range staff {
+		out[row.ID] = StaffDisplayName(row)
+	}
+	return out
+}
+
+func collectStaffIDs(users []models.User) []uint {
+	ids := make([]uint, 0)
+	seen := map[uint]struct{}{}
+	for _, user := range users {
+		if user.StaffID != nil && *user.StaffID > 0 {
+			if _, ok := seen[*user.StaffID]; !ok {
+				seen[*user.StaffID] = struct{}{}
+				ids = append(ids, *user.StaffID)
+			}
+		}
+	}
+	return ids
+}
+
 func (s *RbacService) applyUserScope(user *models.User, scope *UserScopeInput) error {
 	if scope.ScopeLevel != nil {
 		level := strings.TrimSpace(strings.ToLower(*scope.ScopeLevel))
@@ -701,6 +769,8 @@ func (s *RbacService) buildUserRow(user models.User, roles []string, category st
 		Roles:           roles,
 		AccountCategory: category,
 		LastLoginAt:     user.LastLoginAt,
+		TotpEnabled:     user.TotpEnabled,
+		CreatedAt:       user.CreatedAt.Format(time.RFC3339),
 	}
 	if user.ScopeLevel != nil {
 		row.ScopeLevel = *user.ScopeLevel
@@ -717,6 +787,12 @@ func (s *RbacService) buildUserRow(user models.User, roles []string, category st
 		}
 	}
 	row.ScopeAssignments = s.ListUserScopeAssignments(user.ID)
+	if user.StaffID != nil && *user.StaffID > 0 {
+		names := loadStaffNamesByIDs([]uint{*user.StaffID})
+		if name, ok := names[*user.StaffID]; ok {
+			row.StaffName = name
+		}
+	}
 	return row
 }
 
@@ -834,6 +910,7 @@ func (s *RbacService) buildUserRows(
 		}
 	}
 	facilities := loadFacilitiesByIDs(facilityIDs)
+	staffNames := loadStaffNamesByIDs(collectStaffIDs(users))
 
 	rows := make([]RbacUserRow, 0, len(users))
 	for _, user := range users {
@@ -856,6 +933,8 @@ func (s *RbacService) buildUserRows(
 			Roles:           roles,
 			AccountCategory: category,
 			LastLoginAt:     user.LastLoginAt,
+			TotpEnabled:     user.TotpEnabled,
+			CreatedAt:       user.CreatedAt.Format(time.RFC3339),
 		}
 		if user.ScopeLevel != nil {
 			row.ScopeLevel = *user.ScopeLevel
@@ -868,6 +947,11 @@ func (s *RbacService) buildUserRows(
 			row.ScopeFacilityID = user.ScopeFacilityID
 			if facility, ok := facilities[*user.ScopeFacilityID]; ok {
 				row.ScopeFacility = facility.Name
+			}
+		}
+		if user.StaffID != nil && *user.StaffID > 0 {
+			if name, ok := staffNames[*user.StaffID]; ok {
+				row.StaffName = name
 			}
 		}
 		rows = append(rows, row)

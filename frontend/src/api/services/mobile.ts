@@ -145,6 +145,7 @@ export const oosService = {
     start_date: string
     end_date: string
     remarks?: string
+    expected_deliverables?: string
     attachment_url?: string
     destination_name?: string
     destination_address?: string

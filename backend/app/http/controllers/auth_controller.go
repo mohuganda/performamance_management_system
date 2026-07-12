@@ -10,11 +10,17 @@ import (
 )
 
 type AuthController struct {
-	auth *services.AuthService
+	auth       *services.AuthService
+	activation *services.AccountActivationService
+	totp       *services.TotpService
 }
 
 func NewAuthController() *AuthController {
-	return &AuthController{auth: services.NewAuthService()}
+	return &AuthController{
+		auth:       services.NewAuthService(),
+		activation: services.NewAccountActivationService(),
+		totp:       services.NewTotpService(),
+	}
 }
 
 type loginBody struct {
@@ -41,6 +47,169 @@ func (c *AuthController) Login(ctx http.Context) http.Response {
 		return ctx.Response().Status(http.StatusUnauthorized).Json(http.Json{"message": err.Error()})
 	}
 	return ctx.Response().Success().Json(result)
+}
+
+type requestActivationBody struct {
+	Email string `json:"email"`
+}
+
+// RequestActivation godoc
+// @Summary      Request account activation email for staff
+// @Tags         auth
+// @Router       /api/v1/auth/request-activation [post]
+func (c *AuthController) RequestActivation(ctx http.Context) http.Response {
+	var body requestActivationBody
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	if err := c.activation.RequestActivation(body.Email); err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{
+		"message": "If your email is registered with MoH staff records, you will receive an activation link within a few minutes.",
+	})
+}
+
+// PreviewActivation godoc
+// @Summary      Preview activation token
+// @Tags         auth
+// @Router       /api/v1/auth/activation/{token} [get]
+func (c *AuthController) PreviewActivation(ctx http.Context) http.Response {
+	token := ctx.Request().Route("token")
+	preview, err := c.activation.PreviewToken(token)
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(preview)
+}
+
+type completeActivationBody struct {
+	Token    string `json:"token"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+}
+
+// CompleteActivation godoc
+// @Summary      Complete account activation
+// @Tags         auth
+// @Router       /api/v1/auth/activation/complete [post]
+func (c *AuthController) CompleteActivation(ctx http.Context) http.Response {
+	var body completeActivationBody
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	result, err := c.activation.CompleteActivation(ctx, services.CompleteActivationInput{
+		Token:    body.Token,
+		Password: body.Password,
+		Name:     body.Name,
+	})
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(result)
+}
+
+type totpLoginBody struct {
+	LoginChallenge string `json:"login_challenge"`
+	Code           string `json:"code"`
+}
+
+// LoginTotp godoc
+// @Summary      Complete login with authenticator code
+// @Tags         auth
+// @Router       /api/v1/auth/login/totp [post]
+func (c *AuthController) LoginTotp(ctx http.Context) http.Response {
+	var body totpLoginBody
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	result, err := c.auth.CompleteTotpLogin(ctx, body.LoginChallenge, body.Code)
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnauthorized).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(result)
+}
+
+type totpCodeBody struct {
+	Code string `json:"code"`
+}
+
+// TotpStatus godoc
+// @Summary      Authenticator status
+// @Tags         auth
+// @Security     BearerAuth
+// @Router       /api/v1/auth/totp/status [get]
+func (c *AuthController) TotpStatus(ctx http.Context) http.Response {
+	userID, ok := authctx.UserID(ctx)
+	if !ok {
+		return ctx.Response().Status(http.StatusUnauthorized).Json(http.Json{"message": "unauthenticated"})
+	}
+	var user models.User
+	if err := facades.Orm().Query().Where("id", userID).First(&user); err != nil {
+		return ctx.Response().Status(http.StatusNotFound).Json(http.Json{"message": "user not found"})
+	}
+	return ctx.Response().Success().Json(c.totp.Status(user))
+}
+
+// TotpEnroll godoc
+// @Summary      Start authenticator enrollment
+// @Tags         auth
+// @Security     BearerAuth
+// @Router       /api/v1/auth/totp/enroll [post]
+func (c *AuthController) TotpEnroll(ctx http.Context) http.Response {
+	userID, ok := authctx.UserID(ctx)
+	if !ok {
+		return ctx.Response().Status(http.StatusUnauthorized).Json(http.Json{"message": "unauthenticated"})
+	}
+	var user models.User
+	if err := facades.Orm().Query().Where("id", userID).First(&user); err != nil {
+		return ctx.Response().Status(http.StatusNotFound).Json(http.Json{"message": "user not found"})
+	}
+	result, err := c.totp.Enroll(&user)
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(result)
+}
+
+// TotpConfirm godoc
+// @Summary      Confirm authenticator enrollment
+// @Tags         auth
+// @Security     BearerAuth
+// @Router       /api/v1/auth/totp/confirm [post]
+func (c *AuthController) TotpConfirm(ctx http.Context) http.Response {
+	userID, ok := authctx.UserID(ctx)
+	if !ok {
+		return ctx.Response().Status(http.StatusUnauthorized).Json(http.Json{"message": "unauthenticated"})
+	}
+	var body totpCodeBody
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	if err := c.totp.Confirm(userID, body.Code); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{"message": "authenticator enabled"})
+}
+
+// TotpDisable godoc
+// @Summary      Disable authenticator
+// @Tags         auth
+// @Security     BearerAuth
+// @Router       /api/v1/auth/totp/disable [post]
+func (c *AuthController) TotpDisable(ctx http.Context) http.Response {
+	userID, ok := authctx.UserID(ctx)
+	if !ok {
+		return ctx.Response().Status(http.StatusUnauthorized).Json(http.Json{"message": "unauthenticated"})
+	}
+	var body totpCodeBody
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	if err := c.totp.Disable(userID, body.Code); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{"message": "authenticator disabled"})
 }
 
 // Me godoc
@@ -70,10 +239,12 @@ func (c *AuthController) Me(ctx http.Context) http.Response {
 		"staff_id":    principal.StaffID,
 		"staff":       staff,
 		"account": map[string]any{
-			"is_active":             principal.User.IsActive,
-			"must_change_password":  principal.User.MustChangePassword,
-			"last_login_at":         principal.User.LastLoginAt,
-			"password_changed_at":   principal.User.PasswordChangedAt,
+			"is_active":               principal.User.IsActive,
+			"must_change_password":    principal.User.MustChangePassword,
+			"last_login_at":           principal.User.LastLoginAt,
+			"password_changed_at":     principal.User.PasswordChangedAt,
+			"totp_enabled":            principal.User.TotpEnabled,
+			"activation_completed_at": principal.User.ActivationCompletedAt,
 		},
 	})
 }
@@ -195,5 +366,6 @@ func meUserResponse(user models.User) map[string]any {
 		"SignatureUpdatedAt":   user.SignatureUpdatedAt,
 		"LastLoginAt":          user.LastLoginAt,
 		"PasswordChangedAt":    user.PasswordChangedAt,
+		"TotpEnabled":          user.TotpEnabled,
 	}
 }

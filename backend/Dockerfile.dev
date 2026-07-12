@@ -1,0 +1,18 @@
+# Development image: live reload with Air (https://github.com/air-verse/air)
+FROM golang:1.26-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache git build-base curl \
+  && go install github.com/air-verse/air@latest
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY .air.toml ./
+COPY scripts/docker-dev-entrypoint.sh /usr/local/bin/docker-dev-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-dev-entrypoint.sh
+
+EXPOSE 3030
+
+ENTRYPOINT ["/usr/local/bin/docker-dev-entrypoint.sh"]

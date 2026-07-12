@@ -10,12 +10,16 @@ import (
 type StaffAdminController struct {
 	supervisors *services.SupervisorService
 	staffAdmin  *services.StaffAdminService
+	activation  *services.AccountActivationService
+	totp        *services.TotpService
 }
 
 func NewStaffAdminController() *StaffAdminController {
 	return &StaffAdminController{
 		supervisors: services.NewSupervisorService(),
 		staffAdmin:  services.NewStaffAdminService(),
+		activation:  services.NewAccountActivationService(),
+		totp:        services.NewTotpService(),
 	}
 }
 
@@ -161,4 +165,30 @@ func (c *StaffAdminController) UpdateHrProfile(ctx http.Context) http.Response {
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 	}
 	return ctx.Response().Success().Json(http.Json{"message": "HR profile updated"})
+}
+
+func (c *StaffAdminController) SendActivation(ctx http.Context) http.Response {
+	staffID := ctx.Request().RouteInt("id")
+	if staffID == 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "staff id required"})
+	}
+	if err := c.activation.SendActivationForStaff(uint(staffID)); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{"message": "activation email sent"})
+}
+
+func (c *StaffAdminController) ResetStaffAuthenticator(ctx http.Context) http.Response {
+	staffID := ctx.Request().RouteInt("id")
+	if staffID == 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "staff id required"})
+	}
+	userID, err := services.FindUserIDByStaffID(uint(staffID))
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	if err := c.totp.AdminReset(userID); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{"message": "authenticator reset"})
 }

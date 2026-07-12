@@ -35,9 +35,34 @@ performamance_management_system/
     └── REACT_IMPLEMENTATION_GUIDE.md
 ```
 
+## Quick Start (development — auto reload)
+
+For day-to-day feature work, use the **dev stack** so Go and React changes apply automatically (no rebuild):
+
+```bash
+chmod +x scripts/dev.sh
+./scripts/dev.sh
+```
+
+| Service  | URL | Reload |
+|----------|-----|--------|
+| Frontend | http://localhost:5173 | Vite HMR (instant) |
+| API      | http://localhost:3030/api/v1 | Air restarts on `.go` changes |
+| Swagger  | http://localhost:3030/swagger/index.html | Same as API |
+
+**Without Docker** (API + Vite on your machine, DB in Docker):
+
+```bash
+./scripts/dev.sh --local
+```
+
+Requires [Air](https://github.com/air-verse/air) (`go install github.com/air-verse/air@latest`).
+
+Stop the dev stack: `./scripts/dev.sh --down`
+
 ## Quick Start (Docker + demo data)
 
-Demo users, KPIs, leave balances, and legacy iHRIS sample tables are loaded **automatically** (`LOAD_DEMO_DATA=true`, `IHRIS_USE_DEMO_DATA=true` in `docker-compose.yml`).
+Production-style containers (no hot reload — rebuild with `docker compose up --build`):
 
 ```bash
 docker compose up --build

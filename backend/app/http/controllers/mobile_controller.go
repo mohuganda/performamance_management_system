@@ -212,6 +212,7 @@ type oosRequestBody struct {
 	StartDate            string  `json:"start_date"`
 	EndDate              string  `json:"end_date"`
 	Remarks              string  `json:"remarks"`
+	ExpectedDeliverables string  `json:"expected_deliverables"`
 	AttachmentURL        string  `json:"attachment_url"`
 	DestinationName      string  `json:"destination_name"`
 	DestinationAddress   string  `json:"destination_address"`
@@ -254,6 +255,7 @@ func (c *MobileController) CreateOosRequest(ctx http.Context) http.Response {
 		StartDate:            start,
 		EndDate:              end,
 		Remarks:              body.Remarks,
+		ExpectedDeliverables: body.ExpectedDeliverables,
 		AttachmentURL:        body.AttachmentURL,
 		DestinationName:      body.DestinationName,
 		DestinationAddress:   body.DestinationAddress,

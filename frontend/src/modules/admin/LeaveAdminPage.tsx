@@ -685,6 +685,53 @@ export function LeaveAdminPage() {
                       setSettingsForm((f) => f && { ...f, vesting_day: Number(e.target.value) })
                     }
                   />
+                  <div className="flex items-center justify-between rounded-sm border border-gray-100 bg-gray-50/80 px-4 py-3 md:col-span-2">
+                    <div>
+                      <span className="text-sm font-medium">Enforce advance notice policy</span>
+                      <p className="text-xs text-ui-muted">
+                        When enabled, leave must be requested the configured number of days before start.
+                      </p>
+                    </div>
+                    <Switch
+                      {...mt}
+                      checked={settingsForm.enforce_advance_notice}
+                      onChange={(e) =>
+                        setSettingsForm((f) => f && { ...f, enforce_advance_notice: e.target.checked })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-sm border border-gray-100 bg-gray-50/80 px-4 py-3 md:col-span-2">
+                    <div>
+                      <span className="text-sm font-medium">Block past dates</span>
+                      <p className="text-xs text-ui-muted">
+                        Disallow leave applications with start or end dates in the past.
+                      </p>
+                    </div>
+                    <Switch
+                      {...mt}
+                      checked={settingsForm.block_past_dates}
+                      onChange={(e) =>
+                        setSettingsForm((f) => f && { ...f, block_past_dates: e.target.checked })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-sm border border-gray-100 bg-gray-50/80 px-4 py-3 md:col-span-2">
+                    <div>
+                      <span className="text-sm font-medium">Exempt sick leave from advance notice</span>
+                      <p className="text-xs text-ui-muted">
+                        Sick leave can be applied without the advance notice window when enabled.
+                      </p>
+                    </div>
+                    <Switch
+                      {...mt}
+                      checked={settingsForm.exempt_sick_leave_advance_notice}
+                      onChange={(e) =>
+                        setSettingsForm((f) =>
+                          f ? { ...f, exempt_sick_leave_advance_notice: e.target.checked } : f,
+                        )
+                      }
+                    />
+                  </div>
                   <div className="flex items-center justify-between rounded-sm border border-gray-100 bg-gray-50/80 px-4 py-3">
                     <span className="text-sm">Allow carry-over with approval</span>
                     <Switch

@@ -24,6 +24,7 @@ type CreateOutOfStationInput struct {
 	StartDate            time.Time
 	EndDate              time.Time
 	Remarks              string
+	ExpectedDeliverables string
 	AttachmentURL        string
 	DestinationName      string
 	DestinationAddress   string
@@ -33,6 +34,10 @@ type CreateOutOfStationInput struct {
 }
 
 func (s *OutOfStationService) CreateDraft(input CreateOutOfStationInput) (models.OutOfStationRequest, error) {
+	if input.ExpectedDeliverables == "" {
+		return models.OutOfStationRequest{}, fmt.Errorf("expected deliverables are required")
+	}
+
 	today := time.Now().Truncate(24 * time.Hour)
 	if input.StartDate.Before(today) || input.EndDate.Before(today) {
 		return models.OutOfStationRequest{}, fmt.Errorf("cannot create out-of-station request for past dates")
@@ -71,6 +76,7 @@ func (s *OutOfStationService) CreateDraft(input CreateOutOfStationInput) (models
 		StartDate:               input.StartDate,
 		EndDate:                 input.EndDate,
 		Remarks:                 strPtrIf(input.Remarks),
+		ExpectedDeliverables:    strPtrIf(input.ExpectedDeliverables),
 		DestinationName:         input.DestinationName,
 		DestinationAddress:      strPtrIf(input.DestinationAddress),
 		DestinationLatitude:     input.DestinationLatitude,

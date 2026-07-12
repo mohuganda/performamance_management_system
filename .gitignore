@@ -3,3 +3,7 @@ deploy/docker-compose.override.yml
 
 # Runtime / persistent data (MySQL, Redis, API storage, logs) — never commit
 data/
+
+# Go / Air dev build output
+backend/tmp/
+backend/build-errors.log

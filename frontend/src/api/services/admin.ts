@@ -202,4 +202,12 @@ export const staffManagementService = {
     const { data } = await apiClient.put(`/admin/staff/${staffId}/supervisors`, { supervisors })
     return data
   },
+  sendActivation: async (staffId: number) => {
+    const { data } = await apiClient.post(`/admin/staff/${staffId}/send-activation`)
+    return data as { message: string }
+  },
+  resetAuthenticator: async (staffId: number) => {
+    const { data } = await apiClient.post(`/admin/staff/${staffId}/reset-authenticator`)
+    return data as { message: string }
+  },
 }

@@ -87,7 +87,7 @@ export const navGroups: NavGroup[] = [
   },
   {
     id: 'time-attendance',
-    label: 'Time & Attendance',
+    label: 'Out of Station & Leave',
     icon: Clock,
     items: [
       {

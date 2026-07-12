@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { authService } from '@/api/services/auth'
+import { authService, type LoginResponse } from '@/api/services/auth'
 import { setAuthToken } from '@/api/client'
 import { resolveDashboardPermission } from '@/app/navigation/navItems'
 
@@ -25,7 +25,10 @@ interface AuthState {
   quarter: string
   isAuthenticated: boolean
   authReady: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<LoginResponse>
+  completeLogin: (result: LoginResponse) => Promise<void>
+  loginTotp: (loginChallenge: string, code: string) => Promise<void>
+  applyActivationLogin: (result: LoginResponse & { needs_profile_setup?: boolean }) => Promise<void>
   clearSession: () => void
   logout: () => Promise<void>
   refreshSession: () => Promise<void>
@@ -86,8 +89,10 @@ export const useAuthStore = create<AuthState>()(
         })
       },
 
-      login: async (email, password) => {
-        const result = await authService.login(email, password)
+      completeLogin: async (result: LoginResponse) => {
+        if (!result.token || !result.user) {
+          throw new Error('Login did not return a session token')
+        }
         setAuthToken(result.token)
         const permissions = result.permissions ?? []
         set({
@@ -105,6 +110,24 @@ export const useAuthStore = create<AuthState>()(
         } catch {
           // profile refresh is best-effort after login
         }
+      },
+
+      login: async (email, password) => {
+        const result = await authService.login(email, password)
+        if (result.requires_totp) {
+          return result
+        }
+        await get().completeLogin(result)
+        return result
+      },
+
+      loginTotp: async (loginChallenge, code) => {
+        const result = await authService.loginTotp(loginChallenge, code)
+        await get().completeLogin(result)
+      },
+
+      applyActivationLogin: async (result) => {
+        await get().completeLogin(result)
       },
 
       clearSession: () => {
