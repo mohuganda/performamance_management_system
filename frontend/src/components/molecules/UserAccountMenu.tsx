@@ -6,6 +6,7 @@ import { notificationService } from '@/api/services/notifications'
 import { UserAvatar } from '@/components/atoms/UserAvatar'
 import { NotificationBell } from '@/components/molecules/NotificationBell'
 import { ThemeAppearancePicker } from '@/components/molecules/ThemeAppearancePicker'
+import { ThemeToggleButton } from '@/components/molecules/ThemeToggleButton'
 import {
   resolveTheme,
   useThemeStore,
@@ -37,6 +38,7 @@ export function UserAccountMenu({ displayName, roleLabel, profilePhoto }: UserAc
 
   return (
     <div className="flex items-center gap-1">
+      <ThemeToggleButton />
       <NotificationBell />
       <Menu {...mt} placement="bottom-end">
         <MenuHandler>
