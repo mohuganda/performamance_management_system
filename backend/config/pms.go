@@ -71,7 +71,7 @@ func init() {
 			"enabled":      true,
 		},
 		"analytics": map[string]any{
-			"enabled":  config.Env("ANALYTICS_DB_ENABLED", false),
+			"enabled":  config.Env("ANALYTICS_DB_ENABLED", true),
 			"host":     config.Env("ANALYTICS_DB_HOST", "127.0.0.1"),
 			"port":     config.Env("ANALYTICS_DB_PORT", "9030"),
 			"database": config.Env("ANALYTICS_DB_DATABASE", "moh_pms_analytics"),

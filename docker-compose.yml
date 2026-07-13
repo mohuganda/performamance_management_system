@@ -61,6 +61,14 @@ services:
       REDIS_PORT: 6379
       IHRIS_USE_DEMO_DATA: "true"
       LOAD_DEMO_DATA: "true"
+      ANALYTICS_DB_ENABLED: "true"
+      ANALYTICS_DB_HOST: host.docker.internal
+      ANALYTICS_DB_PORT: "9030"
+      ANALYTICS_DB_DATABASE: moh_pms_analytics
+      ANALYTICS_DB_USERNAME: root
+      ANALYTICS_DB_PASSWORD: ""
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "3030:3030"
 

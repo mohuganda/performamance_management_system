@@ -3,7 +3,8 @@
 Integrated performance, leave, attendance, and workforce management platform for the **Ministry of Health Uganda**. The stack pairs **Goravel v1.18** (Go API) with a **React + TypeScript** SPA, **MySQL** (legacy iHRIS extract + normalized PMS schema), and **Redis** for caching and sessions.
 
 **User documentation:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md)  
-**Deployment guide:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+**Deployment guide:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)  
+**Doris analytics:** [docs/ANALYTICS.md](docs/ANALYTICS.md)
 
 ## Features
 
@@ -14,7 +15,10 @@ Integrated performance, leave, attendance, and workforce management platform for
 | **Leave** | Self-service requests with **searchable leave type**, multi-stage approval, balances, HR administration |
 | **Out of station** | GPS destination requests with supervisor approval and geofenced attendance |
 | **Attendance** | Mobile-style clock-in/out with location verification |
+| **Approvals** | Unified inbox for leave, out-of-station, and performance reviews |
 | **Administration** | Staff directory with **searchable supervisor/department fields**, KPI catalog, leave policy, RBAC, system configuration |
+| **Analytics** | **Apache Doris** OLAP (enabled by default) for faster dashboard aggregates; MySQL fallback when offline |
+| **Appearance** | **Light / dark / system** theme, persisted per browser |
 | **Notifications** | In-app alerts for approvals and system events |
 
 ## Architecture
@@ -29,9 +33,11 @@ performamance_management_system/
 ├── deploy/           # Production compose, nginx configs, generated .env
 ├── database/sql/legacy/01_legacy_source_tables.sql
 ├── docker-compose.yml
+├── docker-compose.analytics.yml   # Apache Doris FE/BE (analytics)
 └── docs/
     ├── DEPLOYMENT.md
     ├── USER_GUIDE.md
+    ├── ANALYTICS.md
     └── REACT_IMPLEMENTATION_GUIDE.md
 ```
 
@@ -286,6 +292,7 @@ Use the returned token: `Authorization: Bearer <token>`
 | Path | Module |
 |------|--------|
 | `/dashboard` | Role-based dashboard with drilldowns and district map |
+| `/approvals` | Unified leave / OOS / performance approval inbox |
 | `/performance` | PPA planning and quarterly reporting |
 | `/performance/reports` | PPA/quarterly status, Overall Performance Rating scores, Excel/PDF export |
 | `/leave` | Leave requests and balances |
@@ -293,16 +300,34 @@ Use the returned token: `Authorization: Bearer <token>`
 | `/attendance` | Clock in/out and history |
 | `/notifications` | System notifications |
 | `/profile` | Profile and signature |
-| `/settings` | Preferences, data sources, email, notifications, reporting windows |
+| `/settings` | Preferences (incl. appearance), data sources, Doris analytics, email, notifications |
 | `/admin/leave` | Leave administration (HR) |
 | `/admin/staff` | Staff directory and supervisors |
 | `/admin/system` | Global system configuration (e.g. iHRIS overwrite) |
 | `/admin/kpi` | KPI catalog and assignments |
 | `/admin/rbac` | Roles and permissions |
 
+## Appearance (dark mode)
+
+The UI supports **Light**, **Dark**, and **System** themes:
+
+- Header **moon/sun** toggle (next to notifications) — switches light ↔ dark
+- Account menu → **Appearance**, or **Settings → Preferences → Appearance**
+- Preference is stored in the browser (`localStorage`) and applied on load (no flash)
+
+## Analytics (Apache Doris)
+
+Doris is **enabled by default** for OLAP reads. Start the FE/BE stack when you want live analytics acceleration:
+
+```bash
+docker compose -f docker-compose.analytics.yml up -d
+```
+
+Full guide: **[docs/ANALYTICS.md](docs/ANALYTICS.md)**.
+
 ## API overview
 
-Interactive docs: **http://localhost:3030/swagger/index.html**
+Interactive docs: **http://localhost:3030/swagger/index.html** (also `/swagger/index.html` behind the production gateway)
 
 ### Core
 

@@ -309,6 +309,19 @@ To change settings after first deploy, edit `deploy/.env` and run:
 
 Reference template: [deploy/env.deploy.example](../deploy/env.deploy.example)
 
+### Apache Doris analytics (enabled by default)
+
+Dashboard and attendance aggregates can read from **Apache Doris**. The API enables analytics by default (`ANALYTICS_DB_ENABLED=true`). MySQL remains the write path; dashboards fall back to MySQL if Doris is down.
+
+```bash
+# On the same host as the API / after setup.sh
+docker compose -f docker-compose.analytics.yml up -d
+```
+
+Then in the UI: **Settings → Data sources → Apache Doris analytics → Sync OLTP data to Doris**.
+
+Details: [ANALYTICS.md](./ANALYTICS.md)
+
 ---
 
 ## 7. Operations
@@ -392,6 +405,7 @@ Before go-live:
 - [ ] Schedule MySQL backups
 - [ ] Create real user accounts via **Access Control** (`/admin/rbac`)
 - [ ] Configure iHRIS sync (`IHRIS_USE_DEMO_DATA=false`, set API credentials in backend env)
+- [ ] Start Doris analytics (`docker compose -f docker-compose.analytics.yml up -d`) and run an OLTP sync (or accept MySQL fallback)
 - [ ] Test sign-in, leave request, and performance report flows
 
 ---
@@ -410,6 +424,7 @@ Before go-live:
 | `setup.sh` permission denied | Not executable | `chmod +x setup.sh` |
 | Database connection error | MySQL still starting | Wait 30s; `./setup.sh --logs mysql` |
 | Need fresh database | Old volume data | `./setup.sh --down-volumes` then redeploy |
+| Cannot open Doris / analytics “unreachable” | Doris not running or wrong host | `docker compose -f docker-compose.analytics.yml up -d`; see [ANALYTICS.md](./ANALYTICS.md) |
 
 ### Health checks
 

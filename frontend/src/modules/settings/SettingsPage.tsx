@@ -589,12 +589,12 @@ export function SettingsPage() {
             </SettingsSection>
 
             <SettingsSection
-              title="Apache Doris analytics (optional)"
-              description="OLAP read replica for faster attendance, leave, and dashboard reports. MySQL remains the system of record for all writes."
+              title="Apache Doris analytics"
+              description="OLAP read store for faster attendance, leave, and dashboard reports. Enabled by default. MySQL remains the system of record for all writes."
               accent="blue"
             >
               <div className="space-y-4">
-                <div className="rounded-sm border border-gray-100 bg-gray-50/80 p-3 text-sm text-gray-700">
+                <div className="rounded-sm border border-ui-border bg-ui-subtle/80 p-3 text-sm text-ui-text">
                   <p>
                     Status:{' '}
                     <span className="font-semibold">
@@ -606,20 +606,27 @@ export function SettingsPage() {
                     </span>
                   </p>
                   {analyticsStatus?.message ? (
-                    <p className="mt-1 text-xs text-gray-500">{analyticsStatus.message}</p>
+                    <p className="mt-1 text-xs text-ui-muted">{analyticsStatus.message}</p>
                   ) : null}
                   {analyticsStatus?.database ? (
-                    <p className="mt-1 text-xs text-gray-500">Database: {analyticsStatus.database}</p>
+                    <p className="mt-1 text-xs text-ui-muted">Database: {analyticsStatus.database}</p>
                   ) : null}
                   {analyticsStatus?.last_sync_at ? (
-                    <p className="mt-1 text-xs text-gray-500">Last OLTP sync: {analyticsStatus.last_sync_at}</p>
+                    <p className="mt-1 text-xs text-ui-muted">Last OLTP sync: {analyticsStatus.last_sync_at}</p>
                   ) : null}
                 </div>
                 {!analyticsStatus?.enabled ? (
-                  <p className="text-xs text-gray-500">
-                    Set <code className="text-[11px]">ANALYTICS_DB_ENABLED=true</code> on the API server and start
-                    Doris (see <code className="text-[11px]">docker-compose.analytics.yml</code>). Dashboards
-                    automatically fall back to MySQL when Doris is off.
+                  <p className="text-xs text-ui-muted">
+                    Analytics is disabled. Set <code className="text-[11px]">ANALYTICS_DB_ENABLED=true</code> on
+                    the API (default) and start Doris with{' '}
+                    <code className="text-[11px]">docker compose -f docker-compose.analytics.yml up -d</code>.
+                    Dashboards fall back to MySQL when Doris is off or unreachable.
+                  </p>
+                ) : !analyticsStatus?.connected ? (
+                  <p className="text-xs text-ui-muted">
+                    Doris is enabled but not reachable yet. Start it with{' '}
+                    <code className="text-[11px]">docker compose -f docker-compose.analytics.yml up -d</code>, then
+                    sync OLTP data here. Dashboards keep using MySQL until the connection succeeds.
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-3">
@@ -630,7 +637,6 @@ export function SettingsPage() {
                       className="rounded-sm normal-case"
                       onClick={() => dorisSyncMutation.mutate()}
                       loading={dorisSyncMutation.isPending}
-                      disabled={!analyticsStatus.connected}
                     >
                       Sync OLTP data to Doris
                     </Button>

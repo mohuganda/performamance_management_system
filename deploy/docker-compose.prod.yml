@@ -69,6 +69,14 @@ services:
       REDIS_PORT: 6379
       IHRIS_USE_DEMO_DATA: ${IHRIS_USE_DEMO_DATA}
       LOAD_DEMO_DATA: ${LOAD_DEMO_DATA}
+      ANALYTICS_DB_ENABLED: ${ANALYTICS_DB_ENABLED:-true}
+      ANALYTICS_DB_HOST: ${ANALYTICS_DB_HOST:-host.docker.internal}
+      ANALYTICS_DB_PORT: ${ANALYTICS_DB_PORT:-9030}
+      ANALYTICS_DB_DATABASE: ${ANALYTICS_DB_DATABASE:-moh_pms_analytics}
+      ANALYTICS_DB_USERNAME: ${ANALYTICS_DB_USERNAME:-root}
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${DATA_DIR}/storage:/app/storage
     expose:

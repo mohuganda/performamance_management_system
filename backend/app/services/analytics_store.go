@@ -31,7 +31,7 @@ func NewAnalyticsStore() *AnalyticsStore {
 }
 
 func AnalyticsEnabled() bool {
-	return facades.Config().GetBool("pms.analytics.enabled", false)
+	return facades.Config().GetBool("pms.analytics.enabled", true)
 }
 
 func (s *AnalyticsStore) Status() map[string]any {
@@ -42,7 +42,7 @@ func (s *AnalyticsStore) Status() map[string]any {
 		"database":  facades.Config().GetString("pms.analytics.database", "moh_pms_analytics"),
 	}
 	if !AnalyticsEnabled() {
-		status["message"] = "Analytics OLAP is disabled (set ANALYTICS_DB_ENABLED=true to enable)"
+		status["message"] = "Analytics OLAP is disabled (set ANALYTICS_DB_ENABLED=true to enable; enabled by default)"
 		return status
 	}
 	db, err := s.DB()
