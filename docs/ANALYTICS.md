@@ -58,11 +58,16 @@ and `extra_hosts: host.docker.internal:host-gateway` so Linux Docker can reach t
 
 Writes (leave requests, clock events, PPA, etc.) never go to Doris directly — they stay in MySQL until an admin sync replicates them.
 
+## Fail-fast when Doris is down
+
+If analytics is enabled but Doris is not running, the API dials FE with a **~2s timeout**, then marks Doris unavailable for **60s** and serves dashboards from **MySQL**. You do not need Doris for the UI to load.
+
 ## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
+| Dashboard stuck on skeletons | Redeploy API with current `analytics_store` fail-fast fix; or set `ANALYTICS_DB_ENABLED=false` and restart API |
 | Status: Enabled but unreachable | Start `docker-compose.analytics.yml`; confirm port 9030 is open |
 | Sync button disabled / failing | Wait for FE healthy; check `docker logs moh-pms-doris-fe` |
-| Dashboards look unchanged | Expected until first successful sync; MySQL fallback is active |
+| Dashboards look unchanged after Doris starts | Run **Sync OLTP data to Doris** once; until then MySQL fallback is used |
 | API in Docker cannot open Doris | Use `ANALYTICS_DB_HOST=host.docker.internal` (already the compose default) |
