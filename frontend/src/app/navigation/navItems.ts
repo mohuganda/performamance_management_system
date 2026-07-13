@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   BarChart3,
   CalendarDays,
+  CheckCircle2,
   ClipboardList,
   LayoutDashboard,
   MapPin,
@@ -59,13 +60,13 @@ export const navGroups: NavGroup[] = [
   {
     id: 'approvals',
     label: 'Approvals',
-    icon: ClipboardList,
+    icon: CheckCircle2,
     items: [
       {
         id: 'approvals',
         label: 'Approvals',
         path: '/approvals',
-        icon: ClipboardList,
+        icon: CheckCircle2,
         description: 'Pending leave, out-of-station, and performance approvals',
       },
     ],

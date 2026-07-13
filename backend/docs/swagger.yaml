@@ -41,10 +41,16 @@ definitions:
         type: integer
       allow_carry_over:
         type: boolean
+      block_past_dates:
+        type: boolean
       carry_over_deadline:
         type: string
       clock_window_morning:
         type: string
+      enforce_advance_notice:
+        type: boolean
+      exempt_sick_leave_advance_notice:
+        type: boolean
       vesting_day:
         type: integer
       vesting_month:
@@ -75,6 +81,8 @@ definitions:
         type: string
       end_date:
         type: string
+      expected_deliverables:
+        type: string
       geofence_radius_meters:
         type: integer
       reason_id:
@@ -85,6 +93,13 @@ definitions:
         type: string
       submit:
         type: boolean
+    type: object
+  controllers.uploadBody:
+    properties:
+      data_url:
+        type: string
+      file_name:
+        type: string
     type: object
   github_com_goravel_framework_support_carbon.DateTime:
     properties:
@@ -104,13 +119,29 @@ definitions:
         type: integer
       isActive:
         type: boolean
+      isRequired:
+        type: boolean
+      jobTitleID:
+        type: integer
+      jobTitleMatch:
+        type: string
       name:
+        type: string
+      scope:
         type: string
       sequence:
         format: int32
         type: integer
+      skipIfUnresolved:
+        type: boolean
+      stageType:
+        type: string
+      supervisorSequence:
+        type: integer
       updated_at:
         $ref: '#/definitions/github_com_goravel_framework_support_carbon.DateTime'
+      workflowProfileCode:
+        type: string
     type: object
   models.LeaveEntitlement:
     properties:
@@ -133,7 +164,7 @@ definitions:
     type: object
   models.LeaveType:
     properties:
-      advanceNoticeDays:
+      advance_notice_days:
         type: integer
       code:
         type: string
@@ -141,37 +172,150 @@ definitions:
         $ref: '#/definitions/github_com_goravel_framework_support_carbon.DateTime'
       description:
         type: string
-      eligibilityNotes:
+      eligibility_notes:
         type: string
       id:
         type: integer
-      isActive:
+      is_active:
         type: boolean
-      maxDaysPerRequest:
+      max_days_per_request:
         type: integer
-      maxDaysPerYear:
+      max_days_per_year:
         type: integer
-      medicalReportAfterDays:
+      medical_report_after_days:
         type: integer
       name:
         type: string
-      requiresHrApproval:
+      requires_hr_approval:
         type: boolean
-      requiresSupervisorApproval:
+      requires_supervisor_approval:
         type: boolean
-      sortOrder:
+      sort_order:
         type: integer
       updated_at:
         $ref: '#/definitions/github_com_goravel_framework_support_carbon.DateTime'
+      workflow_profile_code:
+        type: string
     type: object
-host: localhost:3030
+  services.UploadedFile:
+    properties:
+      mime_type:
+        type: string
+      name:
+        type: string
+      size:
+        type: integer
+      url:
+        type: string
+    type: object
 info:
   contact: {}
-  description: Performance Management System API for Ministry of Health Uganda. Mobile
-    self-service endpoints for leave, out-of-station, and GPS attendance clocking.
+  description: Ministry of Health Uganda — Performance Management System (iHRIS-integrated).
   title: MoH Uganda PMS API
   version: "1.0"
 paths:
+  /api/v1/admin/analytics/doris/sync:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Sync analytics warehouse
+      tags:
+      - integrations
+  /api/v1/admin/analytics/status:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Analytics (Doris) connection status
+      tags:
+      - integrations
+  /api/v1/admin/kpi/assignment-targets:
+    get:
+      description: Facility types, facilities, departments (with facility type context),
+        and job titles.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Assignable targets for KPI mapping
+      tags:
+      - admin-kpi
+  /api/v1/admin/kpi/assignments:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List KPI assignments
+      tags:
+      - admin-kpi
+    post:
+      consumes:
+      - application/json
+      description: Assign one or more KPIs to facility_type, facility, department,
+        job, or staff.
+      parameters:
+      - description: kpi_ids, assignable_type, target ids
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create KPI assignment(s)
+      tags:
+      - admin-kpi
+  /api/v1/admin/kpi/kpis:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List KPI catalog
+      tags:
+      - admin-kpi
   /api/v1/admin/leave/approval-stages:
     get:
       produces:
@@ -231,6 +375,21 @@ paths:
             additionalProperties: true
             type: object
       summary: Update leave approval stage
+      tags:
+      - admin-leave
+  /api/v1/admin/leave/balances:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List staff leave balances
       tags:
       - admin-leave
   /api/v1/admin/leave/entitlements:
@@ -310,6 +469,58 @@ paths:
             additionalProperties: true
             type: object
       summary: Update leave entitlement
+      tags:
+      - admin-leave
+  /api/v1/admin/leave/overview:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Leave admin overview metrics
+      tags:
+      - admin-leave
+  /api/v1/admin/leave/requests:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List leave requests (admin)
+      tags:
+      - admin-leave
+  /api/v1/admin/leave/requests/{id}/finalize:
+    post:
+      description: Moves a fully approved request to finalized status. Requires leave.config.manage.
+      parameters:
+      - description: Leave request ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: HR finalize approved leave request
       tags:
       - admin-leave
   /api/v1/admin/leave/settings:
@@ -425,6 +636,112 @@ paths:
       summary: Update leave type
       tags:
       - admin-leave
+  /api/v1/admin/lists/departments:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List departments
+      tags:
+      - admin-lists
+  /api/v1/admin/lists/facilities:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List facilities (paginated)
+      tags:
+      - admin-lists
+  /api/v1/admin/lists/refresh-catalog:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Refresh facility/institution type catalog from facilities
+      tags:
+      - admin-lists
+  /api/v1/admin/lists/summary:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Org catalog summary counts
+      tags:
+      - admin-lists
+  /api/v1/admin/notifications/send-reminders:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Send configured notification reminders
+      tags:
+      - admin-settings
+  /api/v1/admin/performance/settings:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Performance reporting settings
+      tags:
+      - admin-performance
+  /api/v1/admin/rbac/audit-logs:
+    get:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: List RBAC audit logs
+      tags:
+      - admin-rbac
+  /api/v1/admin/rbac/audit-logs/{id}/recover:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Recover a dangerous RBAC action
+      tags:
+      - admin-rbac
   /api/v1/admin/rbac/grant-permission:
     post:
       responses: {}
@@ -441,12 +758,28 @@ paths:
       summary: List permissions
       tags:
       - admin-rbac
+  /api/v1/admin/rbac/revoke-permission:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Revoke permission from role
+      tags:
+      - admin-rbac
   /api/v1/admin/rbac/roles:
     get:
       responses: {}
       security:
       - BearerAuth: []
       summary: List roles
+      tags:
+      - admin-rbac
+  /api/v1/admin/rbac/roles/{code}/permissions:
+    get:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: List permissions granted to a role
       tags:
       - admin-rbac
   /api/v1/admin/rbac/roles/{id}/scopes:
@@ -457,12 +790,73 @@ paths:
       summary: Configure data scope for a role
       tags:
       - admin-rbac
+  /api/v1/admin/rbac/scope-options:
+    get:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: District and facility options for user data scope
+      tags:
+      - admin-rbac
   /api/v1/admin/rbac/users:
+    get:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: List application users
+      tags:
+      - admin-rbac
     post:
       responses: {}
       security:
       - BearerAuth: []
       summary: Create application user (database admin)
+      tags:
+      - admin-rbac
+  /api/v1/admin/rbac/users/{id}:
+    patch:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Update application user
+      tags:
+      - admin-rbac
+  /api/v1/admin/rbac/users/{id}/link-staff-by-email:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Link user to staff record by matching email
+      tags:
+      - admin-rbac
+  /api/v1/admin/rbac/users/{id}/permissions:
+    delete:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Revoke direct permission from user
+      tags:
+      - admin-rbac
+    get:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: List direct permissions granted to a user
+      tags:
+      - admin-rbac
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Grant permission directly to user
+      tags:
+      - admin-rbac
+  /api/v1/admin/rbac/users/{id}/reset-authenticator:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Admin override — reset user authenticator
       tags:
       - admin-rbac
   /api/v1/admin/rbac/users/{id}/roles:
@@ -480,6 +874,138 @@ paths:
       summary: Assign role to user
       tags:
       - admin-rbac
+  /api/v1/admin/rbac/users/{id}/send-activation:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Send account activation email for linked staff
+      tags:
+      - admin-rbac
+  /api/v1/admin/settings:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get system settings
+      tags:
+      - admin-settings
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: group + payload
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update system settings group
+      tags:
+      - admin-settings
+  /api/v1/admin/staff:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Staff directory (paginated)
+      tags:
+      - admin-staff
+  /api/v1/admin/staff/{id}/hr-profile:
+    patch:
+      consumes:
+      - application/json
+      description: HR department override, contact fields, leave management flag (is_leave_manager).
+      parameters:
+      - description: Staff ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: hr_department_id, hr_email, is_leave_manager, etc.
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update staff HR profile
+      tags:
+      - admin-staff
+  /api/v1/admin/staff/{id}/supervisors:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Staff ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 'supervisors: [{sequence, supervisor_staff_id}]'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Set supervisor chain (up to 3)
+      tags:
+      - admin-staff
+  /api/v1/auth/activation/{token}:
+    get:
+      responses: {}
+      summary: Preview activation token
+      tags:
+      - auth
+  /api/v1/auth/activation/complete:
+    post:
+      responses: {}
+      summary: Complete account activation
+      tags:
+      - auth
   /api/v1/auth/change-password:
     post:
       consumes:
@@ -512,6 +1038,12 @@ paths:
       summary: Authenticate and receive JWT
       tags:
       - auth
+  /api/v1/auth/login/totp:
+    post:
+      responses: {}
+      summary: Complete login with authenticator code
+      tags:
+      - auth
   /api/v1/auth/logout:
     post:
       responses:
@@ -540,6 +1072,16 @@ paths:
       summary: Current user profile with roles and permissions
       tags:
       - auth
+  /api/v1/auth/profile:
+    put:
+      consumes:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Update profile photo and/or signature
+      tags:
+      - auth
   /api/v1/auth/refresh:
     post:
       responses:
@@ -553,6 +1095,229 @@ paths:
       summary: Refresh JWT
       tags:
       - auth
+  /api/v1/auth/request-activation:
+    post:
+      responses: {}
+      summary: Request account activation email for staff
+      tags:
+      - auth
+  /api/v1/auth/request-password-reset:
+    post:
+      responses: {}
+      summary: Request password reset email
+      tags:
+      - auth
+  /api/v1/auth/totp/confirm:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Confirm authenticator enrollment
+      tags:
+      - auth
+  /api/v1/auth/totp/disable:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Disable authenticator
+      tags:
+      - auth
+  /api/v1/auth/totp/enroll:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Start authenticator enrollment
+      tags:
+      - auth
+  /api/v1/auth/totp/status:
+    get:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Authenticator status
+      tags:
+      - auth
+  /api/v1/config:
+    get:
+      description: Branding and client-safe settings for the web app.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Public client configuration
+      tags:
+      - system
+  /api/v1/dashboard/department-head:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Department head dashboard
+      tags:
+      - dashboard
+  /api/v1/dashboard/health-worker:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Staff dashboard
+      tags:
+      - dashboard
+  /api/v1/dashboard/hr-manager:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: HR / director / executive dashboard
+      tags:
+      - dashboard
+  /api/v1/dashboard/supervisor:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Supervisor dashboard
+      tags:
+      - dashboard
+  /api/v1/files:
+    get:
+      parameters:
+      - description: Relative path under uploads/
+        in: path
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Download an uploaded attachment
+      tags:
+      - uploads
+  /api/v1/health:
+    get:
+      description: Returns service status. No authentication required.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: API health check
+      tags:
+      - system
+  /api/v1/hrm-attend/sync:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Sync HRM attendance feed
+      tags:
+      - integrations
+  /api/v1/ihris/sync:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Optional batch options (run_id, start_page, pages_per_batch)
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Trigger iHRIS staff sync
+      tags:
+      - integrations
+  /api/v1/ihris/sync/status:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: iHRIS sync run status
+      tags:
+      - integrations
+  /api/v1/mobile/approvals/inbox:
+    get:
+      description: Pending leave, out-of-station, PPA, and appraisal items for the
+        signed-in approver. Requires a linked staff record.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: items, stats (counts and average approval time)
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: User not linked to staff
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Unified approvals inbox
+      tags:
+      - approvals
   /api/v1/mobile/attendance/clock:
     post:
       consumes:
@@ -803,10 +1568,171 @@ paths:
       summary: Create out-of-station request
       tags:
       - mobile-out-of-station
-  /swagger/{any}:
+  /api/v1/mobile/performance/kpis/grouped:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Assigned KPIs grouped by function
+      tags:
+      - mobile-performance
+  /api/v1/mobile/performance/overall-rating:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Overall performance rating for the authenticated staff member
+      tags:
+      - mobile-performance
+  /api/v1/mobile/performance/ppa/review:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ppa_id, approve, comments
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Review submitted PPA
+      tags:
+      - mobile-performance
+  /api/v1/mobile/performance/status-report:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Scoped PPA + quarterly submission/approval status with scores
+      tags:
+      - mobile-performance
+  /api/v1/mobile/performance/summary:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: PPA and KPI summary for current staff
+      tags:
+      - mobile-performance
+  /api/v1/mobile/performance/windows:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Current performance reporting windows
+      tags:
+      - mobile-performance
+  /api/v1/notifications:
     get:
       responses: {}
+      security:
+      - BearerAuth: []
+      summary: List in-app notifications
+      tags:
+      - notifications
+  /api/v1/notifications/{id}/read:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Mark notification as read
+      tags:
+      - notifications
+  /api/v1/notifications/read-all:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Mark all notifications as read
+      tags:
+      - notifications
+  /api/v1/notifications/unread-count:
+    get:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Unread in-app notification count
+      tags:
+      - notifications
+  /api/v1/uploads:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Base64 data URL
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.uploadBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/services.UploadedFile'
+      security:
+      - BearerAuth: []
+      summary: Upload a leave/travel attachment
+      tags:
+      - uploads
+  /swagger/{any}:
+    get:
+      description: Interactive OpenAPI documentation for the MoH Uganda Performance
+        Management System.
+      responses: {}
       summary: Swagger API documentation
+      tags:
+      - documentation
+schemes:
+- http
+- https
 securityDefinitions:
   BearerAuth:
     description: 'JWT Bearer token. Format: Bearer {token}'
@@ -814,3 +1740,41 @@ securityDefinitions:
     name: Authorization
     type: apiKey
 swagger: "2.0"
+tags:
+- description: Authentication, session, profile, and two-factor (TOTP)
+  name: auth
+- description: Unified inbox for pending leave, out-of-station, and performance approvals
+  name: approvals
+- description: Staff leave balances, types, and request submission
+  name: mobile-leave
+- description: Supervisor leave and out-of-station approval actions
+  name: mobile-supervisor
+- description: Out-of-station travel requests
+  name: mobile-oos
+- description: Attendance clock events with optional GPS coordinates
+  name: mobile-attendance
+- description: Performance planning (PPA), quarterly reports, and appraisals
+  name: mobile-performance
+- description: Role-scoped dashboard metrics and drill-down data
+  name: dashboard
+- description: Leave administration — balances, requests, workflow stages, HR finalize
+  name: admin-leave
+- description: KPI catalog, assignments by facility type / facility / department /
+    job / staff
+  name: admin-kpi
+- description: Staff management — HR enrichment, supervisors, activation
+  name: admin-staff
+- description: Organisation reference lists and catalog maintenance
+  name: admin-lists
+- description: Access control — users, roles, permissions, data scopes, audit log
+  name: admin-rbac
+- description: System settings — integrations, email, notifications, performance windows
+  name: admin-settings
+- description: Performance reporting configuration
+  name: admin-performance
+- description: iHRIS sync, HRM attendance, analytics (Doris)
+  name: integrations
+- description: In-app notifications for the signed-in user
+  name: notifications
+- description: Health check and public configuration
+  name: system
