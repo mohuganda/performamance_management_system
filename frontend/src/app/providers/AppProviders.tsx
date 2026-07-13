@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { SessionTimeoutGuard } from '@/components/organisms/SessionTimeoutGuard'
+import { ThemeSync } from '@/components/organisms/ThemeSync'
 import { ToastViewport } from '@/components/organisms/ToastViewport'
 import '@/localization/i18n'
 
@@ -19,6 +20,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <ThemeSync />
         {children}
         <SessionTimeoutGuard />
         <ToastViewport />

@@ -1,10 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { Menu, MenuHandler, MenuItem, MenuList } from '@material-tailwind/react'
-import { Bell, ChevronDown, User } from 'lucide-react'
+import { Bell, ChevronDown, Monitor, Moon, Sun, User } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { notificationService } from '@/api/services/notifications'
 import { UserAvatar } from '@/components/atoms/UserAvatar'
 import { NotificationBell } from '@/components/molecules/NotificationBell'
+import { ThemeAppearancePicker } from '@/components/molecules/ThemeAppearancePicker'
+import {
+  resolveTheme,
+  useThemeStore,
+  type ThemePreference,
+} from '@/stores/themeStore'
 import { mt } from '@/utils/mt'
 
 type UserAccountMenuProps = {
@@ -13,7 +19,15 @@ type UserAccountMenuProps = {
   profilePhoto: string | null
 }
 
+function ThemeIcon({ preference }: { preference: ThemePreference }) {
+  const resolved = resolveTheme(preference)
+  if (preference === 'system') return <Monitor className="h-4 w-4 text-ui-muted" />
+  if (resolved === 'dark') return <Moon className="h-4 w-4 text-ui-muted" />
+  return <Sun className="h-4 w-4 text-ui-muted" />
+}
+
 export function UserAccountMenu({ displayName, roleLabel, profilePhoto }: UserAccountMenuProps) {
+  const preference = useThemeStore((s) => s.preference)
   const { data: unread = 0 } = useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: () => notificationService.unreadCount(),
@@ -39,7 +53,7 @@ export function UserAccountMenu({ displayName, roleLabel, profilePhoto }: UserAc
             <ChevronDown className="hidden h-4 w-4 shrink-0 text-ui-muted md:block" />
           </button>
         </MenuHandler>
-        <MenuList {...mt} className="min-w-[220px] rounded-sm border border-ui-border p-1.5 shadow-lg">
+        <MenuList {...mt} className="min-w-[260px] rounded-sm border border-ui-border bg-ui-surface p-1.5 shadow-lg">
           <div className="border-b border-ui-border px-3 py-2 md:hidden">
             <p className="text-sm font-semibold text-ui-text">{displayName}</p>
             <p className="text-xs capitalize text-ui-muted">{roleLabel}</p>
@@ -69,6 +83,13 @@ export function UserAccountMenu({ displayName, roleLabel, profilePhoto }: UserAc
               <span className="text-sm font-medium text-ui-text">My Profile</span>
             </MenuItem>
           </NavLink>
+          <div className="mt-1 border-t border-ui-border px-2 pt-2">
+            <div className="mb-2 flex items-center gap-2 px-1">
+              <ThemeIcon preference={preference} />
+              <p className="text-xs font-bold uppercase tracking-wide text-ui-muted">Appearance</p>
+            </div>
+            <ThemeAppearancePicker compact />
+          </div>
         </MenuList>
       </Menu>
     </div>

@@ -3,30 +3,31 @@ const withMT = require('@material-tailwind/react/utils/withMT')
 /** @type {import('tailwindcss').Config} */
 module.exports = withMT({
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
         ui: {
-          bg: '#F4F4F5',
-          surface: '#FFFFFF',
-          text: '#18181B',
-          muted: '#71717A',
-          border: '#E4E4E7',
-          subtle: '#FAFAFA',
+          bg: 'var(--color-ui-bg)',
+          surface: 'var(--color-ui-surface)',
+          text: 'var(--color-ui-text)',
+          muted: 'var(--color-ui-muted)',
+          border: 'var(--color-ui-border)',
+          subtle: 'var(--color-ui-subtle)',
         },
         uganda: {
-          black: '#1A1A1A',
-          yellow: '#FCDC04',
-          red: '#D90000',
+          black: 'var(--color-uganda-black)',
+          yellow: 'var(--color-uganda-yellow)',
+          red: 'var(--color-uganda-red)',
         },
         moh: {
-          green: '#18181B',
-          gold: '#FCDC04',
-          success: '#15803D',
-          warning: '#B45309',
-          error: '#D90000',
-          background: '#F4F4F5',
-          card: '#FFFFFF',
+          green: 'var(--color-moh-green)',
+          gold: 'var(--color-moh-gold)',
+          success: 'var(--color-moh-success)',
+          warning: 'var(--color-moh-warning)',
+          error: 'var(--color-moh-error)',
+          background: 'var(--color-moh-background)',
+          card: 'var(--color-moh-card)',
         },
       },
       borderRadius: {

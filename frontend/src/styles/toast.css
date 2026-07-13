@@ -26,6 +26,12 @@
   margin-bottom: 0.5rem;
 }
 
+html.dark .toast-item {
+  background-color: #27272a;
+  box-shadow: 0 9px 18px rgb(0 0 0 / 55%);
+  border: 1px solid #3f3f46;
+}
+
 .toast-item.show {
   opacity: 1;
   transform: translateY(0);
@@ -60,6 +66,14 @@
   font-weight: 400;
   color: #111215;
   line-height: 1.35;
+}
+
+html.dark .toast-message {
+  color: #f4f4f5;
+}
+
+html.dark .toast-title {
+  color: #fafafa;
 }
 
 .toast-close {

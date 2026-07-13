@@ -3,7 +3,7 @@
 @import './styles/toast.css';
 
 @theme {
-  /* Professional grey UI */
+  /* Professional grey UI — values overridden under .dark */
   --color-ui-bg: #f4f4f5;
   --color-ui-surface: #ffffff;
   --color-ui-text: #18181b;
@@ -36,14 +36,201 @@
   --radius-lg: 0.375rem;
 }
 
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+
+  --color-ui-bg: #0c0c0e;
+  --color-ui-surface: #18181b;
+  --color-ui-text: #f4f4f5;
+  --color-ui-muted: #a1a1aa;
+  --color-ui-border: #3f3f46;
+  --color-ui-subtle: #27272a;
+
+  --color-uganda-black: #f4f4f5;
+  --color-moh-green: #f4f4f5;
+  --color-moh-background: #0c0c0e;
+  --color-moh-card: #18181b;
+
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+  --color-moh-success: #4ade80;
+  --color-moh-warning: #fbbf24;
+  --color-moh-error: #f87171;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
   font-family: var(--font-sans);
   background: var(--color-ui-bg);
   color: var(--color-ui-text);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 #root {
   min-height: 100vh;
+}
+
+/* Primary filled actions: keep high contrast on dark canvases */
+html.dark .bg-moh-green {
+  background-color: #f4f4f5 !important;
+  color: #18181b !important;
+}
+
+html.dark .bg-uganda-black,
+html.dark .bg-black {
+  background-color: #f4f4f5 !important;
+  color: #18181b !important;
+}
+
+/* Material Tailwind navbar defaults to white */
+html.dark nav.sticky,
+html.dark .navbar,
+html.dark [class*='navbar'] {
+  background-color: var(--color-ui-surface) !important;
+  color: var(--color-ui-text) !important;
+}
+
+/* Soft remaps for components that hard-code light palette utilities.
+html.dark .bg-white {
+  background-color: var(--color-ui-surface) !important;
+}
+
+html.dark .bg-gray-50,
+html.dark .bg-gray-100,
+html.dark .bg-zinc-50,
+html.dark .bg-zinc-100 {
+  background-color: var(--color-ui-subtle) !important;
+}
+
+html.dark .text-gray-400,
+html.dark .text-gray-500,
+html.dark .text-gray-600,
+html.dark .text-zinc-400,
+html.dark .text-zinc-500,
+html.dark .text-zinc-600 {
+  color: var(--color-ui-muted) !important;
+}
+
+html.dark .text-gray-700,
+html.dark .text-gray-800,
+html.dark .text-gray-900,
+html.dark .text-zinc-700,
+html.dark .text-zinc-800,
+html.dark .text-zinc-900,
+html.dark .text-black {
+  color: var(--color-ui-text) !important;
+}
+
+html.dark .border-gray-100,
+html.dark .border-gray-200,
+html.dark .border-gray-300,
+html.dark .border-zinc-100,
+html.dark .border-zinc-200,
+html.dark .border-zinc-300 {
+  border-color: var(--color-ui-border) !important;
+}
+
+html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-zinc-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-zinc-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--color-ui-border) !important;
+}
+
+html.dark .shadow-sm,
+html.dark .shadow,
+html.dark .shadow-md,
+html.dark .shadow-lg,
+html.dark .shadow-xl {
+  --tw-shadow-color: rgb(0 0 0 / 0.45);
+}
+
+/* Soft tinted surfaces used on dashboards and chips */
+html.dark .bg-emerald-50\/60,
+html.dark .bg-emerald-50 {
+  background-color: rgb(6 78 59 / 0.28) !important;
+}
+
+html.dark .bg-amber-50\/50,
+html.dark .bg-amber-50 {
+  background-color: rgb(120 53 15 / 0.28) !important;
+}
+
+html.dark .bg-blue-50\/50,
+html.dark .bg-blue-50,
+html.dark .bg-sky-50 {
+  background-color: rgb(30 58 138 / 0.3) !important;
+}
+
+html.dark .bg-red-50\/40,
+html.dark .bg-red-50 {
+  background-color: rgb(127 29 29 / 0.28) !important;
+}
+
+html.dark .bg-purple-50\/40,
+html.dark .bg-purple-50,
+html.dark .bg-violet-50 {
+  background-color: rgb(88 28 135 / 0.28) !important;
+}
+
+html.dark .bg-green-50 {
+  background-color: rgb(6 78 59 / 0.28) !important;
+}
+
+html.dark .bg-amber-100 {
+  background-color: rgb(120 53 15 / 0.4) !important;
+}
+
+html.dark .bg-blue-100 {
+  background-color: rgb(30 58 138 / 0.4) !important;
+}
+
+html.dark .bg-red-100 {
+  background-color: rgb(127 29 29 / 0.4) !important;
+}
+
+html.dark .bg-purple-100 {
+  background-color: rgb(88 28 135 / 0.4) !important;
+}
+
+html.dark .text-amber-800,
+html.dark .text-amber-700 {
+  color: #fcd34d !important;
+}
+
+html.dark .text-blue-800,
+html.dark .text-blue-700,
+html.dark .text-sky-800 {
+  color: #93c5fd !important;
+}
+
+html.dark .text-red-700,
+html.dark .text-red-600 {
+  color: #fca5a5 !important;
+}
+
+html.dark .text-purple-800,
+html.dark .text-violet-800 {
+  color: #d8b4fe !important;
+}
+
+html.dark .text-green-800,
+html.dark .text-emerald-800 {
+  color: #6ee7b7 !important;
+}
+
+/* Material Tailwind menus / paper often force white */
+html.dark [role='menu'],
+html.dark .MuiPaper-root {
+  background-color: var(--color-ui-surface) !important;
+  color: var(--color-ui-text) !important;
+  border-color: var(--color-ui-border) !important;
 }

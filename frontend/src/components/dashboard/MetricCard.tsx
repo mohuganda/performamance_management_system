@@ -3,19 +3,19 @@ import { Card } from '@/components/atoms/Card'
 import { cn } from '@/utils/cn'
 
 const ACCENT_STYLES = {
-  green: 'border-l-moh-green bg-emerald-50/60',
-  amber: 'border-l-amber-500 bg-amber-50/50',
-  blue: 'border-l-blue-600 bg-blue-50/50',
-  red: 'border-l-red-600 bg-red-50/40',
-  purple: 'border-l-purple-600 bg-purple-50/40',
+  green: 'border-l-moh-green bg-emerald-50/60 dark:bg-emerald-950/40',
+  amber: 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/40',
+  blue: 'border-l-blue-600 bg-blue-50/50 dark:bg-blue-950/40',
+  red: 'border-l-red-600 bg-red-50/40 dark:bg-red-950/40',
+  purple: 'border-l-purple-600 bg-purple-50/40 dark:bg-purple-950/40',
 } as const
 
 const ICON_STYLES = {
   green: 'bg-moh-green/10 text-moh-green',
-  amber: 'bg-amber-100 text-amber-800',
-  blue: 'bg-blue-100 text-blue-800',
-  red: 'bg-red-100 text-red-700',
-  purple: 'bg-purple-100 text-purple-800',
+  amber: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+  blue: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300',
+  red: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
+  purple: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
 } as const
 
 type Accent = keyof typeof ACCENT_STYLES
@@ -56,9 +56,9 @@ export function MetricCard({ title, value, hint, icon: Icon, accent = 'green', o
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">{title}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-ui-muted">{title}</p>
           <p className="mt-2 text-2xl font-bold text-ui-text">{value}</p>
-          {hint ? <p className="mt-1 text-xs text-gray-500">{hint}</p> : null}
+          {hint ? <p className="mt-1 text-xs text-ui-muted">{hint}</p> : null}
           {clickable ? <p className="mt-2 text-[10px] font-medium text-moh-green">View details →</p> : null}
         </div>
         <div className={cn('rounded-sm p-2', ICON_STYLES[accent])}>

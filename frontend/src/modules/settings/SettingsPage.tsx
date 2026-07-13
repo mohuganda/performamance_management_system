@@ -24,6 +24,7 @@ import { kpiAdminService } from '@/api/services/kpiAdmin'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
 import { SettingsTabNav } from '@/components/molecules/SettingsTabNav'
+import { ThemeAppearancePicker } from '@/components/molecules/ThemeAppearancePicker'
 import {
   canAccessSettingsTab,
   canManagePreferencesAdmin,
@@ -397,6 +398,13 @@ export function SettingsPage() {
                 ))}
               </Select>
             </Field>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Appearance"
+            description="Choose light, dark, or match your device. Your choice is saved on this browser."
+          >
+            <ThemeAppearancePicker />
           </SettingsSection>
 
           {canPrefsAdmin ? (
