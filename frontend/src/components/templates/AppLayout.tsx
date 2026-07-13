@@ -78,7 +78,7 @@ function NavGroupMenu({
           <ChevronDown className="h-3.5 w-3.5 opacity-70" />
         </Button>
       </MenuHandler>
-      <MenuList {...mt} className="min-w-[240px] rounded-sm border border-ui-border p-1.5 shadow-lg">
+      <MenuList {...mt} className="min-w-[240px] rounded-sm border border-ui-border bg-ui-surface p-1.5 text-ui-text shadow-lg">
         {group.items.map((item) => (
           <NavGroupMenuItem key={item.id} item={item} pathname={pathname} navPaths={navPaths} />
         ))}
@@ -99,17 +99,19 @@ function NavGroupMenuItem({
   const Icon = item.icon
   const active = isNavPathActive(pathname, item.path, navPaths)
   return (
-    <NavLink to={item.path}>
+    <NavLink to={item.path} aria-current={active ? 'page' : undefined}>
       <MenuItem
         {...mt}
         className={cn(
-          'flex items-start gap-3 rounded-sm py-2.5',
-          active ? 'bg-moh-green/10' : 'hover:bg-ui-subtle',
+          'flex items-start gap-3 rounded-sm py-2.5 text-ui-text',
+          active
+            ? 'bg-ui-subtle ring-1 ring-inset ring-uganda-yellow/50'
+            : 'hover:bg-ui-subtle',
         )}
       >
-        <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', active ? 'text-moh-green' : 'text-ui-muted')} />
+        <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', active ? 'text-uganda-yellow' : 'text-ui-muted')} />
         <div>
-          <p className={cn('text-sm font-medium', active ? 'text-moh-green' : 'text-ui-text')}>
+          <p className={cn('text-sm font-medium', active ? 'text-ui-text' : 'text-ui-text')}>
             {item.label}
           </p>
           {item.description ? (

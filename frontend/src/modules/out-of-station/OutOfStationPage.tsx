@@ -197,7 +197,7 @@ export function OutOfStationPage() {
       <ProcessGuide title="How out-of-station application works" steps={OOS_STEPS} />
 
       {!staffId ? (
-        <Card {...mt} className="rounded-sm border border-moh-warning/40 p-4">
+        <Card {...mt} className="rounded-sm border border-moh-warning/40 bg-ui-surface p-4">
           <Typography {...mt} className="text-sm text-moh-warning">
             Link your account to an iHRIS staff record to submit out-of-station requests.
           </Typography>
@@ -230,7 +230,7 @@ export function OutOfStationPage() {
                   }) => (
                     <div
                       key={row.approval_id}
-                      className="rounded-sm border border-ui-border bg-white p-3"
+                      className="rounded-sm border border-ui-border bg-ui-surface p-3"
                     >
                       <p className="font-semibold">{row.staff_name}</p>
                       <p className="text-sm text-ui-muted">

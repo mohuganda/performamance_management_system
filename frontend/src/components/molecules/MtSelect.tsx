@@ -39,7 +39,7 @@ export function Select({ children, value, selected, menuProps, ...props }: Selec
       menuProps={{
         ...menuProps,
         className: [
-          'max-h-72 overflow-auto bg-white text-ui-text shadow-lg',
+          'max-h-72 overflow-auto border border-ui-border bg-ui-surface text-ui-text shadow-lg',
           menuProps?.className,
         ]
           .filter(Boolean)

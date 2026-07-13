@@ -260,7 +260,7 @@ export function LeavePage() {
                   }) => (
                     <div
                       key={row.approval_id}
-                      className="rounded-sm border border-ui-border bg-white p-3"
+                      className="rounded-sm border border-ui-border bg-ui-surface p-3"
                     >
                       <p className="font-semibold">{row.staff_name}</p>
                       {row.stage_name ? (

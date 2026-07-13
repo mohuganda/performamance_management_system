@@ -99,7 +99,7 @@ export function SearchableSelect({
 
   const dropdown = open ? (
     <div
-      className="absolute z-50 mt-1 max-h-96 w-full overflow-auto rounded-md border border-ui-border bg-white p-1 shadow-lg"
+      className="absolute z-50 mt-1 max-h-96 w-full overflow-auto rounded-md border border-ui-border bg-ui-surface p-1 shadow-lg"
       role="listbox"
     >
       {emptyLabel ? (
@@ -155,7 +155,7 @@ export function SearchableSelect({
         <label className="mb-1.5 block text-sm font-semibold text-ui-text">{label}</label>
         <div
           className={cn(
-            'flex min-h-[42px] items-center gap-2 rounded-lg border bg-white px-3 py-2 shadow-sm transition',
+            'flex min-h-[42px] items-center gap-2 rounded-lg border bg-ui-surface px-3 py-2 shadow-sm transition',
             open ? 'border-moh-green ring-2 ring-moh-green/15' : 'border-ui-border',
             disabled && 'cursor-not-allowed opacity-50',
           )}

@@ -78,35 +78,28 @@ body {
   min-height: 100vh;
 }
 
-/* Primary filled actions: keep high contrast on dark canvases */
-html.dark .bg-moh-green {
-  background-color: #f4f4f5 !important;
-  color: #18181b !important;
+/* Soft remaps for components that hard-code light palette utilities. */
+html.dark .bg-white,
+html.dark .\!bg-white,
+html.dark [class*='bg-white'] {
+  background-color: var(--color-ui-surface) !important;
 }
 
-html.dark .bg-uganda-black,
-html.dark .bg-black {
-  background-color: #f4f4f5 !important;
-  color: #18181b !important;
-}
-
-/* Material Tailwind navbar defaults to white */
-html.dark nav.sticky,
-html.dark .navbar,
-html.dark [class*='navbar'] {
+/* Material Tailwind Card often ships with white + fixed blue-gray text */
+html.dark .rounded-xl.bg-white,
+html.dark div.rounded-lg.bg-white,
+html.dark .shadow-md.bg-white {
   background-color: var(--color-ui-surface) !important;
   color: var(--color-ui-text) !important;
 }
 
-/* Soft remaps for components that hard-code light palette utilities.
-html.dark .bg-white {
-  background-color: var(--color-ui-surface) !important;
-}
-
 html.dark .bg-gray-50,
+html.dark .bg-gray-50\/60,
 html.dark .bg-gray-100,
 html.dark .bg-zinc-50,
-html.dark .bg-zinc-100 {
+html.dark .bg-zinc-100,
+html.dark .bg-blue-gray-50,
+html.dark .bg-blue-gray-100 {
   background-color: var(--color-ui-subtle) !important;
 }
 
@@ -115,7 +108,10 @@ html.dark .text-gray-500,
 html.dark .text-gray-600,
 html.dark .text-zinc-400,
 html.dark .text-zinc-500,
-html.dark .text-zinc-600 {
+html.dark .text-zinc-600,
+html.dark .text-blue-gray-400,
+html.dark .text-blue-gray-500,
+html.dark .text-blue-gray-600 {
   color: var(--color-ui-muted) !important;
 }
 
@@ -125,6 +121,9 @@ html.dark .text-gray-900,
 html.dark .text-zinc-700,
 html.dark .text-zinc-800,
 html.dark .text-zinc-900,
+html.dark .text-blue-gray-700,
+html.dark .text-blue-gray-800,
+html.dark .text-blue-gray-900,
 html.dark .text-black {
   color: var(--color-ui-text) !important;
 }
@@ -134,7 +133,10 @@ html.dark .border-gray-200,
 html.dark .border-gray-300,
 html.dark .border-zinc-100,
 html.dark .border-zinc-200,
-html.dark .border-zinc-300 {
+html.dark .border-zinc-300,
+html.dark .border-blue-gray-50,
+html.dark .border-blue-gray-100,
+html.dark .border-blue-gray-200 {
   border-color: var(--color-ui-border) !important;
 }
 
@@ -160,7 +162,8 @@ html.dark .bg-emerald-50 {
 }
 
 html.dark .bg-amber-50\/50,
-html.dark .bg-amber-50 {
+html.dark .bg-amber-50,
+html.dark .bg-moh-warning\/5 {
   background-color: rgb(120 53 15 / 0.28) !important;
 }
 
@@ -181,7 +184,8 @@ html.dark .bg-violet-50 {
   background-color: rgb(88 28 135 / 0.28) !important;
 }
 
-html.dark .bg-green-50 {
+html.dark .bg-green-50,
+html.dark .bg-uganda-yellow\/5 {
   background-color: rgb(6 78 59 / 0.28) !important;
 }
 
@@ -189,7 +193,8 @@ html.dark .bg-amber-100 {
   background-color: rgb(120 53 15 / 0.4) !important;
 }
 
-html.dark .bg-blue-100 {
+html.dark .bg-blue-100,
+html.dark .bg-sky-100 {
   background-color: rgb(30 58 138 / 0.4) !important;
 }
 
@@ -197,8 +202,13 @@ html.dark .bg-red-100 {
   background-color: rgb(127 29 29 / 0.4) !important;
 }
 
-html.dark .bg-purple-100 {
+html.dark .bg-purple-100,
+html.dark .bg-violet-100 {
   background-color: rgb(88 28 135 / 0.4) !important;
+}
+
+html.dark .bg-emerald-100 {
+  background-color: rgb(6 78 59 / 0.4) !important;
 }
 
 html.dark .text-amber-800,
@@ -208,7 +218,8 @@ html.dark .text-amber-700 {
 
 html.dark .text-blue-800,
 html.dark .text-blue-700,
-html.dark .text-sky-800 {
+html.dark .text-sky-800,
+html.dark .text-sky-700 {
   color: #93c5fd !important;
 }
 
@@ -218,7 +229,8 @@ html.dark .text-red-600 {
 }
 
 html.dark .text-purple-800,
-html.dark .text-violet-800 {
+html.dark .text-violet-800,
+html.dark .text-violet-700 {
   color: #d8b4fe !important;
 }
 
@@ -227,10 +239,98 @@ html.dark .text-emerald-800 {
   color: #6ee7b7 !important;
 }
 
-/* Material Tailwind menus / paper often force white */
+/* Primary filled CTAs stay high-contrast on dark canvases */
+html.dark button.bg-moh-green,
+html.dark a.bg-moh-green,
+html.dark .bg-moh-green:not([class*='bg-moh-green/']) {
+  background-color: #f4f4f5 !important;
+  color: #18181b !important;
+}
+
+html.dark button.bg-uganda-black,
+html.dark a.bg-uganda-black {
+  background-color: #f4f4f5 !important;
+  color: #18181b !important;
+}
+
+/* Material Tailwind navbar / cards / menus force white */
+html.dark nav.sticky,
+html.dark .navbar,
+html.dark [class*='navbar'] {
+  background-color: var(--color-ui-surface) !important;
+  color: var(--color-ui-text) !important;
+}
+
 html.dark [role='menu'],
+html.dark [role='listbox'],
 html.dark .MuiPaper-root {
   background-color: var(--color-ui-surface) !important;
   color: var(--color-ui-text) !important;
   border-color: var(--color-ui-border) !important;
+}
+
+html.dark [role='menuitem'],
+html.dark [role='option'] {
+  color: var(--color-ui-text) !important;
+}
+
+html.dark [role='menuitem']:hover,
+html.dark [role='menuitem']:focus,
+html.dark [role='menuitem']:focus-visible,
+html.dark [role='option']:hover,
+html.dark [role='option']:focus {
+  background-color: var(--color-ui-subtle) !important;
+  color: var(--color-ui-text) !important;
+}
+
+/* Active/current nav item — avoid white-on-white from MT + light primary token */
+html.dark [role='menuitem'].bg-ui-subtle,
+html.dark [role='menuitem'][aria-current='page'],
+html.dark a[aria-current='page'] [role='menuitem'] {
+  background-color: var(--color-ui-subtle) !important;
+  color: var(--color-ui-text) !important;
+}
+
+/* Tables */
+html.dark table thead tr,
+html.dark table thead th {
+  background-color: var(--color-ui-subtle) !important;
+  color: var(--color-ui-muted) !important;
+  border-color: var(--color-ui-border) !important;
+}
+
+html.dark table tbody td {
+  border-color: var(--color-ui-border) !important;
+  color: var(--color-ui-text);
+}
+
+html.dark table tbody tr:hover {
+  background-color: rgb(244 244 245 / 0.04) !important;
+}
+
+/* Material Tailwind Input / Select fields */
+html.dark .peer,
+html.dark input,
+html.dark textarea,
+html.dark select {
+  color: var(--color-ui-text) !important;
+}
+
+html.dark .peer:focus ~ label,
+html.dark label {
+  color: var(--color-ui-muted);
+}
+
+html.dark [class*='border-blue-gray'],
+html.dark .peer ~ * {
+  border-color: var(--color-ui-border);
+}
+
+/* Gradients that baked in white mid-stops */
+html.dark .from-moh-background,
+html.dark .via-white,
+html.dark .to-moh-background\/40 {
+  --tw-gradient-from: var(--color-ui-subtle) !important;
+  --tw-gradient-to: var(--color-ui-surface) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--color-ui-surface), var(--tw-gradient-to) !important;
 }
