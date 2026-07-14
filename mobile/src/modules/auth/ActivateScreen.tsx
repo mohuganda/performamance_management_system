@@ -2,29 +2,27 @@ import React, { useState } from 'react';
 import { View, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
 import { AuthStackParamList } from '../../app/navigation/types';
 import { Button } from '../../components/atoms/Button';
 import { Input } from '../../components/atoms/Input';
 import { Card } from '../../components/atoms/Card';
 import { FormStatusAlert } from '../../components/molecules/FormStatusAlert';
 import { AuthTemplate } from '../../components/templates';
-import apiClient from '../../api/client';
-import { z } from 'zod';
-
-const activationSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  token: z.string().min(1, 'Activation token is required'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ['confirmPassword'],
-});
+import { activationSchema } from '../../app/schemas/auth';
+import {
+  useRequestActivationMutation,
+  useCompleteActivationMutation,
+} from '../../app/hooks/useAuthMutations';
 
 type ActivateScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Activate'>;
 
 export function ActivateScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<ActivateScreenNavigationProp>();
+
+  const requestMutation = useRequestActivationMutation();
+  const completeMutation = useCompleteActivationMutation();
 
   const [email, setEmail] = useState('');
   const [token, setToken] = useState('');
@@ -32,7 +30,6 @@ export function ActivateScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'request' | 'complete'>('request');
 
   const handleRequestToken = async () => {
@@ -40,24 +37,23 @@ export function ActivateScreen() {
     setErrors({});
 
     if (!email || !email.includes('@')) {
-      setErrors({ email: 'Please enter a valid work email' });
+      setErrors({ email: t('login_email_error') });
       return;
     }
 
-    setLoading(true);
-    try {
-      await apiClient.post('/auth/request-activation', { email: email.trim() });
-      setStatusMessage({
-        text: 'An activation token has been sent to your email address.',
-        type: 'success',
-      });
-      setStep('complete');
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Request failed. Please check your email.';
-      setStatusMessage({ text: msg, type: 'error' });
-    } finally {
-      setLoading(false);
-    }
+    requestMutation.mutate(email.trim(), {
+      onSuccess: () => {
+        setStatusMessage({
+          text: t('activate_token_sent_success'),
+          type: 'success',
+        });
+        setStep('complete');
+      },
+      onError: (err: any) => {
+        const msg = err.response?.data?.message || err.message || t('activate_request_failed_error');
+        setStatusMessage({ text: msg, type: 'error' });
+      },
+    });
   };
 
   const handleCompleteActivation = async () => {
@@ -69,44 +65,42 @@ export function ActivateScreen() {
       const fieldErrors: Record<string, string> = {};
       validation.error.issues.forEach((err) => {
         if (err.path[0]) {
-          fieldErrors[err.path[0] as string] = err.message;
+          fieldErrors[err.path[0] as string] = t(err.message);
         }
       });
       setErrors(fieldErrors);
       return;
     }
 
-    setLoading(true);
-    try {
-      await apiClient.post('/auth/activation/complete', {
-        email: email.trim(),
-        token: token.trim(),
-        password,
-      });
-      setStatusMessage({
-        text: 'Activation completed successfully! Redirecting to login...',
-        type: 'success',
-      });
-      setTimeout(() => {
-        navigation.navigate('Login');
-      }, 2000);
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Activation failed.';
-      setStatusMessage({ text: msg, type: 'error' });
-    } finally {
-      setLoading(false);
-    }
+    completeMutation.mutate(
+      { email: email.trim(), token: token.trim(), password },
+      {
+        onSuccess: () => {
+          setStatusMessage({
+            text: t('activate_complete_success'),
+            type: 'success',
+          });
+          setTimeout(() => {
+            navigation.navigate('Login');
+          }, 2000);
+        },
+        onError: (err: any) => {
+          const msg = err.response?.data?.message || err.message || t('activate_failed_error');
+          setStatusMessage({ text: msg, type: 'error' });
+        },
+      }
+    );
   };
 
   return (
-    <AuthTemplate title="Activate Profile">
+    <AuthTemplate title={t('activate_title')}>
       <View className="flex-1 justify-center py-6">
         
         <View className="items-center mb-8">
           <View className="w-16 h-16 bg-gray-100 rounded-full items-center justify-center mb-4">
             <Text className="text-2xl font-bold text-primary">PMS</Text>
           </View>
-          <Text className="text-2xl font-bold text-gray-900 text-center">Activate Profile</Text>
+          <Text className="text-2xl font-bold text-gray-900 text-center">{t('activate_title')}</Text>
         </View>
 
         <Card>
@@ -119,12 +113,12 @@ export function ActivateScreen() {
           {step === 'request' ? (
             <View className="space-y-4">
               <Text className="text-base text-gray-600 mb-2">
-                Enter your registered work email to request your secure activation code.
+                {t('activate_instruction')}
               </Text>
               
               <Input
-                label="Work Email Address"
-                placeholder="worker@moh.go.ug"
+                label={t('activate_email_label')}
+                placeholder={t('activate_email_placeholder')}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={email}
@@ -133,17 +127,17 @@ export function ActivateScreen() {
               />
 
               <Button
-                title="Request Code"
+                title={t('activate_request_code_button')}
                 onPress={handleRequestToken}
-                loading={loading}
+                loading={requestMutation.isPending}
                 className="mt-4"
               />
             </View>
           ) : (
             <View className="space-y-4">
               <Input
-                label="Activation Token"
-                placeholder="Enter code received"
+                label={t('activate_token_label')}
+                placeholder={t('activate_token_placeholder')}
                 autoCapitalize="none"
                 value={token}
                 onChangeText={setToken}
@@ -151,8 +145,8 @@ export function ActivateScreen() {
               />
 
               <Input
-                label="Set Password"
-                placeholder="Min 8 characters"
+                label={t('activate_new_password_label')}
+                placeholder={t('activate_new_password_placeholder')}
                 secureTextEntry
                 autoCapitalize="none"
                 value={password}
@@ -161,8 +155,8 @@ export function ActivateScreen() {
               />
 
               <Input
-                label="Confirm Password"
-                placeholder="Re-enter password"
+                label={t('activate_confirm_password_label')}
+                placeholder={t('activate_confirm_password_placeholder')}
                 secureTextEntry
                 autoCapitalize="none"
                 value={confirmPassword}
@@ -171,14 +165,14 @@ export function ActivateScreen() {
               />
 
               <Button
-                title="Complete Profile Setup"
+                title={t('activate_submit_button')}
                 onPress={handleCompleteActivation}
-                loading={loading}
+                loading={completeMutation.isPending}
                 className="mt-4"
               />
 
               <Button
-                title="Back to Email Request"
+                title={t('activate_back_email_button')}
                 variant="secondary"
                 onPress={() => setStep('request')}
                 className="mt-2"
@@ -187,12 +181,12 @@ export function ActivateScreen() {
           )}
 
           <View className="flex-row justify-center items-center mt-6">
-            <Text className="text-sm text-gray-500">Back to </Text>
+            <Text className="text-sm text-gray-500">{t('activate_back_to')}</Text>
             <Text
               className="text-sm font-semibold text-primary"
               onPress={() => navigation.navigate('Login')}
             >
-              Sign In
+              {t('activate_sign_in_link')}
             </Text>
           </View>
         </Card>

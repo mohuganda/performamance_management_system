@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView, RefreshControl } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
 import { Button } from '../../components/atoms/Button';
 import { Card } from '../../components/atoms/Card';
@@ -11,6 +12,7 @@ import apiClient from '../../api/client';
 import { colors } from '../../theme/colors';
 
 export function ProfileScreen() {
+  const { t } = useTranslation();
   const { logout, user } = useAuthStore();
 
   const { data: profile, isLoading, refetch, isFetching } = useQuery({
@@ -30,7 +32,7 @@ export function ProfileScreen() {
   const supervisors = contract?.Supervisors || contract?.supervisors || [];
 
   return (
-    <MainTemplate title="Profile" showBack={true}>
+    <MainTemplate title={t('profile_title')} showBack={true}>
       <ScrollView
         className="flex-1"
         refreshControl={
@@ -49,34 +51,34 @@ export function ProfileScreen() {
             />
             <Text className="text-xl font-bold text-gray-900">{user?.name}</Text>
             <Text className="text-sm font-medium text-gray-500 mt-0.5">{user?.email}</Text>
-            <Badge label={user?.role || 'Staff'} variant="info" className="mt-3" />
+            <Badge label={user?.role || t('staff')} variant="info" className="mt-3" />
           </Card>
 
           {/* Biodata Section */}
           {staff && (
             <Card>
-              <Text className="text-lg font-bold text-gray-800 mb-4">Biodata Details</Text>
+              <Text className="text-lg font-bold text-gray-800 mb-4">{t('profile_biodata_details')}</Text>
               <View className="space-y-3">
                 <View className="flex-row justify-between border-b border-gray-50 pb-2">
-                  <Text className="text-sm font-medium text-gray-500">Gender</Text>
+                  <Text className="text-sm font-medium text-gray-500">{t('profile_gender')}</Text>
                   <Text className="text-sm font-semibold text-gray-900 capitalize">
                     {staff.Gender || staff.gender || '—'}
                   </Text>
                 </View>
                 <View className="flex-row justify-between border-b border-gray-50 pb-2">
-                  <Text className="text-sm font-medium text-gray-500">Mobile</Text>
+                  <Text className="text-sm font-medium text-gray-500">{t('profile_mobile')}</Text>
                   <Text className="text-sm font-semibold text-gray-900">
                     {staff.Mobile || staff.mobile || '—'}
                   </Text>
                 </View>
                 <View className="flex-row justify-between border-b border-gray-50 pb-2">
-                  <Text className="text-sm font-medium text-gray-500">IPPS Number</Text>
+                  <Text className="text-sm font-medium text-gray-500">{t('profile_ipps')}</Text>
                   <Text className="text-sm font-semibold text-gray-900 uppercase">
                     {staff.Ipps || staff.ipps || '—'}
                   </Text>
                 </View>
                 <View className="flex-row justify-between">
-                  <Text className="text-sm font-medium text-gray-500">Cadre</Text>
+                  <Text className="text-sm font-medium text-gray-500">{t('profile_cadre')}</Text>
                   <Text className="text-sm font-semibold text-gray-900">
                     {staff.Cadre || staff.cadre || '—'}
                   </Text>
@@ -88,28 +90,28 @@ export function ProfileScreen() {
           {/* Contract Section */}
           {contract && (
             <Card>
-              <Text className="text-lg font-bold text-gray-800 mb-4">Employment Deployment</Text>
+              <Text className="text-lg font-bold text-gray-800 mb-4">{t('profile_employment_deployment')}</Text>
               <View className="space-y-3">
                 <View className="flex-row justify-between border-b border-gray-50 pb-2">
-                  <Text className="text-sm font-medium text-gray-500">Facility</Text>
+                  <Text className="text-sm font-medium text-gray-500">{t('profile_facility')}</Text>
                   <Text className="text-sm font-semibold text-gray-900 text-right flex-1 ml-4">
                     {contract.Facility?.Name || contract.facility?.name || '—'}
                   </Text>
                 </View>
                 <View className="flex-row justify-between border-b border-gray-50 pb-2">
-                  <Text className="text-sm font-medium text-gray-500">Job Title</Text>
+                  <Text className="text-sm font-medium text-gray-500">{t('profile_job_title')}</Text>
                   <Text className="text-sm font-semibold text-gray-900 text-right flex-1 ml-4">
                     {contract.Job?.JobTitle || contract.job?.job_title || '—'}
                   </Text>
                 </View>
                 <View className="flex-row justify-between border-b border-gray-50 pb-2">
-                  <Text className="text-sm font-medium text-gray-500">Department</Text>
+                  <Text className="text-sm font-medium text-gray-500">{t('profile_department')}</Text>
                   <Text className="text-sm font-semibold text-gray-900">
                     {contract.Department?.Name || contract.department?.name || '—'}
                   </Text>
                 </View>
                 <View className="flex-row justify-between">
-                  <Text className="text-sm font-medium text-gray-500">Salary Grade</Text>
+                  <Text className="text-sm font-medium text-gray-500">{t('profile_salary_grade')}</Text>
                   <Text className="text-sm font-semibold text-gray-900 uppercase">
                     {contract.SalaryGrade || contract.salary_grade || '—'}
                   </Text>
@@ -121,7 +123,7 @@ export function ProfileScreen() {
           {/* Supervisors Section */}
           {supervisors.length > 0 && (
             <Card>
-              <Text className="text-lg font-bold text-gray-800 mb-4">Supervisor Approval Chain</Text>
+              <Text className="text-lg font-bold text-gray-800 mb-4">{t('profile_supervisor_chain')}</Text>
               <View className="space-y-4">
                 {supervisors
                   .sort((a: any, b: any) => a.ApprovalSequence - b.ApprovalSequence)
@@ -148,7 +150,7 @@ export function ProfileScreen() {
 
           {/* Logout Control */}
           <Button
-            title="Sign Out Account"
+            title={t('profile_sign_out')}
             onPress={handleSignOut}
             variant="danger"
             className="mt-4"

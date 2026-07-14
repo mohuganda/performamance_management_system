@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, Pressable, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Settings, Palette, LogOut, ChevronRight, Check } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
 import { useThemeStore } from '../../app/store/useThemeStore';
 import { useTheme } from '../../app/hooks/useTheme';
@@ -10,6 +11,7 @@ import { UserProfilePicture } from '../../components/molecules/UserAvatar';
 import { Badge } from '../../components/atoms/Badge';
 
 export function AccountScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { logout, user } = useAuthStore();
   const { themeMode, setThemeMode } = useThemeStore();
@@ -24,12 +26,12 @@ export function AccountScreen() {
   const getThemeModeLabel = (mode: string) => {
     switch (mode) {
       case 'light':
-        return 'Light Mode';
+        return t('account_theme_light');
       case 'dark':
-        return 'Dark Mode';
+        return t('account_theme_dark');
       case 'system':
       default:
-        return 'System Default';
+        return t('account_theme_system');
     }
   };
 
@@ -56,7 +58,7 @@ export function AccountScreen() {
                 {user?.email}
               </Text>
               <View className="flex-row mt-2">
-                <Badge label={user?.role || 'Staff'} variant="info" />
+                <Badge label={user?.role || t('staff')} variant="info" />
               </View>
             </View>
             <ChevronRight size={20} color={colors.muted} />
@@ -66,7 +68,7 @@ export function AccountScreen() {
         {/* Menu Cards */}
         <View className="p-6 flex-1">
           <Text className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: colors.muted }}>
-            Settings & Preference
+            {t('account_settings_preference')}
           </Text>
 
           {/* Settings Card */}
@@ -85,10 +87,10 @@ export function AccountScreen() {
               </View>
               <View className="ml-1">
                 <Text className="text-base font-bold" style={{ color: colors.text }}>
-                  Settings
+                  {t('account_settings')}
                 </Text>
                 <Text className="text-xs opacity-75 mt-0.5" style={{ color: colors.muted }}>
-                  Manage notifications and sync settings
+                  {t('account_settings_sub')}
                 </Text>
               </View>
             </View>
@@ -111,7 +113,7 @@ export function AccountScreen() {
               </View>
               <View className="ml-1">
                 <Text className="text-base font-bold" style={{ color: colors.text }}>
-                  App Theme
+                  {t('account_theme')}
                 </Text>
                 <Text className="text-xs opacity-75 mt-0.5" style={{ color: colors.muted }}>
                   {getThemeModeLabel(themeMode)}
@@ -137,10 +139,10 @@ export function AccountScreen() {
               </View>
               <View className="ml-1">
                 <Text className="text-base font-bold" style={{ color: colors.error }}>
-                  Sign Out
+                  {t('account_sign_out')}
                 </Text>
                 <Text className="text-xs opacity-75 mt-0.5" style={{ color: colors.muted }}>
-                  Sign out of your active session
+                  {t('account_sign_out_sub')}
                 </Text>
               </View>
             </View>
@@ -169,7 +171,7 @@ export function AccountScreen() {
             >
               <View className="w-12 h-1 bg-gray-300 dark:bg-zinc-700 rounded-full self-center mx-auto mb-6" />
               <Text className="text-lg font-black mb-4 text-center" style={{ color: colors.text }}>
-                Choose App Theme
+                {t('account_choose_theme')}
               </Text>
 
               {/* Theme choices */}

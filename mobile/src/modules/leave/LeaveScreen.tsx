@@ -2,18 +2,20 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Calendar, MapPin, ChevronRight } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../app/hooks/useTheme';
 import { MainTemplate } from '../../components/templates';
 
 export function LeaveScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { colors } = useTheme();
 
   return (
-    <MainTemplate title="Leave Management">
+    <MainTemplate title={t('leave_management_title')}>
       <View className="flex-1 p-6">
         <Text className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: colors.muted }}>
-          Leave & Deployment Requests
+          {t('leave_deployment_requests')}
         </Text>
 
         {/* Leave Request Card */}
@@ -31,10 +33,10 @@ export function LeaveScreen() {
             </View>
             <View className="flex-1 ml-1">
               <Text className="text-base font-bold" style={{ color: colors.text }}>
-                Standard Leave Request
+                {t('leave_standard_request')}
               </Text>
               <Text className="text-xs opacity-75 mt-0.5" style={{ color: colors.muted }}>
-                Annual, sick, or compassionate leaves
+                {t('leave_standard_request_sub')}
               </Text>
             </View>
           </View>
@@ -57,10 +59,10 @@ export function LeaveScreen() {
             </View>
             <View className="flex-1 ml-1">
               <Text className="text-base font-bold" style={{ color: colors.text }}>
-                Out of Station (OOS)
+                {t('leave_oos_request')}
               </Text>
               <Text className="text-xs opacity-75 mt-0.5" style={{ color: colors.muted }}>
-                Official offsite duties & field requests
+                {t('leave_oos_request_sub')}
               </Text>
             </View>
           </View>

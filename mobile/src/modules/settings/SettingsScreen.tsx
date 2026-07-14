@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, Switch, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../app/hooks/useTheme';
 import { MainTemplate } from '../../components/templates';
 import { Bell, ShieldCheck, Database, RefreshCw, ChevronRight } from 'lucide-react-native';
 
 export function SettingsScreen() {
+  const { t } = useTranslation();
   const { colors } = useTheme();
 
   // Mock settings state
@@ -17,15 +19,15 @@ export function SettingsScreen() {
     setSyncing(true);
     setTimeout(() => {
       setSyncing(false);
-      Alert.alert('Data Synced', 'All local attendance logs and leave requests have been successfully uploaded to the central iHRIS server.');
+      Alert.alert(t('settings_data_synced_title'), t('settings_data_synced_message'));
     }, 1500);
   };
 
   return (
-    <MainTemplate title="Settings" showBack={true}>
+    <MainTemplate title={t('settings_title')} showBack={true}>
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
         <Text className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: colors.muted }}>
-          App Customization & Security
+          {t('settings_customization_security')}
         </Text>
 
         {/* Notification Group */}
@@ -43,10 +45,10 @@ export function SettingsScreen() {
               </View>
               <View className="ml-1">
                 <Text className="text-base font-bold" style={{ color: colors.text }}>
-                  Push Notifications
+                  {t('settings_push_notifications')}
                 </Text>
                 <Text className="text-xs opacity-75 mt-0.5" style={{ color: colors.muted }}>
-                  Get alerts for targets & leave status
+                  {t('settings_push_notifications_sub')}
                 </Text>
               </View>
             </View>
@@ -74,10 +76,10 @@ export function SettingsScreen() {
               </View>
               <View className="ml-1">
                 <Text className="text-base font-bold" style={{ color: colors.text }}>
-                  Biometric Authentication
+                  {t('settings_biometrics')}
                 </Text>
                 <Text className="text-xs opacity-75 mt-0.5" style={{ color: colors.muted }}>
-                  Unlock app with FaceID or Fingerprint
+                  {t('settings_biometrics_sub')}
                 </Text>
               </View>
             </View>
@@ -106,10 +108,10 @@ export function SettingsScreen() {
               </View>
               <View className="ml-1">
                 <Text className="text-base font-bold" style={{ color: colors.text }}>
-                  Background Sync
+                  {t('settings_background_sync')}
                 </Text>
                 <Text className="text-xs opacity-75 mt-0.5" style={{ color: colors.muted }}>
-                  Auto-sync data when connected to Wi-Fi
+                  {t('settings_background_sync_sub')}
                 </Text>
               </View>
             </View>
@@ -134,10 +136,10 @@ export function SettingsScreen() {
               </View>
               <View className="ml-1">
                 <Text className="text-base font-bold" style={{ color: colors.text }}>
-                  {syncing ? 'Syncing Server Logs...' : 'Sync Local Records Now'}
+                  {syncing ? t('settings_syncing_logs') : t('settings_sync_now')}
                 </Text>
                 <Text className="text-xs opacity-75 mt-0.5" style={{ color: colors.muted }}>
-                  Force immediate upload of local entries
+                  {t('settings_sync_now_sub')}
                 </Text>
               </View>
             </View>
@@ -147,7 +149,7 @@ export function SettingsScreen() {
 
         {/* App Info Group */}
         <Text className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: colors.muted }}>
-          Application Details
+          {t('settings_application_details')}
         </Text>
         <View
           className="border rounded-2xl p-4"
@@ -157,15 +159,15 @@ export function SettingsScreen() {
           }}
         >
           <View className="flex-row justify-between border-b pb-3 mb-3" style={{ borderBottomColor: colors.border }}>
-            <Text className="text-sm font-semibold" style={{ color: colors.muted }}>Ministry Branch</Text>
-            <Text className="text-sm font-bold" style={{ color: colors.text }}>MoH Uganda - iHRIS</Text>
+            <Text className="text-sm font-semibold" style={{ color: colors.muted }}>{t('settings_ministry_branch')}</Text>
+            <Text className="text-sm font-bold" style={{ color: colors.text }}>{t('settings_ministry_branch_val')}</Text>
           </View>
           <View className="flex-row justify-between border-b pb-3 mb-3" style={{ borderBottomColor: colors.border }}>
-            <Text className="text-sm font-semibold" style={{ color: colors.muted }}>App Environment</Text>
-            <Text className="text-sm font-bold" style={{ color: colors.text }}>Production</Text>
+            <Text className="text-sm font-semibold" style={{ color: colors.muted }}>{t('settings_environment')}</Text>
+            <Text className="text-sm font-bold" style={{ color: colors.text }}>{t('settings_production')}</Text>
           </View>
           <View className="flex-row justify-between">
-            <Text className="text-sm font-semibold" style={{ color: colors.muted }}>App Build Version</Text>
+            <Text className="text-sm font-semibold" style={{ color: colors.muted }}>{t('settings_build_version')}</Text>
             <Text className="text-sm font-bold" style={{ color: colors.text }}>1.0.0 (Build 24)</Text>
           </View>
         </View>
