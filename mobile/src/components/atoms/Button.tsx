@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Text, TouchableOpacity } from 'react-native';
-import { colors } from '../../theme/colors';
+import { useTheme } from '../../app/hooks/useTheme';
 
 interface ButtonProps {
   title: string;
@@ -19,19 +19,29 @@ export const Button: React.FC<ButtonProps> = ({
   loading = false,
   className = '',
 }) => {
-  let bgStyle = 'bg-primary'; // default primary black
-  let textStyle = 'text-white font-semibold';
+  const { isDark } = useTheme();
+
+  let bgStyle = 'bg-primary dark:bg-white'; // default primary black / white in dark mode
+  let textStyle = 'text-white dark:text-zinc-950 font-semibold';
 
   if (variant === 'secondary') {
-    bgStyle = 'bg-gray-200';
-    textStyle = 'text-gray-800 font-semibold';
+    bgStyle = 'bg-gray-200 dark:bg-zinc-800';
+    textStyle = 'text-gray-800 dark:text-zinc-200 font-semibold';
   } else if (variant === 'danger') {
-    bgStyle = 'bg-[#D90000]';
+    bgStyle = 'bg-[#D90000] dark:bg-red-600';
     textStyle = 'text-white font-semibold';
   }
 
   if (disabled || loading) {
     bgStyle += ' opacity-50';
+  }
+
+  // Determine ActivityIndicator color
+  let loaderColor = '#FFFFFF';
+  if (variant === 'secondary') {
+    loaderColor = isDark ? '#D1D5DB' : '#374151';
+  } else if (variant === 'primary') {
+    loaderColor = isDark ? '#1A1A1A' : '#FFFFFF';
   }
 
   return (
@@ -42,7 +52,7 @@ export const Button: React.FC<ButtonProps> = ({
       activeOpacity={0.7}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'secondary' ? '#374151' : '#FFFFFF'} size="small" />
+        <ActivityIndicator color={loaderColor} size="small" />
       ) : (
         <Text className={`text-base text-center ${textStyle}`}>{title}</Text>
       )}

@@ -17,11 +17,11 @@ export const FormField: React.FC<FormFieldProps> = ({
   return (
     <View className={`space-y-1 ${className}`}>
       {label && (
-        <Text className="text-sm font-semibold text-gray-700 mb-1">{label}</Text>
+        <Text className="text-sm font-semibold text-gray-700 dark:text-zinc-300 mb-1">{label}</Text>
       )}
       {children}
       {error && (
-        <Text className="text-xs text-[#D90000] font-medium mt-1">{error}</Text>
+        <Text className="text-xs text-[#D90000] dark:text-red-500 font-medium mt-1">{error}</Text>
       )}
     </View>
   );

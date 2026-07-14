@@ -35,7 +35,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   };
 
   return (
-    <View className={`rounded-full overflow-hidden items-center justify-center bg-gray-100 border border-gray-200 ${sizeClass} ${className}`}>
+    <View className={`rounded-full overflow-hidden items-center justify-center bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 ${sizeClass} ${className}`}>
       {photoUrl ? (
         <Image
           source={{ uri: photoUrl }}
@@ -43,7 +43,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
           resizeMode="cover"
         />
       ) : (
-        <Text className={`text-gray-800 ${textClass}`}>{getInitials(name)}</Text>
+        <Text className={`text-gray-800 dark:text-zinc-200 ${textClass}`}>{getInitials(name)}</Text>
       )}
     </View>
   );

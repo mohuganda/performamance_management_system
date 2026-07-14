@@ -32,7 +32,7 @@ export function ProfileScreen() {
     <ScrollView
       className="flex-1 bg-[#F4F4F5]"
       refreshControl={
-        <RefreshControl refreshing={isFetching} onRefresh={refetch} colors={[colors.primary]} />
+        <RefreshControl refreshing={isFetching} onRefresh={refetch} colors={[colors.primary.DEFAULT]} />
       }
     >
       <View className="p-6 space-y-6">
