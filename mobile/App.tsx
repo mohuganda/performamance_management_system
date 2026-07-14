@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAuthStore } from './src/stores/authStore';
@@ -28,13 +29,15 @@ export default function App() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <SafeAreaProvider>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-        <NavigationContainer>
-          {isAuthenticated ? <AppNavigator /> : <AuthNavigator />}
-        </NavigationContainer>
-      </SafeAreaProvider>
-    </QueryClientProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <SafeAreaProvider>
+          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+          <NavigationContainer>
+            {isAuthenticated ? <AppNavigator /> : <AuthNavigator />}
+          </NavigationContainer>
+        </SafeAreaProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }

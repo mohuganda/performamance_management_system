@@ -9,12 +9,13 @@ import { ApprovalsScreen } from '../../modules/approvals/ApprovalsScreen';
 import { NotificationsScreen } from '../../modules/notifications/NotificationsScreen';
 import { AppTabParamList } from './types';
 import { useAuthStore } from '../../stores/authStore';
-import { colors } from '../../theme/colors';
+import { useTheme } from '../hooks/useTheme';
 
 const Tab = createBottomTabNavigator<AppTabParamList>();
 
 export function AppNavigator() {
   const { hasPermission } = useAuthStore();
+  const { colors } = useTheme();
 
   const showApprovals = hasPermission([
     'leave.requests.approve',
@@ -27,15 +28,16 @@ export function AppNavigator() {
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: colors.primary.DEFAULT, // primary black
+        headerShown: false,
+        tabBarActiveTintColor: colors.primary, // primary black
         tabBarInactiveTintColor: '#6B7280',
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
+          backgroundColor: colors.surface,
           borderTopWidth: 1,
-          borderTopColor: '#F3F4F6',
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 64,
+          borderTopColor: colors.border,
+          elevation: 0, // for Android
+          shadowOpacity: 0, // for iOS
+          paddingBottom: 10,
         },
         headerStyle: {
           backgroundColor: '#FFFFFF',
@@ -45,7 +47,7 @@ export function AppNavigator() {
           shadowOpacity: 0,
         },
         headerTitleStyle: {
-          color: colors.ui.text,
+          color: colors.text,
           fontSize: 18,
           fontWeight: 'bold',
         },

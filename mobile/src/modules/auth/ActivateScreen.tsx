@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../app/navigation/types';
@@ -7,6 +7,7 @@ import { Button } from '../../components/atoms/Button';
 import { Input } from '../../components/atoms/Input';
 import { Card } from '../../components/atoms/Card';
 import { FormStatusAlert } from '../../components/molecules/FormStatusAlert';
+import { AuthTemplate } from '../../components/templates';
 import apiClient from '../../api/client';
 import { z } from 'zod';
 
@@ -66,7 +67,7 @@ export function ActivateScreen() {
     const validation = activationSchema.safeParse({ email, token, password, confirmPassword });
     if (!validation.success) {
       const fieldErrors: Record<string, string> = {};
-      validation.error.errors.forEach((err) => {
+      validation.error.issues.forEach((err) => {
         if (err.path[0]) {
           fieldErrors[err.path[0] as string] = err.message;
         }
@@ -98,110 +99,105 @@ export function ActivateScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-[#F4F4F5]"
-    >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-        <View className="flex-1 justify-center px-6 py-12">
-          
-          <View className="items-center mb-8">
-            <View className="w-16 h-16 bg-gray-100 rounded-full items-center justify-center mb-4">
-              <Text className="text-2xl font-bold text-primary">PMS</Text>
-            </View>
-            <Text className="text-2xl font-bold text-gray-900 text-center">Activate Profile</Text>
+    <AuthTemplate title="Activate Profile">
+      <View className="flex-1 justify-center py-6">
+        
+        <View className="items-center mb-8">
+          <View className="w-16 h-16 bg-gray-100 rounded-full items-center justify-center mb-4">
+            <Text className="text-2xl font-bold text-primary">PMS</Text>
           </View>
-
-          <Card>
-            <FormStatusAlert
-              message={statusMessage ? statusMessage.text : null}
-              type={statusMessage ? statusMessage.type : 'error'}
-              className="mb-6"
-            />
-
-            {step === 'request' ? (
-              <View className="space-y-4">
-                <Text className="text-base text-gray-600 mb-2">
-                  Enter your registered work email to request your secure activation code.
-                </Text>
-                
-                <Input
-                  label="Work Email Address"
-                  placeholder="worker@moh.go.ug"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                  error={errors.email}
-                />
-
-                <Button
-                  title="Request Code"
-                  onPress={handleRequestToken}
-                  loading={loading}
-                  className="mt-4"
-                />
-              </View>
-            ) : (
-              <View className="space-y-4">
-                <Input
-                  label="Activation Token"
-                  placeholder="Enter code received"
-                  autoCapitalize="none"
-                  value={token}
-                  onChangeText={setToken}
-                  error={errors.token}
-                />
-
-                <Input
-                  label="Set Password"
-                  placeholder="Min 8 characters"
-                  secureTextEntry
-                  autoCapitalize="none"
-                  value={password}
-                  onChangeText={setPassword}
-                  error={errors.password}
-                />
-
-                <Input
-                  label="Confirm Password"
-                  placeholder="Re-enter password"
-                  secureTextEntry
-                  autoCapitalize="none"
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  error={errors.confirmPassword}
-                />
-
-                <Button
-                  title="Complete Profile Setup"
-                  onPress={handleCompleteActivation}
-                  loading={loading}
-                  className="mt-4"
-                />
-
-                <Button
-                  title="Back to Email Request"
-                  variant="secondary"
-                  onPress={() => setStep('request')}
-                  className="mt-2"
-                />
-              </View>
-            )}
-
-            <View className="flex-row justify-center items-center mt-6">
-              <Text className="text-sm text-gray-500">Back to </Text>
-              <Text
-                className="text-sm font-semibold text-primary"
-                onPress={() => navigation.navigate('Login')}
-              >
-                Sign In
-              </Text>
-            </View>
-          </Card>
-
+          <Text className="text-2xl font-bold text-gray-900 text-center">Activate Profile</Text>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        <Card>
+          <FormStatusAlert
+            message={statusMessage ? statusMessage.text : null}
+            type={statusMessage ? statusMessage.type : 'error'}
+            className="mb-6"
+          />
+
+          {step === 'request' ? (
+            <View className="space-y-4">
+              <Text className="text-base text-gray-600 mb-2">
+                Enter your registered work email to request your secure activation code.
+              </Text>
+              
+              <Input
+                label="Work Email Address"
+                placeholder="worker@moh.go.ug"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+                error={errors.email}
+              />
+
+              <Button
+                title="Request Code"
+                onPress={handleRequestToken}
+                loading={loading}
+                className="mt-4"
+              />
+            </View>
+          ) : (
+            <View className="space-y-4">
+              <Input
+                label="Activation Token"
+                placeholder="Enter code received"
+                autoCapitalize="none"
+                value={token}
+                onChangeText={setToken}
+                error={errors.token}
+              />
+
+              <Input
+                label="Set Password"
+                placeholder="Min 8 characters"
+                secureTextEntry
+                autoCapitalize="none"
+                value={password}
+                onChangeText={setPassword}
+                error={errors.password}
+              />
+
+              <Input
+                label="Confirm Password"
+                placeholder="Re-enter password"
+                secureTextEntry
+                autoCapitalize="none"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                error={errors.confirmPassword}
+              />
+
+              <Button
+                title="Complete Profile Setup"
+                onPress={handleCompleteActivation}
+                loading={loading}
+                className="mt-4"
+              />
+
+              <Button
+                title="Back to Email Request"
+                variant="secondary"
+                onPress={() => setStep('request')}
+                className="mt-2"
+              />
+            </View>
+          )}
+
+          <View className="flex-row justify-center items-center mt-6">
+            <Text className="text-sm text-gray-500">Back to </Text>
+            <Text
+              className="text-sm font-semibold text-primary"
+              onPress={() => navigation.navigate('Login')}
+            >
+              Sign In
+            </Text>
+          </View>
+        </Card>
+
+      </View>
+    </AuthTemplate>
   );
 }
