@@ -1,30 +1,35 @@
 import { useMutation } from '@tanstack/react-query';
 import { useAuthStore } from '../../stores/authStore';
-import apiClient from '../../api/client';
+import authService from '../../api/auth/service';
+import {
+  LoginRequest,
+  LoginResponse,
+  CompleteActivationRequest,
+  CompleteActivationResponse,
+  RequestActivationResponse,
+} from '../../api/auth/types';
 
 export function useLoginMutation() {
   const login = useAuthStore((state) => state.login);
-  return useMutation({
-    mutationFn: async ({ email, password }: any) => {
+  return useMutation<LoginResponse, Error, LoginRequest>({
+    mutationFn: async ({ email, password }) => {
       return await login(email, password);
     },
   });
 }
 
 export function useRequestActivationMutation() {
-  return useMutation({
-    mutationFn: async (email: string) => {
-      const res = await apiClient.post('/auth/request-activation', { email });
-      return res.data;
+  return useMutation<RequestActivationResponse, Error, string>({
+    mutationFn: async (email) => {
+      return await authService.requestActivation({ email });
     },
   });
 }
 
 export function useCompleteActivationMutation() {
-  return useMutation({
-    mutationFn: async ({ email, token, password }: any) => {
-      const res = await apiClient.post('/auth/activation/complete', { email, token, password });
-      return res.data;
+  return useMutation<CompleteActivationResponse, Error, CompleteActivationRequest>({
+    mutationFn: async ({ email, token, password }) => {
+      return await authService.completeActivation({ email, token, password });
     },
   });
 }

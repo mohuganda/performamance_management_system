@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { createMMKV } from 'react-native-mmkv';
 import apiClient, { setAuthToken } from '../api/client';
+import authService from '../api/auth/service';
 
 const storage = createMMKV({ id: 'moh-pms-auth' });
 const mmkvStorage = {
@@ -71,8 +72,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       login: async (email, password) => {
-        const res = await apiClient.post('/auth/login', { email, password });
-        const result = res.data;
+        const result = await authService.login({ email, password });
         if (result.token && !result.requires_totp) {
           get().completeLogin(result.token, result);
         }
