@@ -1,4 +1,5 @@
 export const colors = {
+  primary: '#1A1A1A',
   ui: {
     bg: '#F4F4F5',
     surface: '#FFFFFF',

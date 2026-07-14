@@ -106,8 +106,8 @@ export function ActivateScreen() {
         <View className="flex-1 justify-center px-6 py-12">
           
           <View className="items-center mb-8">
-            <View className="w-16 h-16 bg-emerald-100 rounded-full items-center justify-center mb-4">
-              <Text className="text-2xl font-bold text-[#15803D]">PMS</Text>
+            <View className="w-16 h-16 bg-gray-100 rounded-full items-center justify-center mb-4">
+              <Text className="text-2xl font-bold text-primary">PMS</Text>
             </View>
             <Text className="text-2xl font-bold text-gray-900 text-center">Activate Profile</Text>
           </View>
@@ -192,7 +192,7 @@ export function ActivateScreen() {
             <View className="flex-row justify-center items-center mt-6">
               <Text className="text-sm text-gray-500">Back to </Text>
               <Text
-                className="text-sm font-semibold text-[#15803D]"
+                className="text-sm font-semibold text-primary"
                 onPress={() => navigation.navigate('Login')}
               >
                 Sign In

@@ -19,7 +19,7 @@ export const Button: React.FC<ButtonProps> = ({
   loading = false,
   className = '',
 }) => {
-  let bgStyle = 'bg-[#15803D]'; // default success / primary green
+  let bgStyle = 'bg-primary'; // default primary black
   let textStyle = 'text-white font-semibold';
 
   if (variant === 'secondary') {

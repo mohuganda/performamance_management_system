@@ -7,6 +7,7 @@ import { Card } from '../../components/atoms/Card';
 import { UserAvatar } from '../../components/atoms/UserAvatar';
 import { Badge } from '../../components/atoms/Badge';
 import apiClient from '../../api/client';
+import { colors } from '../../theme/colors';
 
 export function ProfileScreen() {
   const { logout, user } = useAuthStore();
@@ -31,7 +32,7 @@ export function ProfileScreen() {
     <ScrollView
       className="flex-1 bg-[#F4F4F5]"
       refreshControl={
-        <RefreshControl refresh={isFetching} onRefresh={refetch} colors={['#15803D']} />
+        <RefreshControl refreshing={isFetching} onRefresh={refetch} colors={[colors.primary]} />
       }
     >
       <View className="p-6 space-y-6">
@@ -124,8 +125,8 @@ export function ProfileScreen() {
                 .sort((a: any, b: any) => a.ApprovalSequence - b.ApprovalSequence)
                 .map((sup: any, index: number) => (
                   <View key={index} className="flex-row items-center">
-                    <View className="w-8 h-8 rounded-full bg-emerald-100 items-center justify-center mr-3">
-                      <Text className="text-sm font-bold text-[#15803D]">
+                    <View className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center mr-3">
+                      <Text className="text-sm font-bold text-primary">
                         {sup.ApprovalSequence || sup.approval_sequence || index + 1}
                       </Text>
                     </View>

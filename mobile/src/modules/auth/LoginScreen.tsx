@@ -68,8 +68,8 @@ export function LoginScreen() {
           
           {/* Header MoH Branding */}
           <View className="items-center mb-8">
-            <View className="w-20 h-20 bg-emerald-100 rounded-full items-center justify-center mb-4">
-              <Text className="text-3xl font-extrabold text-[#15803D]">MoH</Text>
+            <View className="w-20 h-20 bg-gray-100 rounded-full items-center justify-center mb-4">
+              <Text className="text-3xl font-extrabold text-primary">MoH</Text>
             </View>
             <Text className="text-2xl font-bold text-gray-900 text-center">PMS - iHRIS Mobile</Text>
             <Text className="text-sm font-medium text-gray-500 text-center mt-1">
@@ -118,7 +118,7 @@ export function LoginScreen() {
             <View className="flex-row justify-center items-center mt-6">
               <Text className="text-sm text-gray-500">Need to activate account? </Text>
               <Text
-                className="text-sm font-semibold text-[#15803D]"
+                className="text-sm font-semibold text-primary"
                 onPress={() => navigation.navigate('Activate')}
               >
                 Activate Profile

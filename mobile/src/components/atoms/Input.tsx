@@ -25,7 +25,7 @@ export const Input: React.FC<InputProps> = ({
           error
             ? 'border-[#D90000]'
             : isFocused
-            ? 'border-[#15803D]'
+            ? 'border-primary'
             : 'border-gray-200'
         }`}
       >

@@ -27,7 +27,7 @@ export function AppNavigator() {
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: colors.success, // primary green
+        tabBarActiveTintColor: colors.primary, // primary black
         tabBarInactiveTintColor: '#6B7280',
         tabBarStyle: {
           backgroundColor: '#FFFFFF',

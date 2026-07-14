@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { MMKV } from 'react-native-mmkv';
+import { createMMKV } from 'react-native-mmkv';
 import apiClient, { setAuthToken } from '../api/client';
 
-const storage = new MMKV({ id: 'moh-pms-auth' });
+const storage = createMMKV({ id: 'moh-pms-auth' });
 const mmkvStorage = {
   setItem: (name: string, value: string) => storage.set(name, value),
   getItem: (name: string) => storage.getString(name) ?? null,
-  removeItem: (name: string) => storage.delete(name),
+  removeItem: (name: string) => storage.remove(name),
 };
 
 export interface UserProfile {
