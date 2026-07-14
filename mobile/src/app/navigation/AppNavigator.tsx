@@ -1,19 +1,24 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { User, Calendar, MapPin, Clock, CheckSquare, Bell } from 'lucide-react-native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { User, Calendar, Clock, CheckSquare, Home } from 'lucide-react-native';
 import { ProfileScreen } from '../../modules/profile/ProfileScreen';
 import { LeaveScreen } from '../../modules/leave/LeaveScreen';
 import { OosScreen } from '../../modules/out-of-station/OosScreen';
 import { AttendanceScreen } from '../../modules/attendance/AttendanceScreen';
 import { ApprovalsScreen } from '../../modules/approvals/ApprovalsScreen';
 import { NotificationsScreen } from '../../modules/notifications/NotificationsScreen';
-import { AppTabParamList } from './types';
+import { HomeScreen } from '../../modules/home/HomeScreen';
+import { AccountScreen } from '../../modules/account/AccountScreen';
+import { SettingsScreen } from '../../modules/settings/SettingsScreen';
+import { AppStackParamList, AppTabParamList } from './types';
 import { useAuthStore } from '../../stores/authStore';
 import { useTheme } from '../hooks/useTheme';
 
 const Tab = createBottomTabNavigator<AppTabParamList>();
+const Stack = createNativeStackNavigator<AppStackParamList>();
 
-export function AppNavigator() {
+function MainTabNavigator() {
   const { hasPermission } = useAuthStore();
   const { colors } = useTheme();
 
@@ -29,7 +34,7 @@ export function AppNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary, // primary black
+        tabBarActiveTintColor: colors.primary, // primary theme color
         tabBarInactiveTintColor: '#6B7280',
         tabBarStyle: {
           backgroundColor: colors.surface,
@@ -54,12 +59,12 @@ export function AppNavigator() {
       }}
     >
       <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
+        name="Home"
+        component={HomeScreen}
         options={{
-          tabBarLabel: 'Profile',
-          tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
-          title: 'Staff Profile',
+          tabBarLabel: 'Home',
+          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+          title: 'Home',
         }}
       />
       <Tab.Screen
@@ -80,15 +85,6 @@ export function AppNavigator() {
           title: 'Leave Manager',
         }}
       />
-      <Tab.Screen
-        name="OutOfStation"
-        component={OosScreen}
-        options={{
-          tabBarLabel: 'OOS',
-          tabBarIcon: ({ color, size }) => <MapPin color={color} size={size} />,
-          title: 'Out of Station',
-        }}
-      />
       {showApprovals && (
         <Tab.Screen
           name="Approvals"
@@ -101,14 +97,26 @@ export function AppNavigator() {
         />
       )}
       <Tab.Screen
-        name="Notifications"
-        component={NotificationsScreen}
+        name="Account"
+        component={AccountScreen}
         options={{
-          tabBarLabel: 'Alerts',
-          tabBarIcon: ({ color, size }) => <Bell color={color} size={size} />,
-          title: 'Alerts & Notifications',
+          tabBarLabel: 'Account',
+          tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
+          title: 'My Account',
         }}
       />
     </Tab.Navigator>
+  );
+}
+
+export function AppNavigator() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="OutOfStation" component={OosScreen} />
+    </Stack.Navigator>
   );
 }

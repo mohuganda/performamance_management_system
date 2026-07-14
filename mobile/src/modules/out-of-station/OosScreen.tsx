@@ -4,7 +4,7 @@ import { MainTemplate } from '../../components/templates';
 
 export function OosScreen() {
   return (
-    <MainTemplate title="Out of Station">
+    <MainTemplate title="Out of Station" showBack={true}>
       <View className="flex-1 items-center justify-center">
         <Text className="text-lg font-bold text-gray-700">Out of Station Screen</Text>
       </View>

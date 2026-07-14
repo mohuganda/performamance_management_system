@@ -30,7 +30,7 @@ export function ProfileScreen() {
   const supervisors = contract?.Supervisors || contract?.supervisors || [];
 
   return (
-    <MainTemplate title="Profile">
+    <MainTemplate title="Profile" showBack={true}>
       <ScrollView
         className="flex-1"
         refreshControl={

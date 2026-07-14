@@ -3,12 +3,18 @@ export type AuthStackParamList = {
   Activate: { token?: string } | undefined;
 };
 
-export type AppTabParamList = {
-  Dashboard: undefined;
+export type AppStackParamList = {
+  MainTabs: undefined;
   Profile: undefined;
-  Leave: undefined;
-  OutOfStation: undefined;
-  Attendance: undefined;
-  Approvals: undefined;
   Notifications: undefined;
+  Settings: undefined;
+  OutOfStation: undefined;
+};
+
+export type AppTabParamList = {
+  Home: undefined;
+  Attendance: undefined;
+  Leave: undefined;
+  Approvals: undefined;
+  Account: undefined;
 };
