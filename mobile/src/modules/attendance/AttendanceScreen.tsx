@@ -41,6 +41,7 @@ export function AttendanceScreen() {
   const [geoError, setGeoError] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [notesError, setNotesError] = useState<string | null>(null);
+  const [hasCheckedPermission, setHasCheckedPermission] = useState(false);
 
   // Reusable Location Permissions Hook
   const {
@@ -82,11 +83,15 @@ export function AttendanceScreen() {
 
   // Check permissions status on focus/mount
   useEffect(() => {
-    checkStatus();
+    checkStatus().then(() => {
+      setHasCheckedPermission(true);
+    });
   }, [checkStatus]);
 
   // Handle auto-triggering primer/blocked modal or GPS capture based on status changes
   useEffect(() => {
+    if (!hasCheckedPermission) return;
+
     if (status === 'granted') {
       startGPSCapture();
     } else if (status === 'denied' || status === 'undetermined') {
@@ -94,7 +99,7 @@ export function AttendanceScreen() {
     } else if (status === 'blocked') {
       setShowBlocked(true);
     }
-  }, [status, startGPSCapture, setShowPrimer, setShowBlocked]);
+  }, [status, hasCheckedPermission, startGPSCapture, setShowPrimer, setShowBlocked]);
 
   // Sort and process attendance logs (Newest First)
   const sortedClocks = useMemo(() => {
