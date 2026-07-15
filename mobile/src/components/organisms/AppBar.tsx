@@ -26,7 +26,7 @@ export const AppBar = ({ title, showBack = false, rightElement }: AppBarProps) =
                         <ArrowLeft size={22} color={colors.text} />
                     </TouchableOpacity>
                 )}
-                <Text className="font-bold text-xl">{title}</Text>
+                <Text className="font-bold text-xl" style={{ color: colors.text }}>{title}</Text>
             </View>
             {rightElement && <View>{rightElement}</View>}
         </View>

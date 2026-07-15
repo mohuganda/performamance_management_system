@@ -4,6 +4,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { User, Calendar, Clock, CheckSquare, Home } from 'lucide-react-native';
 import { ProfileScreen } from '../../modules/profile/ProfileScreen';
 import { LeaveScreen } from '../../modules/leave/LeaveScreen';
+import { LeaveRequestScreen } from '../../modules/leave/LeaveRequestScreen';
+import { LeaveHistoryScreen } from '../../modules/leave/LeaveHistoryScreen';
 import { OosScreen } from '../../modules/out-of-station/OosScreen';
 import { AttendanceScreen } from '../../modules/attendance/AttendanceScreen';
 import { ApprovalsScreen } from '../../modules/approvals/ApprovalsScreen';
@@ -117,6 +119,8 @@ export function AppNavigator() {
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="OutOfStation" component={OosScreen} />
+      <Stack.Screen name="LeaveRequest" component={LeaveRequestScreen} />
+      <Stack.Screen name="LeaveHistory" component={LeaveHistoryScreen} />
     </Stack.Navigator>
   );
 }

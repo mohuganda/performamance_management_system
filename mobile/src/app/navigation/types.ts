@@ -9,6 +9,8 @@ export type AppStackParamList = {
   Notifications: undefined;
   Settings: undefined;
   OutOfStation: undefined;
+  LeaveRequest: undefined;
+  LeaveHistory: undefined;
 };
 
 export type AppTabParamList = {

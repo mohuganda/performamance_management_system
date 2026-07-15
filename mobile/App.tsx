@@ -7,6 +7,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { useAuthStore } from './src/stores/authStore';
 import { AuthNavigator } from './src/app/navigation/AuthNavigator';
 import { AppNavigator } from './src/app/navigation/AppNavigator';
+import { initNetworkListener } from './src/utils/network';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,6 +23,10 @@ export default function App() {
 
   useEffect(() => {
     hydrateToken();
+    const unsubscribe = initNetworkListener();
+    return () => {
+      unsubscribe();
+    };
   }, [hydrateToken]);
 
   if (!authReady) {
