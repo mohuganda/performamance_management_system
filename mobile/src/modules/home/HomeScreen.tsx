@@ -11,7 +11,9 @@ import { NotificationIcon } from '../../components/molecules/NotificationIcon';
 import { LOGO_SVG } from '../../assets/logoSvg';
 import { Card } from '../../components/atoms/Card';
 import { Badge } from '../../components/atoms/Badge';
-import { Clock, Calendar } from 'lucide-react-native';
+import { Clock, Calendar, MapPin } from 'lucide-react-native';
+import { ActionCard } from '../../components/organisms/ActionCard';
+import { AnnouncementBanner } from '../../components/organisms/AnnouncementBanner';
 
 export function HomeScreen() {
   const { t } = useTranslation();
@@ -91,68 +93,36 @@ export function HomeScreen() {
           </Text>
         </Card>
 
-        {/* Quick Insights grid */}
+        {/* Quick actions grid */}
         <Text className="text-base font-bold mb-3" style={{ color: colors.text }}>
           {t('home_quick_actions')}
         </Text>
-        <View className="flex-row flex-wrap justify-between gap-3 mb-6">
-          <TouchableOpacity
-            className="w-[48%] p-4 rounded-xl items-center border border-border"
-            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+        <View className="flex-row flex-wrap justify-between mb-6">
+          <ActionCard
+            title={t('home_action_check_in')}
+            subtitle={t('home_action_check_in_sub')}
+            icon={<Clock size={20} color="#10B981" />}
+            iconBgClass="bg-emerald-50 dark:bg-emerald-950/30"
             onPress={() => navigation.navigate('Attendance')}
-          >
-            <View className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-950/30 items-center justify-center mb-2">
-              <Clock size={20} color="#10B981" />
-            </View>
-            <Text className="text-sm font-bold text-center" style={{ color: colors.text }}>
-              {t('home_action_check_in')}
-            </Text>
-            <Text className="text-[10px] mt-0.5 text-center" style={{ color: colors.muted }}>
-              {t('home_action_check_in_sub')}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className="w-[48%] p-4 rounded-xl items-center border border-border"
-            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-            onPress={() => navigation.navigate('Leave')}
-          >
-            <View className="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-950/30 items-center justify-center mb-2">
-              <Calendar size={20} color="#F59E0B" />
-            </View>
-            <Text className="text-sm font-bold text-center" style={{ color: colors.text }}>
-              {t('home_action_leave')}
-            </Text>
-            <Text className="text-[10px] mt-0.5 text-center" style={{ color: colors.muted }}>
-              {t('home_action_leave_sub')}
-            </Text>
-          </TouchableOpacity>
+          />
+          <ActionCard
+            title={t('home_action_leave')}
+            subtitle={t('home_action_leave_sub')}
+            icon={<Calendar size={20} color="#F59E0B" />}
+            iconBgClass="bg-amber-50 dark:bg-amber-950/30"
+            onPress={() => navigation.navigate('LeaveRequest')}
+          />
+          <ActionCard
+            title={t('home_action_oos')}
+            subtitle={t('home_action_oos_sub')}
+            icon={<MapPin size={20} color="#3B82F6" />}
+            iconBgClass="bg-blue-50 dark:bg-blue-950/30"
+            onPress={() => navigation.navigate('OutOfStation', { initialTab: 'apply' })}
+          />
         </View>
 
         {/* Announcement Banner */}
-        <View
-          className="p-4 rounded-2xl border"
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-          }}
-        >
-          <View className="flex-row items-center">
-            <View
-              className="w-2.5 h-2.5 rounded-full mr-2"
-              style={{ backgroundColor: colors.primary }}
-            />
-            <Text className="text-xs font-bold uppercase tracking-wide" style={{ color: colors.text }}>
-              {t('announcement')}
-            </Text>
-          </View>
-          <Text className="text-sm font-semibold mt-2" style={{ color: colors.text }}>
-            {t('home_announcement_title')}
-          </Text>
-          <Text className="text-xs mt-1" style={{ color: colors.muted }}>
-            {t('home_announcement_description')}
-          </Text>
-        </View>
+        <AnnouncementBanner />
       </ScrollView>
     </LayoutTemplate>
   );

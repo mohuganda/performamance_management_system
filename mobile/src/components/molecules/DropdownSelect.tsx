@@ -37,7 +37,7 @@ export const DropdownSelect: React.FC<DropdownSelectProps> = ({
   return (
     <View className={`space-y-2 ${className}`}>
       {label && (
-        <Text className="text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1">
+        <Text className="text-sm font-medium text-gray-700 dark:text-zinc-300">
           {label}
         </Text>
       )}
@@ -45,7 +45,7 @@ export const DropdownSelect: React.FC<DropdownSelectProps> = ({
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={() => setIsOpen(!isOpen)}
-        className={`w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 flex-row items-center justify-between rounded-none px-4 py-3 ${error ? 'border-[#D90000] dark:border-red-500' : ''}`}
+        className={`w-full mt-1 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 flex-row items-center justify-between rounded-none px-4 py-3 ${error ? 'border-[#D90000] dark:border-red-500' : ''}`}
       >
         <Text
           className="text-base"

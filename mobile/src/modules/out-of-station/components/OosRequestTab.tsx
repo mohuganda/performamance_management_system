@@ -11,7 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import MapView, { Marker, Circle } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
-import { MapPin, Navigation, Info } from 'lucide-react-native';
+import { Navigation, Info, AlertTriangle } from 'lucide-react-native';
 import { useTheme } from '../../../app/hooks/useTheme';
 import { Input } from '../../../components/atoms/Input';
 import { Button } from '../../../components/atoms/Button';
@@ -19,9 +19,12 @@ import { DropdownSelect } from '../../../components/molecules/DropdownSelect';
 import { DateRangePicker } from '../../../components/molecules/DateRangePicker';
 import { AttachmentPicker, AttachmentFile } from '../../../components/molecules/AttachmentPicker';
 import { FormStatusAlert } from '../../../components/molecules/FormStatusAlert';
+import { PlacesSearchInput } from '../../../components/molecules/PlacesSearchInput';
 import { useOosReasonsQuery, useCreateOosMutation } from '../../../app/hooks/useOos';
+import { usePlacesSearch } from '../../../app/hooks/usePlacesSearch';
 import oosRequestSchema from '../../../app/schemas/oos';
 import leaveService from '../../../api/leave/service';
+import NetInfo from '@react-native-community/netinfo';
 
 const DEFAULT_COORDS = {
   latitude: 0.3476,
@@ -47,6 +50,31 @@ export function OosRequestTab({ onComplete }: { onComplete: () => void }) {
   const [destinationName, setDestinationName] = useState('');
   const [destinationAddress, setDestinationAddress] = useState('');
 
+  // Search & Places — delegated to usePlacesSearch hook
+  const {
+    searchQuery,
+    setSearchQuery,
+    predictions,
+    isGeocoding,
+    selectPrediction,
+    reverseGeocode,
+    clearSearch,
+  } = usePlacesSearch({
+    onPlaceSelected: (result) => {
+      setDestinationName(result.name);
+      setDestinationAddress(result.formatted_address);
+      const newCoords = { latitude: result.latitude, longitude: result.longitude };
+      setMapCoords(newCoords);
+      setRegion({ ...newCoords, latitudeDelta: 0.003, longitudeDelta: 0.003 });
+    },
+    onReverseGeocoded: (result) => {
+      setDestinationName(result.name);
+      setDestinationAddress(result.formatted_address);
+    },
+  });
+
+  const [isOffline, setIsOffline] = useState(false);
+
   // Map / Geolocation State
   const [mapCoords, setMapCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -57,6 +85,14 @@ export function OosRequestTab({ onComplete }: { onComplete: () => void }) {
   const [isUploading, setIsUploading] = useState(false);
   const [formAlert, setFormAlert] = useState<{ type: 'error' | 'warning' | 'success'; message: string } | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // Listen to network status changes to enforce online-only OOS request creation
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsOffline(!state.isConnected || !state.isInternetReachable);
+    });
+    return unsubscribe;
+  }, []);
 
   // Format reasons catalog for DropdownSelect option interface (id, name)
   const reasonOptions = useMemo(() => {
@@ -84,6 +120,7 @@ export function OosRequestTab({ onComplete }: { onComplete: () => void }) {
           longitudeDelta: 0.003,
         });
         setIsLocating(false);
+        reverseGeocode(newCoords.latitude, newCoords.longitude);
       },
       (error) => {
         console.error('GPS error:', error);
@@ -215,6 +252,24 @@ export function OosRequestTab({ onComplete }: { onComplete: () => void }) {
           </TouchableOpacity>
         )}
 
+        {/* Offline Blocker Banner */}
+        {isOffline && (
+          <View
+            className="p-4 border mb-6 flex-row items-start gap-3"
+            style={{ backgroundColor: 'rgba(239, 68, 68, 0.06)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+          >
+            <AlertTriangle size={18} color="#EF4444" />
+            <View className="flex-1">
+              <Text className="text-sm font-bold text-red-600 dark:text-red-400 mb-1">
+                {t('oos_error_internet_required')}
+              </Text>
+              <Text className="text-xs leading-relaxed text-red-500 dark:text-red-400/80">
+                {t('oos_error_internet_required_desc')}
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Reason Select Option */}
         <View className="space-y-1 mb-6">
           <Text className="text-sm font-semibold" style={{ color: colors.text }}>
@@ -247,87 +302,129 @@ export function OosRequestTab({ onComplete }: { onComplete: () => void }) {
           className="mb-6"
         />
 
-        {/* Interactive Map Picker Section */}
-        <View className="space-y-2 mb-6">
-          <View className="flex-row justify-between items-center mb-1">
-            <Text className="text-sm font-semibold" style={{ color: colors.text }}>
-              Select Destination Location
-            </Text>
-            <TouchableOpacity
-              onPress={handleUseCurrentLocation}
-              disabled={isLocating}
-              className="flex-row items-center gap-1 bg-zinc-100 dark:bg-zinc-800 px-3 py-1.5 border"
-              style={{ borderColor: colors.border }}
-            >
-              <Navigation size={12} color={colors.text} />
-              <Text className="text-xs font-bold" style={{ color: colors.text }}>
-                {t('oos_btn_current_location')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {isLocating && (
-            <View className="h-48 justify-center items-center bg-gray-100 dark:bg-zinc-900 border" style={{ borderColor: colors.border }}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text className="text-xs mt-2" style={{ color: colors.muted }}>Locating device...</Text>
-            </View>
-          )}
-
-          {!isLocating && (
-            <View className="h-48 w-full border relative overflow-hidden" style={{ borderColor: colors.border }}>
-              <MapView
-                style={StyleSheet.absoluteFill}
-                region={region}
-                onRegionChangeComplete={setRegion}
-                onPress={(e) => {
-                  setMapCoords(e.nativeEvent.coordinate);
-                }}
-                userInterfaceStyle={isDark ? 'dark' : 'light'}
-              >
-                {mapCoords && (
-                  <>
-                    <Marker
-                      coordinate={mapCoords}
-                      draggable
-                      onDragEnd={(e) => {
-                        setMapCoords(e.nativeEvent.coordinate);
-                      }}
-                    />
-                    <Circle
-                      center={mapCoords}
-                      radius={500}
-                      fillColor="rgba(21, 128, 61, 0.15)"
-                      strokeColor={colors.success}
-                      strokeWidth={1.5}
-                    />
-                  </>
-                )}
-              </MapView>
-            </View>
-          )}
-          {validationErrors.destination_latitude && (
-            <Text className="text-xs text-red-500 font-medium mt-1">{validationErrors.destination_latitude}</Text>
-          )}
-        </View>
-
-        {/* Destination Facility Input Details */}
-        <Input
+        {/* Destination Search with Autocomplete — PlacesSearchInput molecule */}
+        <PlacesSearchInput
           label={t('oos_form_destination_name')}
+          value={searchQuery}
+          onChangeText={(text) => {
+            setSearchQuery(text);
+            setDestinationName(text);
+            if (!text) {
+              setDestinationAddress('');
+              setMapCoords(null);
+            }
+          }}
+          onClear={() => {
+            clearSearch();
+            setDestinationName('');
+            setDestinationAddress('');
+            setMapCoords(null);
+          }}
+          predictions={predictions}
+          onSelectPrediction={selectPrediction}
           placeholder={t('oos_form_destination_name_placeholder')}
-          value={destinationName}
-          onChangeText={setDestinationName}
           error={validationErrors.destination_name}
+          disabled={isOffline}
+          isResolving={isGeocoding}
           className="mb-6"
         />
 
-        <Input
-          label={t('oos_form_destination_address')}
-          placeholder={t('oos_form_destination_address_placeholder')}
-          value={destinationAddress}
-          onChangeText={setDestinationAddress}
-          error={validationErrors.destination_address}
-          className="mb-6"
-        />
+        {/* Destination Address — auto-populated, editable */}
+        {destinationAddress.length > 0 && (
+          <Input
+            label={t('oos_form_destination_address')}
+            placeholder={t('oos_form_destination_address_placeholder')}
+            value={destinationAddress}
+            onChangeText={setDestinationAddress}
+            error={validationErrors.destination_address}
+            className="mb-6"
+          />
+        )}
+
+        {/* Map — shown after location selection for fine-tuning */}
+        {mapCoords && (
+          <View className="mb-6">
+            <View className="flex-row justify-between items-center mb-2">
+              <Text className="text-sm font-semibold" style={{ color: colors.text }}>
+                Fine-tune Location on Map
+              </Text>
+              <TouchableOpacity
+                onPress={handleUseCurrentLocation}
+                disabled={isLocating || isOffline}
+                className="flex-row items-center gap-1 bg-zinc-100 dark:bg-zinc-800 px-3 py-1.5 border"
+                style={{ borderColor: colors.border, opacity: isOffline ? 0.4 : 1 }}
+              >
+                <Navigation size={12} color={colors.text} />
+                <Text className="text-xs font-bold" style={{ color: colors.text }}>
+                  {t('oos_btn_current_location')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {isLocating ? (
+              <View className="h-52 justify-center items-center bg-gray-100 dark:bg-zinc-900 border" style={{ borderColor: colors.border }}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text className="text-xs mt-2" style={{ color: colors.muted }}>Locating device...</Text>
+              </View>
+            ) : (
+              <View className="h-52 w-full border relative overflow-hidden" style={{ borderColor: colors.border }}>
+                <MapView
+                  style={StyleSheet.absoluteFill}
+                  region={region}
+                  onRegionChangeComplete={setRegion}
+                  onPress={(e) => {
+                    const newCoords = e.nativeEvent.coordinate;
+                    setMapCoords(newCoords);
+                    setRegion((prev) => ({
+                      ...prev,
+                      latitude: newCoords.latitude,
+                      longitude: newCoords.longitude,
+                    }));
+                    reverseGeocode(newCoords.latitude, newCoords.longitude);
+                  }}
+                  userInterfaceStyle={isDark ? 'dark' : 'light'}
+                >
+                  <Marker
+                    coordinate={mapCoords}
+                    draggable
+                    onDragEnd={(e) => {
+                      const newCoords = e.nativeEvent.coordinate;
+                      setMapCoords(newCoords);
+                      reverseGeocode(newCoords.latitude, newCoords.longitude);
+                    }}
+                  />
+                  <Circle
+                    center={mapCoords}
+                    radius={500}
+                    fillColor="rgba(21, 128, 61, 0.15)"
+                    strokeColor={colors.success}
+                    strokeWidth={1.5}
+                  />
+                </MapView>
+              </View>
+            )}
+            {validationErrors.destination_latitude && (
+              <Text className="text-xs text-red-500 font-medium mt-1">{validationErrors.destination_latitude}</Text>
+            )}
+
+            {/* Helper Card */}
+            <View
+              className="p-3.5 border mt-3 flex-col gap-2"
+              style={{
+                backgroundColor: isDark ? 'rgba(59, 130, 246, 0.05)' : 'rgba(59, 130, 246, 0.03)',
+                borderColor: 'rgba(59, 130, 246, 0.2)',
+              }}
+            >
+              <View className="flex-row items-center gap-2">
+                <Info size={14} color="#3B82F6" />
+                <Text className="text-xs font-bold text-blue-700 dark:text-blue-400">Adjust Location</Text>
+              </View>
+              <Text className="text-[11px] leading-relaxed" style={{ color: colors.muted }}>
+                Drag the <Text className="font-semibold">red pin</Text> or tap on the map to fine-tune your destination. The <Text className="font-semibold">green circle</Text> shows the 500m attendance verification zone.
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Display Radius Geofence details */}
         <View className="p-4 border flex-row items-center gap-3 bg-zinc-50 dark:bg-zinc-900/50 mb-6" style={{ borderColor: colors.border }}>
@@ -378,7 +475,7 @@ export function OosRequestTab({ onComplete }: { onComplete: () => void }) {
             title={t('oos_form_submit')}
             onPress={() => handleSubmit(true)}
             loading={createMutation.isPending || isUploading}
-            disabled={createMutation.isPending || isUploading}
+            disabled={createMutation.isPending || isUploading || isOffline}
             className="bg-[#15803D] dark:bg-green-600"
           />
         </View>
@@ -387,3 +484,4 @@ export function OosRequestTab({ onComplete }: { onComplete: () => void }) {
   );
 }
 export default OosRequestTab;
+

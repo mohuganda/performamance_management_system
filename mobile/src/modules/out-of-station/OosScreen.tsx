@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import { useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { MainTemplate } from '../../components/templates';
 import { useTheme } from '../../app/hooks/useTheme';
@@ -13,9 +14,10 @@ export function OosScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const { hasPermission } = useAuthStore();
+  const route = useRoute<any>();
 
   const canApprove = hasPermission('oos.requests.approve');
-  const [activeTab, setActiveTab] = useState<'history' | 'apply' | 'approvals'>('history');
+  const [activeTab, setActiveTab] = useState<'history' | 'apply' | 'approvals'>(route.params?.initialTab || 'history');
 
   return (
     <MainTemplate title={t('oos_title')} showBack={true}>

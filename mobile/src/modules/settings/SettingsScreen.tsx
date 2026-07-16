@@ -76,16 +76,6 @@ export function SettingsScreen() {
         {/* App Info Section */}
         <SettingsSection title={t('settings_application_details')}>
           <SettingsRow
-            label={t('settings_ministry_branch')}
-            infoValue={t('settings_ministry_branch_val')}
-            type="info"
-          />
-          <SettingsRow
-            label={t('settings_environment')}
-            infoValue={t('settings_production')}
-            type="info"
-          />
-          <SettingsRow
             label={t('settings_build_version')}
             infoValue="1.0.0 (Build 24)"
             type="info"

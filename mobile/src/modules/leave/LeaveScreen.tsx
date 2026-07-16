@@ -24,7 +24,7 @@ export function LeaveScreen() {
 
           {/* Leave Balances Section (Full-Width Organism) */}
           <View className="space-y-3">
-            <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.muted }}>
+            <Text className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.muted }}>
               {t('leave_balances_title')}
             </Text>
             <LeaveBalances />
@@ -38,7 +38,7 @@ export function LeaveScreen() {
           >
             <View className="flex-row items-center space-x-3 flex-1">
               <View className="w-9 h-9 rounded-full items-center justify-center bg-gray-50 dark:bg-zinc-800 mr-3">
-                <HelpCircle size={18} className="text-blue-500" />
+                <HelpCircle size={18} color={colors.text} />
               </View>
               <View className="flex-1">
                 <Text className="text-sm font-bold" style={{ color: colors.text }}>
