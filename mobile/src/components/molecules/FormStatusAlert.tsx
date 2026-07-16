@@ -35,7 +35,7 @@ export const FormStatusAlert: React.FC<FormStatusAlertProps> = ({
   const iconColor = type === 'success' ? colors.success : type === 'warning' ? colors.warning : colors.error;
 
   return (
-    <View className={`flex-row items-center p-4 rounded-xl ${bgClass} ${className}`}>
+    <View className={`flex-row items-center p-4 rounded-none ${bgClass} ${className}`}>
       <Icon size={20} color={iconColor} className="mr-3" />
       <Text className={`text-sm font-medium flex-1 ${textClass}`}>{message}</Text>
     </View>

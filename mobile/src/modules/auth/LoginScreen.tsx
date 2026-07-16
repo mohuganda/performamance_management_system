@@ -11,11 +11,13 @@ import { FormStatusAlert } from '../../components/molecules/FormStatusAlert';
 import { AuthTemplate } from '../../components/templates';
 import { loginSchema } from '../../app/schemas/auth';
 import { useLoginMutation } from '../../app/hooks/useAuthMutations';
+import { useTheme } from '../../app/hooks/useTheme';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
 export function LoginScreen() {
   const { t } = useTranslation();
+  const { colors } = useTheme();
   const navigation = useNavigation<LoginScreenNavigationProp>();
   const loginMutation = useLoginMutation();
 
@@ -59,13 +61,13 @@ export function LoginScreen() {
   return (
     <AuthTemplate title={t('login_title')}>
       <View className="flex-1 justify-center py-6">
-        
+
         {/* Header MoH Branding */}
         <View className="items-center mb-8">
           <View className="w-20 h-20 bg-gray-100 rounded-full items-center justify-center mb-4">
             <Text className="text-3xl font-extrabold text-primary">MoH</Text>
           </View>
-          <Text className="text-2xl font-bold text-gray-900 text-center">{t('pms_ihris')}</Text>
+          <Text className="text-2xl font-bold text-center" style={{ color: colors.text }}>{t('pms_ihris')}</Text>
           <Text className="text-sm font-medium text-gray-500 text-center mt-1">
             Ministry of Health Uganda
           </Text>
@@ -76,7 +78,7 @@ export function LoginScreen() {
 
         {/* Form Card */}
         <Card>
-          <Text className="text-lg font-bold text-gray-800 mb-6">{t('login_title')}</Text>
+          <Text className="text-lg font-bold mb-6" style={{ color: colors.text }}>{t('login_title')}</Text>
 
           <FormStatusAlert message={serverError} type="error" className="mb-4" />
 
@@ -89,6 +91,7 @@ export function LoginScreen() {
               value={email}
               onChangeText={setEmail}
               error={errors.email}
+              className="mb-4"
             />
 
             <Input
@@ -112,7 +115,8 @@ export function LoginScreen() {
           <View className="flex-row justify-center items-center mt-6">
             <Text className="text-sm text-gray-500">{t('login_need_activate')}</Text>
             <Text
-              className="text-sm font-semibold text-primary"
+              className="text-sm font-semibold"
+              style={{ color: colors.primary }}
               onPress={() => navigation.navigate('Activate')}
             >
               {t('login_activate_link')}

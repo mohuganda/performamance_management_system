@@ -9,6 +9,7 @@ import { useTheme } from '../../app/hooks/useTheme';
 import { LayoutTemplate } from '../../components/templates/LayoutTemplate';
 import { UserProfilePicture } from '../../components/molecules/UserAvatar';
 import { Badge } from '../../components/atoms/Badge';
+import { QuickActionCard } from '../../components/organisms/QuickActionCard';
 
 export function AccountScreen() {
   const { t } = useTranslation();
@@ -72,82 +73,40 @@ export function AccountScreen() {
           </Text>
 
           {/* Settings Card */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => navigation.navigate('Settings')}
-            className="flex-row items-center justify-between p-4 rounded-2xl border mb-4"
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            }}
-          >
-            <View className="flex-row items-center gap-3">
-              <View className="w-10 h-10 rounded-full items-center justify-center" style={{ backgroundColor: colors.border + '33' }}>
-                <Settings size={20} color={colors.text} />
-              </View>
-              <View className="ml-1">
-                <Text className="text-base font-bold" style={{ color: colors.text }}>
-                  {t('account_settings')}
-                </Text>
-                <Text className="text-xs opacity-75 mt-0.5" style={{ color: colors.muted }}>
-                  {t('account_settings_sub')}
-                </Text>
-              </View>
-            </View>
-            <ChevronRight size={18} color={colors.muted} />
-          </TouchableOpacity>
+          <View className="mb-4">
+            <QuickActionCard
+              title={t('account_settings')}
+              subtitle={t('account_settings_sub')}
+              Icon={Settings}
+              iconColor={colors.text}
+              iconBgClass="bg-gray-100 dark:bg-zinc-800"
+              onPress={() => navigation.navigate('Settings')}
+            />
+          </View>
 
           {/* Theme Card */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => setThemeModalVisible(true)}
-            className="flex-row items-center justify-between p-4 rounded-2xl border mb-4"
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            }}
-          >
-            <View className="flex-row items-center gap-3">
-              <View className="w-10 h-10 rounded-full items-center justify-center" style={{ backgroundColor: colors.border + '33' }}>
-                <Palette size={20} color={colors.text} />
-              </View>
-              <View className="ml-1">
-                <Text className="text-base font-bold" style={{ color: colors.text }}>
-                  {t('account_theme')}
-                </Text>
-                <Text className="text-xs opacity-75 mt-0.5" style={{ color: colors.muted }}>
-                  {getThemeModeLabel(themeMode)}
-                </Text>
-              </View>
-            </View>
-            <ChevronRight size={18} color={colors.muted} />
-          </TouchableOpacity>
+          <View className="mb-4">
+            <QuickActionCard
+              title={t('account_theme')}
+              subtitle={getThemeModeLabel(themeMode)}
+              Icon={Palette}
+              iconColor={colors.text}
+              iconBgClass="bg-gray-100 dark:bg-zinc-800"
+              onPress={() => setThemeModalVisible(true)}
+            />
+          </View>
 
           {/* Logout Card */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={handleLogout}
-            className="flex-row items-center justify-between p-4 rounded-2xl border mt-6"
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            }}
-          >
-            <View className="flex-row items-center gap-3">
-              <View className="w-10 h-10 rounded-full items-center justify-center bg-red-50 dark:bg-red-950/20">
-                <LogOut size={20} color={colors.error} />
-              </View>
-              <View className="ml-1">
-                <Text className="text-base font-bold" style={{ color: colors.error }}>
-                  {t('account_sign_out')}
-                </Text>
-                <Text className="text-xs opacity-75 mt-0.5" style={{ color: colors.muted }}>
-                  {t('account_sign_out_sub')}
-                </Text>
-              </View>
-            </View>
-            <ChevronRight size={18} color={colors.muted} />
-          </TouchableOpacity>
+          <View className="mt-6">
+            <QuickActionCard
+              title={t('account_sign_out')}
+              subtitle={t('account_sign_out_sub')}
+              Icon={LogOut}
+              iconColor={colors.error}
+              iconBgClass="bg-red-50 dark:bg-red-950/20"
+              onPress={handleLogout}
+            />
+          </View>
         </View>
 
         {/* Custom Bottom Sheet Theme Modal */}
@@ -187,6 +146,7 @@ export function AccountScreen() {
                         setThemeModalVisible(false);
                       }}
                       className="flex-row items-center justify-between p-4 rounded-xl border mb-3"
+                      // eslint-disable-next-line react-native/no-inline-styles
                       style={{
                         backgroundColor: active ? colors.border + '22' : 'transparent',
                         borderColor: active ? colors.primary : colors.border,

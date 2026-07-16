@@ -34,15 +34,11 @@ export function LeaveScreen() {
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => setIsGuideVisible(true)}
-            className="flex-row items-center justify-between p-4 rounded-2xl border border-dashed"
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            }}
+            className="flex-row items-center justify-between p-4 rounded-none bg-blue-500/10 dark:bg-blue-500/20 border-blue-500/50"
           >
             <View className="flex-row items-center space-x-3 flex-1">
               <View className="w-9 h-9 rounded-full items-center justify-center bg-gray-50 dark:bg-zinc-800 mr-3">
-                <HelpCircle size={18} color={colors.primary} />
+                <HelpCircle size={18} className="text-blue-500" />
               </View>
               <View className="flex-1">
                 <Text className="text-sm font-bold" style={{ color: colors.text }}>
@@ -56,12 +52,12 @@ export function LeaveScreen() {
             <ChevronRight size={16} color={colors.muted} />
           </TouchableOpacity>
 
-          <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.muted }}>
+          <Text className="text-xs font-bold uppercase tracking-wider mt-4" style={{ color: colors.muted }}>
             {t('leave_deployment_requests')}
           </Text>
 
           {/* Reused Quick Action Buttons Organisms */}
-          <View className="space-y-4">
+          <View className="space-y-4 mt-2">
             <QuickActionCard
               title={t('leave_apply_title')}
               subtitle={t('leave_standard_request_sub')}
@@ -69,6 +65,7 @@ export function LeaveScreen() {
               iconColor={colors.success}
               iconBgClass="bg-green-50 dark:bg-green-950/20"
               onPress={() => navigation.navigate('LeaveRequest')}
+              className="mb-2"
             />
 
             <QuickActionCard
@@ -78,6 +75,7 @@ export function LeaveScreen() {
               iconColor="#8B5CF6"
               iconBgClass="bg-purple-50 dark:bg-purple-950/20"
               onPress={() => navigation.navigate('LeaveHistory')}
+              className="mb-2"
             />
 
             <QuickActionCard
@@ -87,6 +85,7 @@ export function LeaveScreen() {
               iconColor="#F59E0B"
               iconBgClass="bg-amber-50 dark:bg-amber-950/20"
               onPress={() => navigation.navigate('OutOfStation')}
+              className="mb-2"
             />
           </View>
         </View>

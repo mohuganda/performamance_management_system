@@ -18,18 +18,17 @@ export const Input: React.FC<InputProps> = ({
   const { isDark } = useTheme();
 
   return (
-    <View className={`space-y-1.5 ${className}`}>
+    <View className={`space-y-1.5 rounded-none ${className}`}>
       {label && (
-        <Text className="text-sm font-medium text-gray-700 dark:text-zinc-300">{label}</Text>
+        <Text className="text-sm font-medium text-gray-700 dark:text-zinc-300 mb-2">{label}</Text>
       )}
       <View
-        className={`w-full bg-white dark:bg-zinc-950 border rounded-xl px-4 py-3 flex-row items-center ${
-          error
-            ? 'border-[#D90000] dark:border-red-500'
-            : isFocused
+        className={`w-full bg-white dark:bg-zinc-950 border rounded-xl px-4 py-3 flex-row items-center ${error
+          ? 'border-[#D90000] dark:border-red-500'
+          : isFocused
             ? 'border-primary dark:border-white'
             : 'border-gray-200 dark:border-zinc-800'
-        }`}
+          }`}
       >
         <TextInput
           className="flex-1 text-base text-gray-900 dark:text-zinc-50 p-0"

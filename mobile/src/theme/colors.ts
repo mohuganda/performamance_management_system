@@ -54,7 +54,7 @@ export const lightTheme = {
 
 export const darkTheme = {
   primary: '#FFFFFF',
-  background: '#121212',
+  background: '#010101',
   surface: '#1E1E1E',
   text: '#F4F4F5',
   muted: '#A1A1AA',

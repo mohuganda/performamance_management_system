@@ -30,7 +30,7 @@ export const Badge: React.FC<BadgeProps> = ({
   }
 
   return (
-    <View className={`px-2.5 py-1 rounded-full flex-row items-center self-start ${bgStyle} ${className}`}>
+    <View className={`px-2.5 py-1 rounded-none flex-row items-center self-start  ${bgStyle} ${className}`}>
       <Text className={`text-xs font-semibold uppercase tracking-wider ${textStyle}`}>{label}</Text>
     </View>
   );

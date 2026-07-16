@@ -43,9 +43,9 @@ export function ActiveShiftTimer({ clockedInAt }: ActiveShiftTimerProps) {
   }, [clockedInAt]);
 
   return (
-    <View 
-      className="w-full flex-row items-center justify-between p-4 rounded-2xl border"
-      style={{ 
+    <View
+      className="w-full flex-row items-center justify-between p-4 rounded-none border"
+      style={{
         backgroundColor: isDark ? 'rgba(21, 128, 61, 0.15)' : 'rgba(21, 128, 61, 0.08)',
         borderColor: isDark ? 'rgba(21, 128, 61, 0.3)' : 'rgba(21, 128, 61, 0.15)'
       }}
@@ -55,13 +55,13 @@ export function ActiveShiftTimer({ clockedInAt }: ActiveShiftTimerProps) {
           <Play size={18} color={colors.success} fill={colors.success} />
         </View>
         <View>
-          <Text 
+          <Text
             className="text-xs font-semibold uppercase tracking-wider"
             style={{ color: colors.success }}
           >
             {t('attendance_active_timer_label')}
           </Text>
-          <Text 
+          <Text
             className="text-2xl font-mono font-bold tracking-widest mt-0.5"
             style={{ color: colors.text }}
           >

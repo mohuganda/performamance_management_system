@@ -15,7 +15,7 @@ export const FormField: React.FC<FormFieldProps> = ({
   children,
 }) => {
   return (
-    <View className={`space-y-1 ${className}`}>
+    <View className={`space-y-1 rounded-none ${className}`}>
       {label && (
         <Text className="text-sm font-semibold text-gray-700 dark:text-zinc-300 mb-1">{label}</Text>
       )}

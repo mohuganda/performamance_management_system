@@ -28,13 +28,13 @@ export function LocationPermissionModal({
       statusBarTranslucent
     >
       <View className="flex-1 justify-center items-center bg-black/60 px-6">
-        <View 
-          className="w-full max-w-sm rounded-2xl p-6 shadow-xl"
+        <View
+          className="w-full max-w-sm rounded-none p-6 shadow-xl"
           style={{ backgroundColor: colors.surface }}
         >
           {/* Header Icon */}
           <View className="items-center mb-4">
-            <View 
+            <View
               className="w-16 h-16 rounded-full items-center justify-center mb-2"
               style={{ backgroundColor: isBlocked ? `${colors.error}15` : `${colors.primary}15` }}
             >
@@ -47,7 +47,7 @@ export function LocationPermissionModal({
           </View>
 
           {/* Dialog Title */}
-          <Text 
+          <Text
             className="text-xl font-bold text-center mb-3"
             style={{ color: colors.text }}
           >
@@ -57,7 +57,7 @@ export function LocationPermissionModal({
           </Text>
 
           {/* Dialog Body Text */}
-          <Text 
+          <Text
             className="text-center text-sm leading-relaxed mb-6"
             style={{ color: isDark ? '#A1A1AA' : '#4B5563' }}
           >
@@ -70,10 +70,10 @@ export function LocationPermissionModal({
           <View className="flex-col gap-2">
             <TouchableOpacity
               onPress={onConfirm}
-              className="py-3.5 rounded-xl justify-center items-center font-bold"
+              className="py-3.5 rounded-none justify-center items-center font-bold"
               style={{ backgroundColor: isBlocked ? colors.error : colors.primary }}
             >
-              <Text className="text-white font-bold text-base">
+              <Text className="text-white dark:text-gray-500 font-bold text-base">
                 {isBlocked
                   ? t('permission_btn_settings')
                   : t('permission_btn_grant')}
@@ -82,9 +82,9 @@ export function LocationPermissionModal({
 
             <TouchableOpacity
               onPress={onCancel}
-              className="py-3 rounded-xl justify-center items-center"
+              className="py-3 rounded-none justify-center items-center"
             >
-              <Text 
+              <Text
                 className="font-semibold text-sm"
                 style={{ color: isDark ? '#A1A1AA' : '#6B7280' }}
               >

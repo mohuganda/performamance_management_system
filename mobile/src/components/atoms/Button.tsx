@@ -46,7 +46,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <TouchableOpacity
-      className={`px-4 py-3.5 rounded-xl flex-row justify-center items-center ${bgStyle} ${className}`}
+      className={`px-4 py-3.5 rounded-none flex-row justify-center items-center ${bgStyle} ${className}`}
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.7}

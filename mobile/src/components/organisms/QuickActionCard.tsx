@@ -9,6 +9,7 @@ interface QuickActionCardProps {
   Icon: LucideIcon;
   iconColor: string;
   iconBgClass: string;
+  className?: string;
   onPress: () => void;
 }
 
@@ -18,6 +19,7 @@ export const QuickActionCard: React.FC<QuickActionCardProps> = ({
   Icon,
   iconColor,
   iconBgClass,
+  className,
   onPress,
 }) => {
   const { colors } = useTheme();
@@ -26,7 +28,7 @@ export const QuickActionCard: React.FC<QuickActionCardProps> = ({
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={onPress}
-      className="flex-row items-center justify-between p-5 rounded-2xl border"
+      className={`flex-row items-center justify-between p-5 rounded-none border ${className}`}
       style={{
         backgroundColor: colors.surface,
         borderColor: colors.border,

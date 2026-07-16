@@ -84,7 +84,7 @@ export const LeaveBalances: React.FC = () => {
   }
 
   return (
-    <View className="space-y-4">
+    <View className="space-y-4 rounded-none">
       {balances.map((row) => {
         const typeName = typeMap.get(row.leave_type_id) ?? 'Leave';
         const entitled = row.entitled_days;

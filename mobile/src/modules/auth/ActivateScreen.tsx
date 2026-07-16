@@ -14,11 +14,13 @@ import {
   useRequestActivationMutation,
   useCompleteActivationMutation,
 } from '../../app/hooks/useAuthMutations';
+import { useTheme } from '../../app/hooks/useTheme';
 
 type ActivateScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Activate'>;
 
 export function ActivateScreen() {
   const { t } = useTranslation();
+  const { colors } = useTheme();
   const navigation = useNavigation<ActivateScreenNavigationProp>();
 
   const requestMutation = useRequestActivationMutation();
@@ -183,7 +185,8 @@ export function ActivateScreen() {
           <View className="flex-row justify-center items-center mt-6">
             <Text className="text-sm text-gray-500">{t('activate_back_to')}</Text>
             <Text
-              className="text-sm font-semibold text-primary"
+              className="text-sm font-semibold"
+              style={{ color: colors.primary }}
               onPress={() => navigation.navigate('Login')}
             >
               {t('activate_sign_in_link')}
