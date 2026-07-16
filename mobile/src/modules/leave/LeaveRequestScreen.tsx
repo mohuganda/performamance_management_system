@@ -4,19 +4,19 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Alert,
+  StyleSheet,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import { pick, types, errorCodes } from '@react-native-documents/picker';
-import { Calendar as CalendarIcon, Upload, Trash2, ChevronDown, AlertCircle } from 'lucide-react-native';
+import { AlertCircle } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../app/hooks/useTheme';
 import { MainTemplate } from '../../components/templates';
 import { Input } from '../../components/atoms/Input';
 import { Button } from '../../components/atoms/Button';
-import { Card } from '../../components/atoms/Card';
+import { DropdownSelect } from '../../components/molecules/DropdownSelect';
+import { DateRangePicker } from '../../components/molecules/DateRangePicker';
+import { AttachmentPicker, AttachmentFile } from '../../components/molecules/AttachmentPicker';
 import { FormStatusAlert } from '../../components/molecules/FormStatusAlert';
 import {
   useLeaveTypesQuery,
@@ -27,17 +27,11 @@ import leaveRequestSchema from '../../app/schemas/leave';
 import {
   minLeaveStartDate,
   validateLeaveDates,
-  formatDisplayDate,
   parseISODate,
 } from '../../utils/leavePolicy';
 import leaveService from '../../api/leave/service';
 
-interface AttachmentFile {
-  uri: string;
-  name: string;
-  type: string;
-  size?: number;
-}
+
 
 export function LeaveRequestScreen() {
   const { t } = useTranslation();
@@ -62,16 +56,11 @@ export function LeaveRequestScreen() {
   const [formAlert, setFormAlert] = useState<{ type: 'error' | 'warning' | 'success'; message: string } | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  // Date Pickers State
-  const [isStartPickerVisible, setStartPickerVisibility] = useState(false);
-  const [isEndPickerVisible, setEndPickerVisibility] = useState(false);
 
-  // Type Dropdown State
-  const [showTypeSelector, setShowTypeSelector] = useState(false);
 
   const selectedType = React.useMemo(() => {
     if (!leaveTypes || !form.leave_type_id) return undefined;
-    return leaveTypes.find((t) => String(t.id) === form.leave_type_id);
+    return leaveTypes.find((typeItem) => String(typeItem.id) === form.leave_type_id);
   }, [leaveTypes, form.leave_type_id]);
 
   // Policy helpers
@@ -107,35 +96,7 @@ export function LeaveRequestScreen() {
     });
   };
 
-  // Pick supporting document
-  const handlePickDocument = async () => {
-    try {
-      const res = await pick({
-        type: [types.images, types.pdf],
-        allowMultiSelection: false,
-      });
-      const file = res[0];
-      if (file) {
-        setAttachments((prev) => [
-          ...prev,
-          {
-            uri: file.uri,
-            name: file.name ?? 'document.pdf',
-            type: file.type ?? 'application/pdf',
-            size: file.size ?? undefined,
-          },
-        ]);
-      }
-    } catch (err: any) {
-      if (err?.code !== errorCodes.OPERATION_CANCELED) {
-        console.error('Document picking error:', err);
-      }
-    }
-  };
 
-  const handleRemoveAttachment = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
-  };
 
   // Submit standard leave request form
   const handleSubmit = async (submit: boolean) => {
@@ -225,7 +186,7 @@ export function LeaveRequestScreen() {
 
   return (
     <MainTemplate title={t('leave_apply_title')} showBack={true}>
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView className="flex-1" contentContainerStyle={styles.scrollContent}>
         <View className="p-6 space-y-6">
           {formAlert && (
             <TouchableOpacity onPress={() => setFormAlert(null)} activeOpacity={0.9}>
@@ -236,10 +197,10 @@ export function LeaveRequestScreen() {
             </TouchableOpacity>
           )}
           {/* Prominent 14-day Advance Notice Warning */}
-          <View className="p-4 rounded-2xl flex-row bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/50">
-            <AlertCircle size={18} color="#D97706" className="mr-3 mt-0.5" />
+          <View className="p-4 mb-3 rounded-none flex-row bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-900/50">
+            <AlertCircle size={18} color="#D97706" className="mt-0.5" />
             <View className="flex-1">
-              <Text className="text-xs font-bold text-amber-800 dark:text-amber-400">
+              <Text className="ml-3 text-xs font-bold text-amber-800 dark:text-amber-400">
                 Notice Requirement:
               </Text>
               <Text className="text-xs text-amber-700 dark:text-amber-400/80 mt-1 leading-relaxed">
@@ -247,105 +208,42 @@ export function LeaveRequestScreen() {
               </Text>
             </View>
           </View>
-          {/* Leave Type Select Card */}
-          <View className="space-y-2">
-            <Text className="text-sm font-medium text-gray-700 dark:text-zinc-300">
-              {t('leave_form_type')}
-            </Text>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => setShowTypeSelector(!showTypeSelector)}
-              className="w-full bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl px-4 py-4.5 flex-row items-center justify-between"
-            >
-              <Text className="text-base" style={{ color: selectedType ? colors.text : colors.muted }}>
-                {selectedType ? selectedType.name : 'Choose a leave type...'}
-              </Text>
-              <ChevronDown size={18} color={colors.muted} />
-            </TouchableOpacity>
 
-            {validationErrors.leave_type_id && (
-              <Text className="text-xs text-[#D90000] font-medium">
-                {validationErrors.leave_type_id}
-              </Text>
-            )}
+          {/* Leave Type Select Dropdown Organism */}
+          <DropdownSelect
+            label={t('leave_form_type')}
+            placeholder="Choose a leave type..."
+            options={leaveTypes || []}
+            selectedValue={form.leave_type_id}
+            onSelect={(option) => {
+              setForm((f) => ({ ...f, leave_type_id: String(option.id) }));
+            }}
+            error={validationErrors.leave_type_id}
+            loading={isTypesLoading}
+            className="mb-4"
+          />
 
-            {/* Dropdown Options List */}
-            {showTypeSelector && (
-              <Card className="p-2 border border-gray-100 dark:border-zinc-800 max-h-48 overflow-hidden">
-                <ScrollView nestedScrollEnabled={true}>
-                  {isTypesLoading ? (
-                    <ActivityIndicator size="small" color={colors.primary} className="py-4" />
-                  ) : (
-                    leaveTypes?.map((t) => (
-                      <TouchableOpacity
-                        key={t.id}
-                        onPress={() => {
-                          setForm((f) => ({ ...f, leave_type_id: String(t.id) }));
-                          setShowTypeSelector(false);
-                        }}
-                        className="p-3 rounded-lg border-b border-gray-50 dark:border-zinc-900 last:border-b-0"
-                      >
-                        <Text className="text-base font-semibold" style={{ color: colors.text }}>
-                          {t.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </ScrollView>
-              </Card>
-            )}
-          </View>
-
-          {/* Dates Selection Card */}
-          <View className="flex-row space-x-4">
-            {/* Start Date */}
-            <View className="flex-1 space-y-2">
-              <Text className="text-sm font-medium text-gray-700 dark:text-zinc-300">
-                {t('leave_form_start_date')}
-              </Text>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setStartPickerVisibility(true)}
-                className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl px-4 py-4 flex-row items-center justify-between"
-              >
-                <Text className="text-sm" style={{ color: form.start_date ? colors.text : colors.muted }}>
-                  {form.start_date ? formatDisplayDate(parseISODate(form.start_date)) : 'Select Date'}
-                </Text>
-                <CalendarIcon size={16} color={colors.muted} />
-              </TouchableOpacity>
-              {validationErrors.start_date && (
-                <Text className="text-xs text-[#D90000] font-medium">
-                  {validationErrors.start_date}
-                </Text>
-              )}
-            </View>
-
-            {/* End Date */}
-            <View className="flex-1 space-y-2">
-              <Text className="text-sm font-medium text-gray-700 dark:text-zinc-300">
-                {t('leave_form_end_date')}
-              </Text>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setEndPickerVisibility(true)}
-                className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl px-4 py-4 flex-row items-center justify-between"
-              >
-                <Text className="text-sm" style={{ color: form.end_date ? colors.text : colors.muted }}>
-                  {form.end_date ? formatDisplayDate(parseISODate(form.end_date)) : 'Select Date'}
-                </Text>
-                <CalendarIcon size={16} color={colors.muted} />
-              </TouchableOpacity>
-              {validationErrors.end_date && (
-                <Text className="text-xs text-[#D90000] font-medium">
-                  {validationErrors.end_date}
-                </Text>
-              )}
-            </View>
-          </View>
+          {/* Dates Selection Range Picker Organism */}
+          <DateRangePicker
+            startDate={form.start_date}
+            endDate={form.end_date}
+            onStartDateChange={(date) => {
+              setForm((f) => ({ ...f, start_date: date }));
+            }}
+            onEndDateChange={(date) => {
+              setForm((f) => ({ ...f, end_date: date }));
+            }}
+            startLabel={t('leave_form_start_date')}
+            endLabel={t('leave_form_end_date')}
+            startError={validationErrors.start_date}
+            endError={validationErrors.end_date}
+            minimumDate={minDate}
+            className="mb-4"
+          />
 
           {/* Days count Indicator */}
           {leaveDays > 0 && (
-            <View className="bg-gray-50 dark:bg-zinc-900 px-4 py-3.5 rounded-xl border border-gray-100 dark:border-zinc-800 flex-row justify-between items-center">
+            <View className="bg-gray-50 dark:bg-zinc-900 px-4 py-3.5 rounded-none border border-gray-100 dark:border-zinc-800 flex-row justify-between items-center">
               <Text className="text-sm font-bold" style={{ color: colors.text }}>
                 Duration Calculated:
               </Text>
@@ -368,53 +266,16 @@ export function LeaveRequestScreen() {
             className="h-28"
           />
 
-          {/* Attachments Section */}
-          <View className="space-y-3">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-sm font-medium text-gray-700 dark:text-zinc-300">
-                {t('leave_form_attachments')}
-                {needsMedicalReport && <Text className="text-[#D90000]"> *</Text>}
-              </Text>
-              {needsMedicalReport && (
-                <Text className="text-xs text-red-500 font-bold">Medical Certificate Required</Text>
-              )}
-            </View>
-
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={handlePickDocument}
-              className="w-full border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-xl p-6 items-center justify-center bg-gray-50 dark:bg-zinc-950/20"
-            >
-              <Upload size={24} color={colors.muted} className="mb-2" />
-              <Text className="text-sm font-bold text-gray-700 dark:text-zinc-300">Select Files</Text>
-              <Text className="text-xs text-gray-400 mt-1">Upload Supporting Images or PDF certificates</Text>
-            </TouchableOpacity>
-
-            {attachments.length > 0 && (
-              <View className="space-y-2">
-                {attachments.map((file, index) => (
-                  <View
-                    key={index}
-                    className="flex-row justify-between items-center bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl p-3"
-                  >
-                    <View className="flex-1 pr-2">
-                      <Text className="text-sm font-semibold truncate" style={{ color: colors.text }}>
-                        {file.name}
-                      </Text>
-                      {file.size && (
-                        <Text className="text-xs text-gray-400">
-                          {Math.round(file.size / 1024)} KB
-                        </Text>
-                      )}
-                    </View>
-                    <TouchableOpacity onPress={() => handleRemoveAttachment(index)}>
-                      <Trash2 size={16} color={colors.error} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
+          {/* Reusable AttachmentPicker Molecule */}
+          <AttachmentPicker
+            label={t('leave_form_attachments')}
+            required={needsMedicalReport}
+            requiredWarningText={needsMedicalReport ? "Medical Certificate Required" : undefined}
+            attachments={attachments}
+            onAttachmentsChange={setAttachments}
+            allowMultiple={true}
+            className="mb-4"
+          />
 
           {/* Action buttons */}
           <View className="space-y-3 pt-4">
@@ -428,6 +289,7 @@ export function LeaveRequestScreen() {
             <Button
               title="Save as Draft"
               variant="secondary"
+              className="mt-4"
               onPress={() => handleSubmit(false)}
               disabled={createMutation.isPending || isUploading}
             />
@@ -435,30 +297,14 @@ export function LeaveRequestScreen() {
         </View>
       </ScrollView>
 
-      {/* DateTime Picker Modals */}
-      <DateTimePickerModal
-        isVisible={isStartPickerVisible}
-        mode="date"
-        minimumDate={minDate}
-        onConfirm={(date) => {
-          setStartPickerVisibility(false);
-          const iso = date.toISOString().split('T')[0];
-          setForm((f) => ({ ...f, start_date: iso }));
-        }}
-        onCancel={() => setStartPickerVisibility(false)}
-      />
-
-      <DateTimePickerModal
-        isVisible={isEndPickerVisible}
-        mode="date"
-        minimumDate={form.start_date ? parseISODate(form.start_date) : minDate}
-        onConfirm={(date) => {
-          setEndPickerVisibility(false);
-          const iso = date.toISOString().split('T')[0];
-          setForm((f) => ({ ...f, end_date: iso }));
-        }}
-        onCancel={() => setEndPickerVisibility(false)}
-      />
     </MainTemplate>
   );
 }
+
+const styles = StyleSheet.create({
+  scrollContent: {
+    paddingBottom: 40,
+  },
+});
+
+export default LeaveRequestScreen;

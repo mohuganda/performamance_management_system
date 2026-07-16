@@ -23,5 +23,10 @@ export const authService = {
     const res = await apiClient.post<CompleteActivationResponse>('/auth/activation/complete', payload);
     return res.data;
   },
+
+  async refresh(): Promise<{ token: string; token_type: string }> {
+    const res = await apiClient.post<{ token: string; token_type: string }>('/auth/refresh');
+    return res.data;
+  },
 };
 export default authService;

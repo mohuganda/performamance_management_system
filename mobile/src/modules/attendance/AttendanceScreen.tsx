@@ -220,7 +220,7 @@ export function AttendanceScreen() {
 
           {/* Action Module: Clock Trigger & Notes Input */}
           <View
-            className="p-4 rounded-2xl border mb-6 shadow-sm"
+            className="p-4 rounded-none border mb-6 shadow-sm"
             style={{
               backgroundColor: colors.surface,
               borderColor: colors.border,
@@ -240,7 +240,7 @@ export function AttendanceScreen() {
                 placeholder={t('attendance_notes_placeholder')}
                 multiline
                 numberOfLines={3}
-                className="w-full px-3 py-2.5 rounded-xl border text-sm text-left"
+                className="w-full px-3 py-2.5 rounded-none border text-sm text-left"
                 style={{
                   backgroundColor: isDark ? '#1C1C1E' : '#F9F9F9',
                   borderColor: notesError ? colors.error : colors.border,
@@ -261,7 +261,7 @@ export function AttendanceScreen() {
             <TouchableOpacity
               onPress={handleClockAction}
               disabled={!coords || clockMutation.isPending || !!notesError}
-              className="py-4 rounded-xl items-center justify-center shadow-md flex-row gap-2"
+              className="py-4 rounded-none items-center justify-center shadow-md flex-row gap-2"
               style={{
                 backgroundColor: isClockedIn ? colors.error : colors.success,
                 opacity: (!coords || clockMutation.isPending || !!notesError) ? 0.5 : 1,

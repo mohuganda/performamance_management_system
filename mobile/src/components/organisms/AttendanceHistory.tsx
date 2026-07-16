@@ -66,7 +66,7 @@ export const AttendanceHistory: React.FC<AttendanceHistoryProps> = ({
 
                 {/* Log details card */}
                 <View
-                  className="flex-1 p-4 rounded-xl border"
+                  className="flex-1 p-4 rounded-none border"
                   style={{
                     backgroundColor: colors.surface,
                     borderColor: colors.border,

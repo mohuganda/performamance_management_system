@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { createMMKV } from 'react-native-mmkv';
 import apiClient, { setAuthToken } from '../api/client';
 import authService from '../api/auth/service';
+import { queryClient } from '../app/queryClient';
 
 const storage = createMMKV({ id: 'moh-pms-auth' });
 const mmkvStorage = {
@@ -95,11 +96,15 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        try {
-          await apiClient.post('/auth/logout');
-        } catch {
-          // best-effort server logout
-        }
+        // Invalidate cached data immediately
+        queryClient.clear();
+
+        // Fire and forget server logout call in the background
+        apiClient.post('/auth/logout', {}, { skipAuthHandler: true }).catch((err) => {
+          console.warn('Background logout call failed:', err);
+        });
+
+        // Instantly transition local state to unauthenticated
         setAuthToken(null);
         set({
           token: null,
