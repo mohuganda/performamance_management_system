@@ -45,10 +45,7 @@ export const DropdownSelect: React.FC<DropdownSelectProps> = ({
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={() => setIsOpen(!isOpen)}
-        className="w-full bg-white dark:bg-zinc-950 border flex-row items-center justify-between rounded-none px-4 py-3"
-        style={{
-          borderColor: error ? colors.error : colors.border,
-        }}
+        className={`w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 flex-row items-center justify-between rounded-none px-4 py-3 ${error ? 'border-[#D90000] dark:border-red-500' : ''}`}
       >
         <Text
           className="text-base"

@@ -48,8 +48,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={() => setStartPickerVisibility(true)}
-          className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-none px-4 py-3 flex-row items-center justify-between"
-          style={{ borderColor: startError ? colors.error : colors.border }}
+          className={`bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-none px-4 py-3 flex-row items-center justify-between ${startError ? 'border-[#D90000] dark:border-red-500' : ''}`}
         >
           <Text className="text-sm" style={{ color: startDate ? colors.text : colors.muted }}>
             {startDate ? formatDisplayDate(parseISODate(startDate)) : 'Select Date'}
@@ -73,8 +72,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={() => setEndPickerVisibility(true)}
-          className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-none px-4 py-3 flex-row items-center justify-between"
-          style={{ borderColor: endError ? colors.error : colors.border }}
+          className={`bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-none px-4 py-3 flex-row items-center justify-between ${endError ? 'border-[#D90000] dark:border-red-500' : ''}`}
         >
           <Text className="text-sm" style={{ color: endDate ? colors.text : colors.muted }}>
             {endDate ? formatDisplayDate(parseISODate(endDate)) : 'Select Date'}

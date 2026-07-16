@@ -6,7 +6,6 @@ import { MainTemplate } from '../../components/templates';
 import { Card } from '../../components/atoms/Card';
 import { Badge } from '../../components/atoms/Badge';
 import { useLeaveRequestsQuery, useLeaveTypesQuery } from '../../app/hooks/useLeave';
-import { useSyncStore } from '../../stores/syncStore';
 import { formatDisplayDate, parseISODate } from '../../utils/leavePolicy';
 
 export function LeaveHistoryScreen() {
@@ -16,9 +15,6 @@ export function LeaveHistoryScreen() {
   // Queries
   const { data: requests, isLoading: isRequestsLoading, refetch, isFetching } = useLeaveRequestsQuery();
   const { data: leaveTypes, isLoading: isTypesLoading } = useLeaveTypesQuery();
-
-  // Sync Store (Offline Requests)
-  const offlineQueue = useSyncStore((state) => state.queue);
 
   const handleRefresh = () => {
     refetch();
@@ -31,29 +27,6 @@ export function LeaveHistoryScreen() {
     }
     return map;
   }, [leaveTypes]);
-
-  // Combine offline-queued leave requests with central database records
-  const combinedRequests = React.useMemo(() => {
-    const offlineRequests = offlineQueue
-      .filter((item) => item.type === 'LEAVE_REQUEST')
-      .map((item, index) => {
-        const payload = item.payload;
-        return {
-          id: `offline-${index}`,
-          leave_type_id: Number(payload.leave_type_id),
-          start_date: payload.start_date,
-          end_date: payload.end_date,
-          reason: payload.reason,
-          status: 'pending_sync' as const,
-          days_requested: undefined,
-        };
-      });
-
-    const onlineRequests = requests || [];
-
-    // Return combined list, with offline requests appearing first (as they are the newest local actions)
-    return [...offlineRequests, ...onlineRequests];
-  }, [requests, offlineQueue]);
 
   const isLoading = isRequestsLoading || isTypesLoading;
 
@@ -82,7 +55,7 @@ export function LeaveHistoryScreen() {
         </View>
       ) : (
         <FlatList
-          data={combinedRequests}
+          data={requests}
           keyExtractor={(item) => String(item.id)}
           refreshControl={
             <RefreshControl

@@ -2,13 +2,13 @@ import React, { useEffect } from 'react';
 import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAuthStore } from './src/stores/authStore';
 import { AuthNavigator } from './src/app/navigation/AuthNavigator';
 import { AppNavigator } from './src/app/navigation/AppNavigator';
 import { initNetworkListener } from './src/utils/network';
-import { queryClient } from './src/app/queryClient';
+import { queryClient, mmkvStoragePersister } from './src/app/queryClient';
 import { LogBox } from 'react-native';
 
 LogBox.ignoreAllLogs();
@@ -31,14 +31,17 @@ export default function App() {
   return (
     // eslint-disable-next-line react-native/no-inline-styles
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{ persister: mmkvStoragePersister }}
+      >
         <SafeAreaProvider>
           <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
           <NavigationContainer>
             {isAuthenticated ? <AppNavigator /> : <AuthNavigator />}
           </NavigationContainer>
         </SafeAreaProvider>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </GestureHandlerRootView>
   );
 }

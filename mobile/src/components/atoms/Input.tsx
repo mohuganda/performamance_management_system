@@ -23,7 +23,7 @@ export const Input: React.FC<InputProps> = ({
         <Text className="text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1">{label}</Text>
       )}
       <View
-        className={`w-full bg-white dark:bg-zinc-950 border rounded-none px-4 py-3 flex-row items-center ${error
+        className={`w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-none px-4 py-3 flex-row items-center ${error
           ? 'border-[#D90000] dark:border-red-500'
           : isFocused
             ? 'border-primary dark:border-white'

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import Geolocation from 'react-native-geolocation-service';
-import { Clock, MessageSquare } from 'lucide-react-native';
+import { Clock, MessageSquare, CheckCircle, AlertTriangle, MapPin } from 'lucide-react-native';
 import { MainTemplate } from '../../components/templates';
 import { useTheme } from '../../app/hooks/useTheme';
 import { useAttendanceListQuery, useClockMutation } from '../../app/hooks/useAttendance';
@@ -22,6 +22,8 @@ import { attendanceNotesSchema } from '../../app/schemas/attendance';
 import { AttendanceStatusCard } from '../../components/organisms/AttendanceStatusCard';
 import { AttendanceMapCard } from '../../components/organisms/AttendanceMapCard';
 import { AttendanceHistory } from '../../components/organisms/AttendanceHistory';
+import { useOosRequestsQuery } from '../../app/hooks/useOos';
+import { getDistanceMeters } from '../../utils/haversine';
 
 // Default map coordinate centered on Kampala, Uganda if location is loading
 const DEFAULT_COORDS = {
@@ -57,6 +59,37 @@ export function AttendanceScreen() {
   // TanStack Query Hooks
   const clocksQuery = useAttendanceListQuery();
   const clockMutation = useClockMutation();
+  const oosQuery = useOosRequestsQuery();
+
+  // Find active approved OOS request for today
+  const activeOosRequest = useMemo(() => {
+    if (!oosQuery.data) return null;
+    const todayStr = new Date().toISOString().split('T')[0];
+    return oosQuery.data.find((req) => {
+      const isApproved = req.status === 'approved';
+      if (!isApproved) return false;
+      const start = req.start_date.split('T')[0];
+      const end = req.end_date.split('T')[0];
+      return todayStr >= start && todayStr <= end;
+    });
+  }, [oosQuery.data]);
+
+  // Compute distance from current location to approved OOS coordinates
+  const oosDistance = useMemo(() => {
+    if (!coords || !activeOosRequest) return null;
+    return getDistanceMeters(
+      coords.latitude,
+      coords.longitude,
+      activeOosRequest.destination_latitude,
+      activeOosRequest.destination_longitude
+    );
+  }, [coords, activeOosRequest]);
+
+  // Determine if user is within the approved OOS geofence bounds (500m fallback)
+  const isWithinOosGeofence = useMemo(() => {
+    if (oosDistance === null || !activeOosRequest) return false;
+    return oosDistance <= (activeOosRequest.geofence_radius_meters || 500);
+  }, [oosDistance, activeOosRequest]);
 
   // Background GPS Position capture loop
   const startGPSCapture = useCallback(() => {
@@ -145,6 +178,7 @@ export function AttendanceScreen() {
         longitude: coords.longitude,
         accuracy_meters: coords.accuracy,
         notes: notes.trim(),
+        location_label: activeOosRequest ? activeOosRequest.destination_name : undefined,
       });
 
       if (response === null) {
@@ -208,6 +242,46 @@ export function AttendanceScreen() {
             latestClock={latestClock}
             formatTime={formatTime}
           />
+
+          {activeOosRequest && (
+            <View
+              className="p-4 border mb-4 flex-row items-center gap-3 shadow-sm"
+              style={{
+                backgroundColor: isWithinOosGeofence ? 'rgba(21, 128, 61, 0.08)' : 'rgba(180, 83, 9, 0.08)',
+                borderColor: isWithinOosGeofence ? colors.success : colors.warning,
+              }}
+            >
+              <View className="flex-1">
+                <View className="flex-row items-center gap-2 mb-1">
+                  <MapPin size={16} color={isWithinOosGeofence ? colors.success : colors.warning} />
+                  <Text className="font-bold text-xs flex-1" style={{ color: colors.text }}>
+                    {t('oos_active_deployment', { destination: activeOosRequest.destination_name })}
+                  </Text>
+                </View>
+                {oosDistance !== null ? (
+                  <View className="flex-row items-center gap-1.5 mt-1">
+                    {isWithinOosGeofence ? (
+                      <>
+                        <CheckCircle size={14} color={colors.success} />
+                        <Text className="text-xs font-semibold text-green-700 dark:text-green-400">
+                          {t('oos_inside_geofence')}
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle size={14} color={colors.warning} />
+                        <Text className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                          {t('oos_outside_geofence', { distance: Math.round(oosDistance) })}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                ) : (
+                  <ActivityIndicator size="small" color={colors.warning} style={{ alignSelf: 'flex-start', marginTop: 4 }} />
+                )}
+              </View>
+            </View>
+          )}
 
           {/* Interactive Map Box Organism */}
           <AttendanceMapCard

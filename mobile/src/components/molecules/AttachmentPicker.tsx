@@ -87,7 +87,7 @@ export const AttachmentPicker: React.FC<AttachmentPickerProps> = ({
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={handlePickDocument}
-        className="w-full border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-none p-6 items-center justify-center bg-white dark:bg-zinc-950/20"
+        className="w-full border-2 border-dashed border-gray-200 dark:border-zinc-700 rounded-none p-6 items-center justify-center bg-white dark:bg-zinc-900"
       >
         <Upload size={24} color={colors.muted} className="mb-2" />
         <Text className="text-sm font-bold text-gray-700 dark:text-zinc-300">{placeholderText}</Text>

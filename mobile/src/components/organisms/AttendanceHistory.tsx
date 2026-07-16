@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
-import { CheckCircle, HelpCircle } from 'lucide-react-native';
+import { CheckCircle, HelpCircle, RefreshCw } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../app/hooks/useTheme';
 import { ClockResponse } from '../../api/attendance/types';
@@ -98,7 +98,14 @@ export const AttendanceHistory: React.FC<AttendanceHistoryProps> = ({
                   {/* Verification details badge */}
                   <View className="flex-row justify-end mt-2">
                     <View className="flex-row items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800">
-                      {row.verified || row.within_geofence ? (
+                      {(row as any).isOfflinePending ? (
+                        <>
+                          <RefreshCw size={10} color="#3B82F6" />
+                          <Text className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                            {t('attendance_status_pending_sync')}
+                          </Text>
+                        </>
+                      ) : row.verified || row.within_geofence ? (
                         <>
                           <CheckCircle size={10} color={colors.success} />
                           <Text className="text-[10px] font-bold text-green-700 dark:text-green-400">Verified</Text>

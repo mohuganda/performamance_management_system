@@ -4,6 +4,8 @@ export interface ClockRequest {
   longitude: number;
   accuracy_meters?: number;
   notes?: string;
+  clocked_at?: string;
+  location_label?: string;
 }
 
 export interface ClockResponse {
@@ -13,9 +15,13 @@ export interface ClockResponse {
   created_at?: string;
   latitude: number;
   longitude: number;
+  accuracy_meters?: number;
   verified?: boolean;
   within_geofence?: boolean;
   notes?: string;
+  location_label?: string;
+  verification_status?: string;
+  distance_from_destination_meters?: number;
 }
 
 export interface ClockListParams {

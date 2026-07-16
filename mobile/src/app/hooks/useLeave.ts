@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import leaveService from '../../api/leave/service';
@@ -41,13 +42,41 @@ export function useLeaveBalancesQuery(year?: number) {
 }
 
 export function useLeaveRequestsQuery() {
-  return useQuery<LeaveRequest[], Error>({
+  const queue = useSyncStore((state) => state.queue);
+
+  const queryResult = useQuery<LeaveRequest[], Error>({
     queryKey: ['leave', 'requests'],
     queryFn: async () => {
       return await leaveService.listRequests();
     },
     staleTime: 5 * 60 * 1000,
   });
+
+  const mergedData = useMemo(() => {
+    if (!queryResult.data) return queryResult.data;
+
+    const queuedRequests = queue
+      .filter((mut) => mut.type === 'LEAVE_REQUEST')
+      .map((mut, index) => {
+        const payload = mut.payload as LeaveSubmissionPayload;
+        return {
+          id: -Number(mut.id.replace(/\D/g, '').substring(0, 6)) || -(index + 1),
+          leave_type_id: Number(payload.leave_type_id),
+          start_date: payload.start_date,
+          end_date: payload.end_date,
+          status: 'pending_sync' as const,
+          reason: payload.reason,
+          days_requested: undefined,
+        } as LeaveRequest;
+      });
+
+    return [...queuedRequests, ...queryResult.data];
+  }, [queryResult.data, queue]);
+
+  return {
+    ...queryResult,
+    data: mergedData,
+  };
 }
 
 export function useCreateLeaveMutation() {
