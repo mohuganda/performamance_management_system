@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
@@ -24,6 +23,8 @@ import { AttendanceMapCard } from '../../components/organisms/AttendanceMapCard'
 import { AttendanceHistory } from '../../components/organisms/AttendanceHistory';
 import { useOosRequestsQuery } from '../../app/hooks/useOos';
 import { getDistanceMeters } from '../../utils/haversine';
+import { Toaster } from '../../utils/toast';
+import { getApiErrorMessage } from '../../api/client';
 
 // Default map coordinate centered on Kampala, Uganda if location is loading
 const DEFAULT_COORDS = {
@@ -160,12 +161,12 @@ export function AttendanceScreen() {
   // Execute Clock In / Out Mutation
   const handleClockAction = async () => {
     if (!coords) {
-      Alert.alert('Error', t('attendance_err_no_gps'));
+      Toaster.error(t('attendance_err_no_gps'));
       return;
     }
 
     if (notesError) {
-      Alert.alert('Error', notesError);
+      Toaster.error(notesError);
       return;
     }
 
@@ -182,14 +183,14 @@ export function AttendanceScreen() {
       });
 
       if (response === null) {
-        Alert.alert(t('attendance_title'), t('attendance_sync_offline'));
+        Toaster.info(t('attendance_sync_offline'));
       } else {
-        Alert.alert(t('attendance_title'), t('attendance_sync_success'));
+        Toaster.success(t('attendance_sync_success'));
       }
 
       setNotes(''); // Clear notes after submission
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to submit attendance request.');
+    } catch (err: unknown) {
+      Toaster.error(getApiErrorMessage(err, 'Failed to submit attendance request.'));
     }
   };
 

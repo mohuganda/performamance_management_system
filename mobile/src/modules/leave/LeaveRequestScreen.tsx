@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Alert,
   StyleSheet,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -30,8 +29,8 @@ import {
   parseISODate,
 } from '../../utils/leavePolicy';
 import leaveService from '../../api/leave/service';
-
-
+import { Toaster } from '../../utils/toast';
+import { getApiErrorMessage } from '../../api/client';
 
 export function LeaveRequestScreen() {
   const { t } = useTranslation();
@@ -167,19 +166,15 @@ export function LeaveRequestScreen() {
     createMutation.mutate(payload, {
       onSuccess: (res: any) => {
         if (res?.offline) {
-          Alert.alert('Offline Mode', t('leave_success_queued'), [
-            { text: 'OK', onPress: () => navigation.goBack() },
-          ]);
+          Toaster.info(t('leave_success_queued'), 'Offline Mode');
+          navigation.goBack();
         } else {
-          Alert.alert(
-            submit ? 'Submitted' : 'Saved Draft',
-            submit ? t('leave_success_submit') : t('leave_success_draft'),
-            [{ text: 'OK', onPress: () => navigation.goBack() }]
-          );
+          Toaster.success(submit ? t('leave_success_submit') : t('leave_success_draft'), submit ? 'Submitted' : 'Saved Draft');
+          navigation.goBack();
         }
       },
-      onError: (err) => {
-        setFormAlert({ type: 'error', message: err.message || 'An unexpected error occurred while saving the leave request.' });
+      onError: (err: unknown) => {
+        setFormAlert({ type: 'error', message: getApiErrorMessage(err, 'An unexpected error occurred while saving the leave request.') });
       },
     });
   };

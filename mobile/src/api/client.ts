@@ -115,3 +115,12 @@ apiClient.interceptors.response.use(
 
 export default apiClient;
 
+export function getApiErrorMessage(error: unknown, fallbackMessage = 'An unexpected error occurred'): string {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.message || error.message || fallbackMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return fallbackMessage;
+}

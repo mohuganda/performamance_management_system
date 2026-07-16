@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { ScrollView, Alert, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { MainTemplate } from '../../components/templates';
 import { Bell, ShieldCheck, Database, RefreshCw } from 'lucide-react-native';
 import { SettingsSection } from '../../components/molecules/SettingsSection';
 import { SettingsRow } from '../../components/molecules/SettingsRow';
+import { Toaster } from '../../utils/toast';
 
 export function SettingsScreen() {
   const { t } = useTranslation();
@@ -19,7 +20,7 @@ export function SettingsScreen() {
     setSyncing(true);
     setTimeout(() => {
       setSyncing(false);
-      Alert.alert(t('settings_data_synced_title'), t('settings_data_synced_message'));
+      Toaster.success(t('settings_data_synced_message'), t('settings_data_synced_title'));
     }, 1500);
   };
 

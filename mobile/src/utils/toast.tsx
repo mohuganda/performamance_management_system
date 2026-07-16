@@ -9,7 +9,7 @@ export const toastConfig: ToastConfig = {
       style={{
         borderLeftColor: '#22c55e',
         backgroundColor: '#22c55e',
-        borderRadius: 8,
+        borderRadius: 1,
         width: '90%',
         elevation: 3,
         shadowOpacity: 0.1,
@@ -27,7 +27,7 @@ export const toastConfig: ToastConfig = {
       style={{
         borderLeftColor: '#ef4444',
         backgroundColor: '#ef4444',
-        borderRadius: 8,
+        borderRadius: 1,
         width: '90%',
         elevation: 3,
         shadowOpacity: 0.1,
@@ -46,7 +46,7 @@ export const toastConfig: ToastConfig = {
       style={{
         borderLeftColor: '#3b82f6',
         backgroundColor: '#3b82f6',
-        borderRadius: 8,
+        borderRadius: 1,
         width: '90%',
         elevation: 3,
         shadowOpacity: 0.1,
@@ -65,7 +65,7 @@ export const toastConfig: ToastConfig = {
       style={{
         borderLeftColor: '#f59e0b',
         backgroundColor: '#f59e0b',
-        borderRadius: 8,
+        borderRadius: 1,
         width: '90%',
         elevation: 3,
         shadowOpacity: 0.1,

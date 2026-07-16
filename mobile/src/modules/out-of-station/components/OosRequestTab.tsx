@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Alert,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
@@ -25,6 +24,8 @@ import { usePlacesSearch } from '../../../app/hooks/usePlacesSearch';
 import oosRequestSchema from '../../../app/schemas/oos';
 import leaveService from '../../../api/leave/service';
 import NetInfo from '@react-native-community/netinfo';
+import { Toaster } from '../../../utils/toast';
+import { getApiErrorMessage } from '../../../api/client';
 
 const DEFAULT_COORDS = {
   latitude: 0.3476,
@@ -124,7 +125,7 @@ export function OosRequestTab({ onComplete }: { onComplete: () => void }) {
       },
       (error) => {
         console.error('GPS error:', error);
-        Alert.alert('Location Error', 'Unable to retrieve current coordinates. Please select manually on the map.');
+        Toaster.error('Unable to retrieve current coordinates. Please select manually on the map.', 'Location Error');
         setIsLocating(false);
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
@@ -232,13 +233,15 @@ export function OosRequestTab({ onComplete }: { onComplete: () => void }) {
         setAttachments([]);
 
         if (res?.offline) {
-          Alert.alert('Offline Mode', t('oos_success_queued'), [{ text: 'OK', onPress: onComplete }]);
+          Toaster.info(t('oos_success_queued'), 'Offline Mode');
+          onComplete();
         } else {
-          Alert.alert('Success', t('oos_success_submit'), [{ text: 'OK', onPress: onComplete }]);
+          Toaster.success(t('oos_success_submit'), 'Success');
+          onComplete();
         }
       },
-      onError: (err) => {
-        setFormAlert({ type: 'error', message: err.message || 'An error occurred while submitting your travel request.' });
+      onError: (err: unknown) => {
+        setFormAlert({ type: 'error', message: getApiErrorMessage(err, 'An error occurred while submitting your travel request.') });
       },
     });
   };

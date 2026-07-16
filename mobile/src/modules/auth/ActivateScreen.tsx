@@ -17,6 +17,7 @@ import {
 } from '../../app/hooks/useAuthMutations';
 import { useTheme } from '../../app/hooks/useTheme';
 import { LOGO_SVG } from '../../assets/logoSvg';
+import { getApiErrorMessage } from '../../api/client';
 
 type ActivateScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Activate'>;
 
@@ -53,9 +54,8 @@ export function ActivateScreen() {
         });
         setStep('complete');
       },
-      onError: (err: any) => {
-        const msg = err.response?.data?.message || err.message || t('activate_request_failed_error');
-        setStatusMessage({ text: msg, type: 'error' });
+      onError: (err: unknown) => {
+        setStatusMessage({ text: getApiErrorMessage(err, t('activate_request_failed_error')), type: 'error' });
       },
     });
   };
@@ -88,9 +88,8 @@ export function ActivateScreen() {
             navigation.navigate('Login');
           }, 2000);
         },
-        onError: (err: any) => {
-          const msg = err.response?.data?.message || err.message || t('activate_failed_error');
-          setStatusMessage({ text: msg, type: 'error' });
+        onError: (err: unknown) => {
+          setStatusMessage({ text: getApiErrorMessage(err, t('activate_failed_error')), type: 'error' });
         },
       }
     );

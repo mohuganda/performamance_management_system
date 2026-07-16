@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { useOosPendingApprovalsQuery, useApproveOosMutation } from '../../../app/hooks/useOos';
 import { useTheme } from '../../../app/hooks/useTheme';
 import { Check, X, User, MapPin, Calendar, ClipboardList } from 'lucide-react-native';
+import { Toaster } from '../../../utils/toast';
+import { getApiErrorMessage } from '../../../api/client';
 
 export function OosApprovalsTab() {
   const { t } = useTranslation();
@@ -21,15 +23,15 @@ export function OosApprovalsTab() {
       { id: approvalId, approve, comments: commentText },
       {
         onSuccess: () => {
-          Alert.alert('Success', approve ? 'Travel request approved.' : 'Travel request rejected.');
+          Toaster.success(approve ? 'Travel request approved.' : 'Travel request rejected.', 'Success');
           setComments((prev) => {
             const copy = { ...prev };
             delete copy[approvalId];
             return copy;
           });
         },
-        onError: (err) => {
-          Alert.alert('Error', err.message || 'Could not process travel approval.');
+        onError: (err: unknown) => {
+          Toaster.error(getApiErrorMessage(err, 'Could not process travel approval.'));
         },
       }
     );

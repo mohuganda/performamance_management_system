@@ -10,10 +10,11 @@ import { Input } from '../../components/atoms/Input';
 import { Card } from '../../components/atoms/Card';
 import { FormStatusAlert } from '../../components/molecules/FormStatusAlert';
 import { AuthTemplate } from '../../components/templates';
-import { loginSchema } from '../../app/schemas/auth';
-import { useLoginMutation } from '../../app/hooks/useAuthMutations';
 import { useTheme } from '../../app/hooks/useTheme';
 import { LOGO_SVG } from '../../assets/logoSvg';
+import { loginSchema } from '../../app/schemas/auth';
+import { useLoginMutation } from '../../app/hooks/useAuthMutations';
+import { getApiErrorMessage } from '../../api/client';
 import { demoAccounts, DEMO_PASSWORD } from '../../constants/demoAccounts';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
@@ -54,9 +55,8 @@ export function LoginScreen() {
             setServerError(t('login_totp_error'));
           }
         },
-        onError: (err: any) => {
-          const msg = err.response?.data?.message || err.message || t('login_failed_error');
-          setServerError(msg);
+        onError: (err: unknown) => {
+          setServerError(getApiErrorMessage(err, t('login_failed_error')));
         },
       }
     );
