@@ -10,6 +10,8 @@ import { AppNavigator } from './src/app/navigation/AppNavigator';
 import { initNetworkListener } from './src/utils/network';
 import { queryClient, mmkvStoragePersister } from './src/app/queryClient';
 import { LogBox } from 'react-native';
+import { toastConfig } from './src/utils/toast';
+import Toast from 'react-native-toast-message';
 
 LogBox.ignoreAllLogs();
 
@@ -40,6 +42,7 @@ export default function App() {
           <NavigationContainer>
             {isAuthenticated ? <AppNavigator /> : <AuthNavigator />}
           </NavigationContainer>
+          <Toast config={toastConfig} />
         </SafeAreaProvider>
       </PersistQueryClientProvider>
     </GestureHandlerRootView>
