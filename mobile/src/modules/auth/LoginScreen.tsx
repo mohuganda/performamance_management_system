@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +13,8 @@ import { AuthTemplate } from '../../components/templates';
 import { loginSchema } from '../../app/schemas/auth';
 import { useLoginMutation } from '../../app/hooks/useAuthMutations';
 import { useTheme } from '../../app/hooks/useTheme';
+import { LOGO_SVG } from '../../assets/logoSvg';
+import { demoAccounts, DEMO_PASSWORD } from '../../constants/demoAccounts';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
@@ -25,6 +28,7 @@ export function LoginScreen() {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
+  const [showDemoAccounts, setShowDemoAccounts] = useState(false);
 
   const handleLogin = async () => {
     setServerError(null);
@@ -64,8 +68,8 @@ export function LoginScreen() {
 
         {/* Header MoH Branding */}
         <View className="items-center mb-8">
-          <View className="w-20 h-20 bg-gray-100 rounded-full items-center justify-center mb-4">
-            <Text className="text-3xl font-extrabold text-primary">MoH</Text>
+          <View className="mb-4">
+            <SvgXml xml={LOGO_SVG} width={80} height={80} />
           </View>
           <Text className="text-2xl font-bold text-center" style={{ color: colors.text }}>{t('pms_ihris')}</Text>
           <Text className="text-sm font-medium text-gray-500 text-center mt-1">
@@ -121,6 +125,45 @@ export function LoginScreen() {
             >
               {t('login_activate_link')}
             </Text>
+          </View>
+
+          {/* Demo Accounts Section */}
+          <View className="mt-6 pt-5 border-t" style={{ borderTopColor: colors.border }}>
+            <TouchableOpacity 
+              onPress={() => setShowDemoAccounts(prev => !prev)}
+              className="items-center"
+            >
+              <Text className="text-sm font-medium" style={{ color: colors.muted }}>
+                {showDemoAccounts ? 'Hide demo accounts' : 'Show demo accounts for testing'}
+              </Text>
+            </TouchableOpacity>
+
+            {showDemoAccounts && (
+              <View className="mt-4 flex-col">
+                {demoAccounts.map((account) => (
+                  <TouchableOpacity
+                    key={account.email}
+                    onPress={() => {
+                      setEmail(account.email);
+                      setPassword(account.password);
+                      setShowDemoAccounts(false);
+                    }}
+                    className="rounded-md border p-3 mb-3"
+                    style={{ 
+                      backgroundColor: email === account.email ? `${colors.primary}10` : colors.surface,
+                      borderColor: email === account.email ? colors.primary : colors.border 
+                    }}
+                  >
+                    <Text className="text-sm font-bold" style={{ color: colors.text }}>{account.label}</Text>
+                    <Text className="text-xs mt-1" style={{ color: colors.muted }}>{account.description}</Text>
+                    <Text className="mt-2 font-mono text-[10px]" style={{ color: colors.muted }}>{account.email}</Text>
+                  </TouchableOpacity>
+                ))}
+                <Text className="text-center text-xs mt-1" style={{ color: colors.muted }}>
+                  Demo password: <Text className="font-mono font-bold" style={{ color: colors.text }}>{DEMO_PASSWORD}</Text>
+                </Text>
+              </View>
+            )}
           </View>
         </Card>
 

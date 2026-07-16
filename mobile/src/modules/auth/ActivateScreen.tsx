@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +16,7 @@ import {
   useCompleteActivationMutation,
 } from '../../app/hooks/useAuthMutations';
 import { useTheme } from '../../app/hooks/useTheme';
+import { LOGO_SVG } from '../../assets/logoSvg';
 
 type ActivateScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Activate'>;
 
@@ -97,12 +99,12 @@ export function ActivateScreen() {
   return (
     <AuthTemplate title={t('activate_title')}>
       <View className="flex-1 justify-center py-6">
-        
+
         <View className="items-center mb-8">
-          <View className="w-16 h-16 bg-gray-100 rounded-full items-center justify-center mb-4">
-            <Text className="text-2xl font-bold text-primary">PMS</Text>
+          <View className="mb-4">
+            <SvgXml xml={LOGO_SVG} width={80} height={80} />
           </View>
-          <Text className="text-2xl font-bold text-gray-900 text-center">{t('activate_title')}</Text>
+          <Text className="text-2xl font-bold text-center" style={{ color: colors.text }}>{t('activate_title')}</Text>
         </View>
 
         <Card>
@@ -114,10 +116,10 @@ export function ActivateScreen() {
 
           {step === 'request' ? (
             <View className="space-y-4">
-              <Text className="text-base text-gray-600 mb-2">
+              <Text className="text-base text-gray-600 mb-5">
                 {t('activate_instruction')}
               </Text>
-              
+
               <Input
                 label={t('activate_email_label')}
                 placeholder={t('activate_email_placeholder')}
@@ -126,6 +128,7 @@ export function ActivateScreen() {
                 value={email}
                 onChangeText={setEmail}
                 error={errors.email}
+                className="mb-5"
               />
 
               <Button
@@ -144,6 +147,7 @@ export function ActivateScreen() {
                 value={token}
                 onChangeText={setToken}
                 error={errors.token}
+                className="mb-5"
               />
 
               <Input
@@ -154,6 +158,7 @@ export function ActivateScreen() {
                 value={password}
                 onChangeText={setPassword}
                 error={errors.password}
+                className="mb-5"
               />
 
               <Input
@@ -164,6 +169,7 @@ export function ActivateScreen() {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 error={errors.confirmPassword}
+                className="mb-5"
               />
 
               <Button
