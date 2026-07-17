@@ -1,48 +1,19 @@
-import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import attendanceService from '../../api/attendance/service';
 import { ClockRequest, ClockResponse, ClockListParams } from '../../api/attendance/types';
 import { useSyncStore } from '../../stores/syncStore';
+import { AttendanceDbService } from '../../db/services/AttendanceDbService';
 
-export function useAttendanceListQuery(params?: ClockListParams) {
-  const queue = useSyncStore((state) => state.queue);
-
-  const queryResult = useQuery<ClockResponse[], Error>({
-    queryKey: ['attendance', 'clocks', params],
+export function useAttendanceListSync(params?: ClockListParams) {
+  return useQuery({
+    queryKey: ['attendance', 'clocks_sync', params],
     queryFn: async () => {
-      return await attendanceService.listClocks(params);
+      const clocks = await attendanceService.listClocks(params);
+      await AttendanceDbService.syncClocks(clocks);
+      return clocks;
     },
-    staleTime: 5 * 60 * 1000,
   });
-
-  const mergedData = useMemo(() => {
-    if (!queryResult.data) return queryResult.data;
-
-    const queuedClocks = queue
-      .filter((mut) => mut.type === 'CLOCK')
-      .map((mut, index) => {
-        const payload = mut.payload as ClockRequest;
-        return {
-          id: -Number(mut.id.replace(/\D/g, '').substring(0, 6)) || -(index + 1),
-          action: payload.action,
-          clocked_at: payload.clocked_at || new Date().toISOString(),
-          latitude: payload.latitude,
-          longitude: payload.longitude,
-          verified: false,
-          within_geofence: false,
-          notes: payload.notes,
-          isOfflinePending: true,
-        } as unknown as ClockResponse;
-      });
-
-    return [...queuedClocks, ...queryResult.data];
-  }, [queryResult.data, queue]);
-
-  return {
-    ...queryResult,
-    data: mergedData,
-  };
 }
 
 export function useClockMutation() {
@@ -67,13 +38,14 @@ export function useClockMutation() {
           endpoint: '/mobile/attendance/clock',
           payload: cleanPayload,
         });
+        await AttendanceDbService.addOptimisticClock(cleanPayload);
         return null;
       }
 
       return await attendanceService.clock(cleanPayload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['attendance', 'clocks'] });
+      queryClient.invalidateQueries({ queryKey: ['attendance', 'clocks_sync'] });
     },
   });
 }

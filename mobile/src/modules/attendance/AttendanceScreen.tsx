@@ -14,7 +14,7 @@ import Geolocation from 'react-native-geolocation-service';
 import { Clock, MessageSquare, CheckCircle, AlertTriangle, MapPin } from 'lucide-react-native';
 import { MainTemplate } from '../../components/templates';
 import { useTheme } from '../../app/hooks/useTheme';
-import { useAttendanceListQuery, useClockMutation } from '../../app/hooks/useAttendance';
+import { useAttendanceListSync, useClockMutation } from '../../app/hooks/useAttendance';
 import { useLocationPermission } from '../../app/hooks/useLocationPermission';
 import { LocationPermissionModal } from '../../components/molecules/LocationPermissionModal';
 import { attendanceNotesSchema } from '../../app/schemas/attendance';
@@ -25,6 +25,9 @@ import { useOosRequestsQuery } from '../../app/hooks/useOos';
 import { getDistanceMeters } from '../../utils/haversine';
 import { Toaster } from '../../utils/toast';
 import { getApiErrorMessage } from '../../api/client';
+import withObservables from '@nozbe/with-observables';
+import { database } from '../../db';
+import AttendanceLog from '../../db/models/AttendanceLog';
 
 // Default map coordinate centered on Kampala, Uganda if location is loading
 const DEFAULT_COORDS = {
@@ -34,7 +37,11 @@ const DEFAULT_COORDS = {
   longitudeDelta: 0.005,
 };
 
-export function AttendanceScreen() {
+interface AttendanceScreenProps {
+  clocks: AttendanceLog[];
+}
+
+const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks }) => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
 
@@ -57,8 +64,8 @@ export function AttendanceScreen() {
     openSettings,
   } = useLocationPermission();
 
-  // TanStack Query Hooks
-  const clocksQuery = useAttendanceListQuery();
+  // TanStack Query Hooks (ListSync triggers background update)
+  const clocksQuery = useAttendanceListSync();
   const clockMutation = useClockMutation();
   const oosQuery = useOosRequestsQuery();
 
@@ -134,15 +141,31 @@ export function AttendanceScreen() {
     }
   }, [status, hasCheckedPermission, startGPSCapture, setShowPrimer, setShowBlocked]);
 
-  // Sort and process attendance logs (Newest First)
+  // Sort and process attendance logs from local DB (Newest First)
   const sortedClocks = useMemo(() => {
-    const clocks = Array.isArray(clocksQuery.data) ? clocksQuery.data : [];
-    return [...clocks].sort((a, b) => {
-      const timeA = new Date(a.clocked_at || a.created_at || 0).getTime();
-      const timeB = new Date(b.clocked_at || b.created_at || 0).getTime();
-      return timeB - timeA;
-    });
-  }, [clocksQuery.data]);
+    return [...clocks]
+      .sort((a, b) => {
+        const timeA = new Date(a.clockedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.clockedAt || b.createdAt || 0).getTime();
+        return timeB - timeA;
+      })
+      .map((item) => ({
+        id: item.remoteId ?? -1,
+        action: item.action as 'in' | 'out',
+        clocked_at: item.clockedAt,
+        created_at: item.createdAt || undefined,
+        latitude: item.latitude,
+        longitude: item.longitude,
+        accuracy_meters: item.accuracyMeters || undefined,
+        verified: item.verified || false,
+        within_geofence: item.withinGeofence || false,
+        notes: item.notes || undefined,
+        location_label: item.locationLabel || undefined,
+        verification_status: item.verificationStatus || undefined,
+        distance_from_destination_meters: item.distanceFromDestinationMeters || undefined,
+        isOfflinePending: item.remoteId === null,
+      }));
+  }, [clocks]);
 
   const latestClock = sortedClocks[0] || null;
   const isClockedIn = latestClock ? latestClock.action === 'in' : false;
@@ -357,7 +380,7 @@ export function AttendanceScreen() {
 
           {/* Activity Logs Timeline Feed Organism */}
           <AttendanceHistory
-            isLoading={clocksQuery.isLoading}
+            isLoading={clocksQuery.isLoading && clocks.length === 0}
             sortedClocks={sortedClocks}
             formatDate={formatDate}
             formatTime={formatTime}
@@ -381,5 +404,8 @@ export function AttendanceScreen() {
       />
     </MainTemplate>
   );
-}
-export default AttendanceScreen;
+};
+
+export const AttendanceScreen = withObservables([], () => ({
+  clocks: database.collections.get<AttendanceLog>('attendance_logs').query().observe(),
+}))(BaseAttendanceScreen);
