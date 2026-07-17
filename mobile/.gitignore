@@ -28,6 +28,7 @@ build/
 .idea
 .gradle
 local.properties
+keystore.properties
 *.iml
 *.hprof
 .cxx/
@@ -73,11 +74,6 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
-
-# environment files
-.env
-.env.local
-.env.*.local
 
 .agents/
 .agent/

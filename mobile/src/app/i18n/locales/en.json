@@ -40,7 +40,7 @@
   "home_dashboard_overview": "Dashboard Overview",
   "home_welcome_user": "Hello, {{name}}",
   "home_moh_role": "Ministry of Health Uganda • {{role}}",
-  "home_pms_title": "Performance Management System",
+  "home_pms_title": "PMS - iHRIS",
   "home_pms_description": "Track attendance, manage leaves, request out of station duty deployments, and complete supervisors reviews seamlessly.",
   "home_quick_actions": "Quick Actions",
   "home_action_check_in": "Duty Check In",
