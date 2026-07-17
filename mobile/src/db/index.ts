@@ -5,6 +5,12 @@ import migrations from './migrations';
 
 import AttendanceLog from './models/AttendanceLog';
 import LeaveRequest from './models/LeaveRequest';
+import Notification from './models/Notification';
+import ApprovalTask from './models/ApprovalTask';
+import OosRequest from './models/OosRequest';
+import LeaveBalanceModel from './models/LeaveBalanceModel';
+import LeaveTypeModel from './models/LeaveTypeModel';
+import ProfileModel from './models/ProfileModel';
 
 const adapter = new SQLiteAdapter({
   schema,
@@ -21,5 +27,11 @@ export const database = new Database({
   modelClasses: [
     AttendanceLog,
     LeaveRequest,
+    Notification,
+    ApprovalTask,
+    OosRequest,
+    LeaveBalanceModel,
+    LeaveTypeModel,
+    ProfileModel,
   ],
 });
