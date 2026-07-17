@@ -1,16 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { createMMKV } from 'react-native-mmkv';
+import { zustandStorage } from '../utils/asyncStorage';
 import axios from 'axios';
 import syncService from '../api/sync/service';
 import { QueuedMutation } from '../api/sync/types';
-
-const syncStorage = createMMKV({ id: 'moh-pms-sync' });
-const storageWrapper = {
-  setItem: (name: string, value: string) => syncStorage.set(name, value),
-  getItem: (name: string) => syncStorage.getString(name) ?? null,
-  removeItem: (name: string) => syncStorage.remove(name),
-};
 
 export interface FailedQueuedMutation extends QueuedMutation {
   error?: string;
@@ -99,7 +92,7 @@ export const useSyncStore = create<SyncState>()(
     }),
     {
       name: 'sync-queue-storage',
-      storage: createJSONStorage(() => storageWrapper),
+      storage: createJSONStorage(() => zustandStorage),
     }
   )
 );

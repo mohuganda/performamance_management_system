@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Platform, PermissionsAndroid, Linking } from 'react-native';
-import { createMMKV } from 'react-native-mmkv';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Geolocation from 'react-native-geolocation-service';
-
-const permStorage = createMMKV({ id: 'moh-pms-permissions' });
 const HAS_PROMPTED_KEY = 'location_has_prompted';
 
 export type PermissionStatus = 'granted' | 'denied' | 'blocked' | 'undetermined';
@@ -23,7 +21,7 @@ export function useLocationPermission() {
         return 'granted';
       }
 
-      const hasPrompted = permStorage.getBoolean(HAS_PROMPTED_KEY);
+      const hasPrompted = await AsyncStorage.getItem(HAS_PROMPTED_KEY) === 'true';
       if (!hasPrompted) {
         setStatus('undetermined');
         return 'undetermined';
@@ -32,7 +30,7 @@ export function useLocationPermission() {
       setStatus('denied');
       return 'denied';
     } else {
-      const hasPrompted = permStorage.getBoolean(HAS_PROMPTED_KEY);
+      const hasPrompted = await AsyncStorage.getItem(HAS_PROMPTED_KEY) === 'true';
       if (!hasPrompted) {
         setStatus('undetermined');
         return 'undetermined';
@@ -61,7 +59,7 @@ export function useLocationPermission() {
 
   const requestNativePermission = useCallback(async (): Promise<boolean> => {
     setShowPrimer(false);
-    permStorage.set(HAS_PROMPTED_KEY, true);
+    await AsyncStorage.setItem(HAS_PROMPTED_KEY, 'true');
     if (Platform.OS === 'android') {
       try {
         const result = await PermissionsAndroid.request(

@@ -2,13 +2,13 @@ import React, { useEffect } from 'react';
 import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAuthStore } from './src/stores/authStore';
 import { AuthNavigator } from './src/app/navigation/AuthNavigator';
 import { AppNavigator } from './src/app/navigation/AppNavigator';
 import { initNetworkListener } from './src/utils/network';
-import { queryClient, mmkvStoragePersister } from './src/app/queryClient';
+import { queryClient } from './src/app/queryClient';
 import { LogBox } from 'react-native';
 import { toastConfig } from './src/utils/toast';
 import Toast from 'react-native-toast-message';
@@ -27,16 +27,13 @@ export default function App() {
   }, [hydrateToken]);
 
   if (!authReady) {
-    return null; // display blank layout while Zustand state MMKV resolves
+    return null; // display blank layout while Zustand state resolves
   }
 
   return (
     // eslint-disable-next-line react-native/no-inline-styles
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <PersistQueryClientProvider
-        client={queryClient}
-        persistOptions={{ persister: mmkvStoragePersister }}
-      >
+      <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
           <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
           <NavigationContainer>
@@ -44,7 +41,7 @@ export default function App() {
           </NavigationContainer>
           <Toast config={toastConfig} />
         </SafeAreaProvider>
-      </PersistQueryClientProvider>
+      </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }

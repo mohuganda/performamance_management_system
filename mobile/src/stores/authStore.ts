@@ -1,19 +1,10 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { createMMKV } from 'react-native-mmkv';
+import { zustandStorage } from '../utils/asyncStorage';
 import apiClient, { setAuthToken } from '../api/client';
 import authService from '../api/auth/service';
 import { queryClient } from '../app/queryClient';
-
-const storage = createMMKV({ id: 'moh-pms-auth' });
-const mmkvStorage = {
-  setItem: (name: string, value: string) => storage.set(name, value),
-  getItem: (name: string) => storage.getString(name) ?? null,
-  removeItem: (name: string) => storage.remove(name),
-};
-
 import { AuthUser } from '../api/auth/types';
-
 interface AuthState {
   token: string | null;
   user: AuthUser | null;
@@ -112,7 +103,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'moh-pms-auth-storage',
-      storage: createJSONStorage(() => mmkvStorage),
+      storage: createJSONStorage(() => zustandStorage),
       partialize: (state) => ({
         token: state.token,
         user: state.user,

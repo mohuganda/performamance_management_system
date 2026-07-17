@@ -1,17 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
-import { createMMKV } from 'react-native-mmkv';
 
-const queryCacheStorage = createMMKV({ id: 'moh-pms-query-cache' });
-
-export const mmkvStoragePersister = createSyncStoragePersister({
-  storage: {
-    setItem: (key, value) => queryCacheStorage.set(key, value),
-    getItem: (key) => queryCacheStorage.getString(key) ?? null,
-    removeItem: (key) => queryCacheStorage.remove(key),
-  },
-  throttleTime: 1000,
-});
 
 export const queryClient = new QueryClient({
   defaultOptions: {

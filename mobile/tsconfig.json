@@ -4,7 +4,8 @@
     "resolveJsonModule": true,
     "types": [
       "jest"
-    ]
+    ],
+    "experimentalDecorators": true
   },
   "include": [
     "**/*.ts",
