@@ -214,5 +214,16 @@
   "approvals_reject_btn": "Reject",
   "approvals_return_btn": "Return",
   "approvals_success": "Request processed successfully.",
-  "approvals_queued": "Offline mode: Approval decision saved locally. Will sync automatically."
+  "approvals_queued": "Offline mode: Approval decision saved locally. Will sync automatically.",
+  "profile_electronic_signature": "Electronic Signature",
+  "profile_electronic_signature_desc": "Your signature is required for leave and out-of-station approvals.",
+  "profile_no_signature": "No signature found",
+  "profile_update_signature": "Update Signature",
+  "profile_draw_signature": "Draw Signature",
+  "profile_clear": "Clear",
+  "profile_save_signature": "Save Signature",
+  "profile_update_failed": "Update Failed",
+  "profile_update_failed_desc": "Failed to update profile. Please try again.",
+  "profile_update_success": "Profile Updated",
+  "profile_update_success_desc": "Your profile changes have been saved."
 }

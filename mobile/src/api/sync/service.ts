@@ -3,7 +3,12 @@ import { QueuedMutation } from './types';
 
 export const syncService = {
   async processMutation(mutation: Omit<QueuedMutation, 'id'>): Promise<any> {
-    const res = await apiClient.post(mutation.endpoint, mutation.payload);
+    const method = mutation.method || 'POST';
+    const res = await apiClient({
+      method,
+      url: mutation.endpoint,
+      data: mutation.payload,
+    });
     return res.data;
   },
 };

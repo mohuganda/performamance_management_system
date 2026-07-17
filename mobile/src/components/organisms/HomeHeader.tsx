@@ -46,7 +46,7 @@ export function HomeHeader() {
           onPress={() => navigation.navigate('Profile')}
           activeOpacity={0.8}
         >
-          <UserProfilePicture uri={user?.profile_photo} size={36} />
+          <UserProfilePicture uri={user?.ProfilePhoto} size={36} />
         </TouchableOpacity>
       </View>
     </View>

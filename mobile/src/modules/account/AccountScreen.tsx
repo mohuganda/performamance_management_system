@@ -43,23 +43,23 @@ export function AccountScreen() {
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => navigation.navigate('Profile')}
-          className="p-6 pb-8 rounded-b-[32px] border-b"
+          className="p-6 pb-8 rounded-none border-b"
           style={{
             backgroundColor: colors.surface,
             borderBottomColor: colors.border,
           }}
         >
           <View className="flex-row items-center gap-4 mt-4">
-            <UserProfilePicture uri={user?.profile_photo} size={64} />
-            <View className="flex-1 ml-1">
-              <Text className="text-xl font-black" style={{ color: colors.text }}>
-                {user?.name || 'Officer'}
+            <UserProfilePicture uri={user?.ProfilePhoto} size={64} />
+            <View className="ml-4 flex-1">
+              <Text className="text-xl font-bold text-gray-900 mb-1" style={{ color: colors.text }}>
+                {user?.Name || 'Officer'}
               </Text>
-              <Text className="text-sm font-medium opacity-75 mt-0.5" style={{ color: colors.muted }}>
-                {user?.email}
+              <Text className="text-sm text-gray-500 mb-2" style={{ color: colors.muted }}>
+                {user?.Email}
               </Text>
-              <View className="flex-row mt-2">
-                <Badge label={user?.role || t('staff')} variant="info" />
+              <View className="self-start">
+                <Badge label={user?.Role || t('staff')} variant="info" />
               </View>
             </View>
             <ChevronRight size={20} color={colors.muted} />

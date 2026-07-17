@@ -12,17 +12,11 @@ const mmkvStorage = {
   removeItem: (name: string) => storage.remove(name),
 };
 
-export interface UserProfile {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  profile_photo?: string | null;
-}
+import { AuthUser } from '../api/auth/types';
 
 interface AuthState {
   token: string | null;
-  user: UserProfile | null;
+  user: AuthUser | null;
   roles: string[];
   permissions: string[];
   staffId: number | null;

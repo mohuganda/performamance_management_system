@@ -6,6 +6,8 @@ import {
   RequestActivationResponse,
   CompleteActivationRequest,
   CompleteActivationResponse,
+  MeResponse,
+  UpdateProfilePayload,
 } from './types';
 
 export const authService = {
@@ -21,6 +23,16 @@ export const authService = {
 
   async completeActivation(payload: CompleteActivationRequest): Promise<CompleteActivationResponse> {
     const res = await apiClient.post<CompleteActivationResponse>('/auth/activation/complete', payload);
+    return res.data;
+  },
+
+  async me(): Promise<MeResponse> {
+    const res = await apiClient.get<MeResponse>('/auth/me');
+    return res.data;
+  },
+
+  async updateProfile(payload: UpdateProfilePayload): Promise<MeResponse> {
+    const res = await apiClient.put<MeResponse>('/auth/profile', payload);
     return res.data;
   },
 
