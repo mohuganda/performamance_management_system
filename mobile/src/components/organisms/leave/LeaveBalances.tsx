@@ -1,10 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../app/hooks/useTheme';
 import { Card } from '../../atoms/Card';
-import { useLeaveBalancesQuery, useLeaveTypesQuery } from '../../../app/hooks/useLeave';
+import { useLeaveBalancesSync, useLeaveTypesSync } from '../../../app/hooks/useLeave';
+import withObservables from '@nozbe/with-observables';
+import { database } from '../../../db';
+import LeaveBalanceModel from '../../../db/models/LeaveBalanceModel';
+import LeaveTypeModel from '../../../db/models/LeaveTypeModel';
 
 // SVG Progress Circle Component
 interface ProgressCircleProps {
@@ -52,28 +56,40 @@ const ProgressCircle: React.FC<ProgressCircleProps> = ({
   );
 };
 
-export const LeaveBalances: React.FC = () => {
+interface LeaveBalancesProps {
+  balances: LeaveBalanceModel[];
+  leaveTypes: LeaveTypeModel[];
+}
+
+const BaseLeaveBalances: React.FC<LeaveBalancesProps> = ({ balances, leaveTypes }) => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
 
-  const { data: balances, isLoading: isBalancesLoading } = useLeaveBalancesQuery();
-  const { data: leaveTypes, isLoading: isTypesLoading } = useLeaveTypesQuery();
+  // Trigger network sync in background
+  const { isLoading: isBalancesLoading } = useLeaveBalancesSync();
+  const { isLoading: isTypesLoading } = useLeaveTypesSync();
 
   const typeMap = React.useMemo(() => {
     const map = new Map<number, string>();
     if (leaveTypes) {
-      leaveTypes.forEach((t) => map.set(t.id, t.name));
+      leaveTypes.forEach((t) => {
+        if (t.remoteId) {
+          map.set(t.remoteId, t.name);
+        }
+      });
     }
     return map;
   }, [leaveTypes]);
 
-  const isLoading = isBalancesLoading || isTypesLoading;
+  // We consider it empty only if DB has no balances and network hasn't returned yet
+  const isEmpty = balances.length === 0;
+  const isInitialLoading = isEmpty && (isBalancesLoading || isTypesLoading);
 
-  if (isLoading) {
+  if (isInitialLoading) {
     return <ActivityIndicator size="small" color={colors.primary} className="py-8" />;
   }
 
-  if (!balances || balances.length === 0) {
+  if (isEmpty) {
     return (
       <Card className="p-6 items-center">
         <Text className="text-sm text-center" style={{ color: colors.muted }}>
@@ -86,10 +102,10 @@ export const LeaveBalances: React.FC = () => {
   return (
     <View className="space-y-4 rounded-none">
       {balances.map((row) => {
-        const typeName = typeMap.get(row.leave_type_id) ?? 'Leave';
-        const entitled = row.entitled_days;
-        const carriedOver = row.carried_over_days;
-        const used = row.used_days;
+        const typeName = typeMap.get(row.leaveTypeId) ?? 'Leave';
+        const entitled = row.entitledDays;
+        const carriedOver = row.carriedOverDays;
+        const used = row.usedDays;
         const total = entitled + carriedOver;
         const remaining = Math.max(total - used, 0);
         const percentageRemaining = total > 0 ? (remaining / total) * 100 : 0;
@@ -104,7 +120,7 @@ export const LeaveBalances: React.FC = () => {
         const circleSize = 72;
 
         return (
-          <Card key={row.id ?? row.leave_type_id} className="flex-row items-center justify-between p-5 w-full">
+          <Card key={row.id} className="flex-row items-center justify-between p-5 w-full">
             <View className="flex-1 pr-4 space-y-2 justify-center">
               <Text className="text-base font-bold" style={{ color: colors.text }}>
                 {typeName}
@@ -164,4 +180,9 @@ export const LeaveBalances: React.FC = () => {
     </View>
   );
 };
-export default LeaveBalances;
+
+export const LeaveBalances = withObservables([], () => ({
+  balances: database.collections.get<LeaveBalanceModel>('leave_balances').query().observe(),
+  leaveTypes: database.collections.get<LeaveTypeModel>('leave_types').query().observe(),
+}))(BaseLeaveBalances);
+

@@ -3,95 +3,108 @@ import { View, Text, ScrollView, RefreshControl, ActivityIndicator, FlatList } f
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../app/hooks/useTheme';
 import { MainTemplate } from '../../components/templates';
-import { Card } from '../../components/atoms/Card';
-import { Badge } from '../../components/atoms/Badge';
-import { useLeaveRequestsQuery, useLeaveTypesQuery } from '../../app/hooks/useLeave';
+import { useLeaveRequestsSync, useLeaveTypesSync } from '../../app/hooks/useLeave';
 import { formatDisplayDate, parseISODate } from '../../utils/leavePolicy';
 import { LeaveHistoryCard } from '../../components/organisms/leave/LeaveHistoryCard';
 import { EmptyState } from '../../components/molecules/EmptyState';
 import { Calendar } from 'lucide-react-native';
+import withObservables from '@nozbe/with-observables';
+import { database } from '../../db';
+import LeaveRequestModel from '../../db/models/LeaveRequest';
+import LeaveTypeModel from '../../db/models/LeaveTypeModel';
 
-export function LeaveHistoryScreen() {
+interface LeaveHistoryScreenProps {
+  requests: LeaveRequestModel[];
+  leaveTypes: LeaveTypeModel[];
+}
+
+const BaseLeaveHistoryScreen: React.FC<LeaveHistoryScreenProps> = ({ requests, leaveTypes }) => {
   const { t } = useTranslation();
   const { colors } = useTheme();
 
-  // Queries
-  const { data: requests, isLoading: isRequestsLoading, refetch, isFetching } = useLeaveRequestsQuery();
-  const { data: leaveTypes, isLoading: isTypesLoading } = useLeaveTypesQuery();
+  // Background syncs
+  const { isFetching: isRequestsFetching, refetch: refetchRequests } = useLeaveRequestsSync();
+  useLeaveTypesSync();
 
   const handleRefresh = () => {
-    refetch();
+    refetchRequests();
   };
 
   const typeMap = React.useMemo(() => {
     const map = new Map<number, string>();
     if (leaveTypes) {
-      leaveTypes.forEach((t) => map.set(t.id, t.name));
+      leaveTypes.forEach((t) => {
+        if (t.remoteId) map.set(t.remoteId, t.name);
+      });
     }
     return map;
   }, [leaveTypes]);
 
-  const isLoading = isRequestsLoading || isTypesLoading;
-
-
-
   return (
     <MainTemplate title={t('leave_history_title')} showBack={true}>
-      {isLoading && !isFetching ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : (
-        <FlatList
-          data={requests}
-          keyExtractor={(item) => String(item.id)}
-          refreshControl={
-            <RefreshControl
-              refreshing={isFetching}
-              onRefresh={handleRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
+      <FlatList
+        data={requests}
+        keyExtractor={(item) => item.id}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRequestsFetching}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+        contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
+        ListEmptyComponent={
+          <View className="py-12">
+            <EmptyState
+              title={t('leave_history_empty_title', 'No Leave History')}
+              description={t('leave_history_empty')}
+              icon={<Calendar size={48} color={colors.muted} />}
             />
-          }
-          contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
-          ListEmptyComponent={
-            <View className="py-12">
-              <EmptyState
-                title={t('leave_history_empty_title', 'No Leave History')}
-                description={t('leave_history_empty')}
-                icon={<Calendar size={48} color={colors.muted} />}
-              />
-            </View>
-          }
-          ItemSeparatorComponent={() => <View className="h-4" />}
-          renderItem={({ item }) => {
-            const typeName = typeMap.get(item.leave_type_id) ?? 'Leave Request';
-            const displayStart = item.start_date ? formatDisplayDate(parseISODate(item.start_date)) : '';
-            const displayEnd = item.end_date ? formatDisplayDate(parseISODate(item.end_date)) : '';
+          </View>
+        }
+        ItemSeparatorComponent={() => <View className="h-4" />}
+        renderItem={({ item }) => {
+          const typeName = typeMap.get(item.leaveTypeId) ?? 'Leave Request';
+          const displayStart = item.startDate ? formatDisplayDate(parseISODate(item.startDate)) : '';
+          const displayEnd = item.endDate ? formatDisplayDate(parseISODate(item.endDate)) : '';
 
-            // Calculate duration if not provided by backend payload
-            let duration = item.days_requested;
-            if (!duration && item.start_date && item.end_date) {
-              const start = parseISODate(item.start_date);
-              const end = parseISODate(item.end_date);
-              if (end >= start) {
-                const diffTime = Math.abs(end.getTime() - start.getTime());
-                duration = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-              }
+          // Calculate duration if not provided by backend payload
+          let duration = item.daysRequested;
+          if (!duration && item.startDate && item.endDate) {
+            const start = parseISODate(item.startDate);
+            const end = parseISODate(item.endDate);
+            if (end >= start) {
+              const diffTime = Math.abs(end.getTime() - start.getTime());
+              duration = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
             }
+          }
 
-            return (
-              <LeaveHistoryCard
-                item={item}
-                typeName={typeName}
-                displayStart={displayStart}
-                displayEnd={displayEnd}
-                duration={duration}
-              />
-            );
-          }}
-        />
-      )}
+          // Map the WatermelonDB model properties back to API-like fields expected by LeaveHistoryCard
+          const mappedItem = {
+            id: item.remoteId ?? -1, // Fallback to local id for pending_sync
+            status: item.status,
+            reason: item.reason,
+            start_date: item.startDate,
+            end_date: item.endDate,
+          };
+
+          return (
+            <LeaveHistoryCard
+              item={mappedItem as any}
+              typeName={typeName}
+              displayStart={displayStart}
+              displayEnd={displayEnd}
+              duration={duration ?? undefined}
+            />
+          );
+        }}
+      />
     </MainTemplate>
   );
-}
+};
+
+export const LeaveHistoryScreen = withObservables([], () => ({
+  requests: database.collections.get<LeaveRequestModel>('leave_requests').query().observe(),
+  leaveTypes: database.collections.get<LeaveTypeModel>('leave_types').query().observe(),
+}))(BaseLeaveHistoryScreen);

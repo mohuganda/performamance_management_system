@@ -1,15 +1,12 @@
-import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import leaveService from '../../api/leave/service';
 import {
   LeavePolicyConfig,
-  LeaveType,
-  LeaveBalance,
-  LeaveRequest,
   LeaveSubmissionPayload,
 } from '../../api/leave/types';
 import { useSyncStore } from '../../stores/syncStore';
+import { LeaveDbService } from '../../db/services/LeaveDbService';
 
 export function useLeaveConfigQuery() {
   return useQuery<LeavePolicyConfig, Error>({
@@ -21,62 +18,37 @@ export function useLeaveConfigQuery() {
   });
 }
 
-export function useLeaveTypesQuery() {
-  return useQuery<LeaveType[], Error>({
-    queryKey: ['leave', 'types'],
+export function useLeaveTypesSync() {
+  return useQuery({
+    queryKey: ['leave', 'types_sync'],
     queryFn: async () => {
-      return await leaveService.listTypes();
+      const types = await leaveService.listTypes();
+      await LeaveDbService.syncLeaveTypes(types);
+      return types;
     },
-    staleTime: 15 * 60 * 1000, // 15 minutes cache
   });
 }
 
-export function useLeaveBalancesQuery(year?: number) {
-  return useQuery<LeaveBalance[], Error>({
-    queryKey: ['leave', 'balances', year],
+export function useLeaveBalancesSync(year?: number) {
+  return useQuery({
+    queryKey: ['leave', 'balances_sync', year],
     queryFn: async () => {
-      return await leaveService.listBalances(year);
+      const balances = await leaveService.listBalances(year);
+      await LeaveDbService.syncLeaveBalances(balances);
+      return balances;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes cache
   });
 }
 
-export function useLeaveRequestsQuery() {
-  const queue = useSyncStore((state) => state.queue);
-
-  const queryResult = useQuery<LeaveRequest[], Error>({
-    queryKey: ['leave', 'requests'],
+export function useLeaveRequestsSync() {
+  return useQuery({
+    queryKey: ['leave', 'requests_sync'],
     queryFn: async () => {
-      return await leaveService.listRequests();
+      const requests = await leaveService.listRequests();
+      await LeaveDbService.syncLeaveRequests(requests);
+      return requests;
     },
-    staleTime: 5 * 60 * 1000,
   });
-
-  const mergedData = useMemo(() => {
-    if (!queryResult.data) return queryResult.data;
-
-    const queuedRequests = queue
-      .filter((mut) => mut.type === 'LEAVE_REQUEST')
-      .map((mut, index) => {
-        const payload = mut.payload as LeaveSubmissionPayload;
-        return {
-          id: -Number(mut.id.replace(/\D/g, '').substring(0, 6)) || -(index + 1),
-          leave_type_id: Number(payload.leave_type_id),
-          start_date: payload.start_date,
-          end_date: payload.end_date,
-          status: 'pending_sync' as const,
-          reason: payload.reason,
-          days_requested: undefined,
-        } as LeaveRequest;
-      });
-
-    return [...queuedRequests, ...queryResult.data];
-  }, [queryResult.data, queue]);
-
-  return {
-    ...queryResult,
-    data: mergedData,
-  };
 }
 
 export function useCreateLeaveMutation() {
@@ -96,12 +68,14 @@ export function useCreateLeaveMutation() {
           endpoint: '/mobile/leave/requests',
           payload: cleanPayload,
         });
+        await LeaveDbService.addOptimisticRequest(cleanPayload);
         return { offline: true };
       }
 
       return await leaveService.createRequest(cleanPayload);
     },
     onSuccess: (data) => {
+      // Re-trigger sync
       queryClient.invalidateQueries({ queryKey: ['leave'] });
     },
   });

@@ -5,7 +5,11 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../app/hooks/useTheme';
 import { MainTemplate } from '../../components/templates';
 import { Card } from '../../components/atoms/Card';
-import { useLeaveBalancesQuery, useLeaveTypesQuery } from '../../app/hooks/useLeave';
+import { useLeaveBalancesSync, useLeaveTypesSync } from '../../app/hooks/useLeave';
+import withObservables from '@nozbe/with-observables';
+import { database } from '../../db';
+import LeaveBalanceModel from '../../db/models/LeaveBalanceModel';
+import LeaveTypeModel from '../../db/models/LeaveTypeModel';
 
 // SVG Progress Circle Component
 interface ProgressCircleProps {
@@ -53,30 +57,38 @@ const ProgressCircle: React.FC<ProgressCircleProps> = ({
   );
 };
 
-export function LeaveBalancesScreen() {
+interface LeaveBalancesScreenProps {
+  balances: LeaveBalanceModel[];
+  leaveTypes: LeaveTypeModel[];
+}
+
+const BaseLeaveBalancesScreen: React.FC<LeaveBalancesScreenProps> = ({ balances, leaveTypes }) => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
 
-  const { data: balances, isLoading: isBalancesLoading, refetch, isFetching } = useLeaveBalancesQuery();
-  const { data: leaveTypes, isLoading: isTypesLoading } = useLeaveTypesQuery();
+  const { isFetching: isBalancesFetching, refetch: refetchBalances, isLoading: isBalancesLoading } = useLeaveBalancesSync();
+  const { isLoading: isTypesLoading } = useLeaveTypesSync();
 
   const handleRefresh = () => {
-    refetch();
+    refetchBalances();
   };
-
-  const isLoading = isBalancesLoading || isTypesLoading;
 
   const typeMap = React.useMemo(() => {
     const map = new Map<number, string>();
     if (leaveTypes) {
-      leaveTypes.forEach((t) => map.set(t.id, t.name));
+      leaveTypes.forEach((type) => {
+        if (type.remoteId) map.set(type.remoteId, type.name);
+      });
     }
     return map;
   }, [leaveTypes]);
 
+  const isEmpty = balances.length === 0;
+  const isInitialLoading = isEmpty && (isBalancesLoading || isTypesLoading);
+
   return (
     <MainTemplate title={t('leave_balances_title')} showBack={true}>
-      {isLoading && !isFetching ? (
+      {isInitialLoading && !isBalancesFetching ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -85,7 +97,7 @@ export function LeaveBalancesScreen() {
           className="flex-1"
           refreshControl={
             <RefreshControl
-              refreshing={isFetching}
+              refreshing={isBalancesFetching}
               onRefresh={handleRefresh}
               colors={[colors.primary]}
               tintColor={colors.primary}
@@ -97,7 +109,7 @@ export function LeaveBalancesScreen() {
               Your accrued leave limits, usage details, and current balances for the calendar year.
             </Text>
 
-            {!balances || balances.length === 0 ? (
+            {isEmpty ? (
               <Card className="p-8 items-center justify-center">
                 <Text className="text-base text-center" style={{ color: colors.muted }}>
                   {t('leave_balances_empty')}
@@ -106,10 +118,10 @@ export function LeaveBalancesScreen() {
             ) : (
               <View className="space-y-4">
                 {balances.map((row) => {
-                  const typeName = typeMap.get(row.leave_type_id) ?? 'Leave Request';
-                  const entitled = row.entitled_days;
-                  const carriedOver = row.carried_over_days;
-                  const used = row.used_days;
+                  const typeName = typeMap.get(row.leaveTypeId) ?? 'Leave Request';
+                  const entitled = row.entitledDays;
+                  const carriedOver = row.carriedOverDays;
+                  const used = row.usedDays;
                   const total = entitled + carriedOver;
                   const remaining = Math.max(total - used, 0);
 
@@ -127,7 +139,7 @@ export function LeaveBalancesScreen() {
                   const circleSize = 90;
 
                   return (
-                    <Card key={row.id ?? row.leave_type_id} className="flex-row items-center justify-between p-5">
+                    <Card key={row.id} className="flex-row items-center justify-between p-5">
                       <View className="flex-1 pr-4 space-y-2">
                         <Text className="text-lg font-bold" style={{ color: colors.text }}>
                           {typeName}
@@ -191,4 +203,9 @@ export function LeaveBalancesScreen() {
       )}
     </MainTemplate>
   );
-}
+};
+
+export const LeaveBalancesScreen = withObservables([], () => ({
+  balances: database.collections.get<LeaveBalanceModel>('leave_balances').query().observe(),
+  leaveTypes: database.collections.get<LeaveTypeModel>('leave_types').query().observe(),
+}))(BaseLeaveBalancesScreen);

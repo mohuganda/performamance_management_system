@@ -18,7 +18,7 @@ import { DateRangePicker } from '../../components/molecules/DateRangePicker';
 import { AttachmentPicker, AttachmentFile } from '../../components/molecules/AttachmentPicker';
 import { FormStatusAlert } from '../../components/molecules/FormStatusAlert';
 import {
-  useLeaveTypesQuery,
+  useLeaveTypesSync,
   useLeaveConfigQuery,
   useCreateLeaveMutation,
 } from '../../app/hooks/useLeave';
@@ -31,14 +31,21 @@ import {
 import leaveService from '../../api/leave/service';
 import { Toaster } from '../../utils/toast';
 import { getApiErrorMessage } from '../../api/client';
+import withObservables from '@nozbe/with-observables';
+import { database } from '../../db';
+import LeaveTypeModel from '../../db/models/LeaveTypeModel';
 
-export function LeaveRequestScreen() {
+interface LeaveRequestScreenProps {
+  leaveTypes: LeaveTypeModel[];
+}
+
+const BaseLeaveRequestScreen: React.FC<LeaveRequestScreenProps> = ({ leaveTypes }) => {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const { colors } = useTheme();
 
   // Queries & Mutations
-  const { data: leaveTypes, isLoading: isTypesLoading } = useLeaveTypesQuery();
+  const { isLoading: isTypesLoading } = useLeaveTypesSync();
   const { data: config } = useLeaveConfigQuery();
   const createMutation = useCreateLeaveMutation();
 
@@ -55,16 +62,14 @@ export function LeaveRequestScreen() {
   const [formAlert, setFormAlert] = useState<{ type: 'error' | 'warning' | 'success'; message: string } | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-
-
   const selectedType = React.useMemo(() => {
     if (!leaveTypes || !form.leave_type_id) return undefined;
-    return leaveTypes.find((typeItem) => String(typeItem.id) === form.leave_type_id);
+    return leaveTypes.find((typeItem) => String(typeItem.remoteId) === form.leave_type_id);
   }, [leaveTypes, form.leave_type_id]);
 
   // Policy helpers
   const policy = config;
-  const minDate = React.useMemo(() => minLeaveStartDate(policy, selectedType), [policy, selectedType]);
+  const minDate = React.useMemo(() => minLeaveStartDate(policy, selectedType as any), [policy, selectedType]);
 
   const leaveDays = React.useMemo(() => {
     if (!form.start_date || !form.end_date) return 0;
@@ -77,10 +82,10 @@ export function LeaveRequestScreen() {
   }, [form.start_date, form.end_date]);
 
   const needsMedicalReport = React.useMemo(() => {
-    if (!selectedType || selectedType.medical_report_after_days === null || selectedType.medical_report_after_days === undefined) {
+    if (!selectedType || selectedType.medicalReportAfterDays === null || selectedType.medicalReportAfterDays === undefined) {
       return false;
     }
-    return leaveDays > selectedType.medical_report_after_days;
+    return leaveDays > selectedType.medicalReportAfterDays;
   }, [selectedType, leaveDays]);
 
   // Helper to read local file blob and convert to Base64 dataURL
@@ -94,8 +99,6 @@ export function LeaveRequestScreen() {
       reader.readAsDataURL(blob);
     });
   };
-
-
 
   // Submit standard leave request form
   const handleSubmit = async (submit: boolean) => {
@@ -117,7 +120,7 @@ export function LeaveRequestScreen() {
     }
 
     // 2. Policy-level date validations
-    const dateError = validateLeaveDates(form, policy, selectedType);
+    const dateError = validateLeaveDates(form, policy, selectedType as any);
     if (dateError) {
       setFormAlert({ type: 'warning', message: dateError });
       return;
@@ -128,7 +131,7 @@ export function LeaveRequestScreen() {
       setFormAlert({
         type: 'warning',
         message: t('leave_error_medical_required', {
-          days: selectedType?.medical_report_after_days ?? 0,
+          days: selectedType?.medicalReportAfterDays ?? 0,
         }),
       });
       return;
@@ -179,6 +182,10 @@ export function LeaveRequestScreen() {
     });
   };
 
+  const formattedLeaveTypes = React.useMemo(() => {
+    return leaveTypes.map(t => ({ id: t.remoteId || t.id, name: t.name }));
+  }, [leaveTypes]);
+
   return (
     <MainTemplate title={t('leave_apply_title')} showBack={true}>
       <ScrollView className="flex-1" contentContainerStyle={styles.scrollContent}>
@@ -208,13 +215,13 @@ export function LeaveRequestScreen() {
           <DropdownSelect
             label={t('leave_form_type')}
             placeholder="Choose a leave type..."
-            options={leaveTypes || []}
+            options={formattedLeaveTypes || []}
             selectedValue={form.leave_type_id}
             onSelect={(option) => {
               setForm((f) => ({ ...f, leave_type_id: String(option.id) }));
             }}
             error={validationErrors.leave_type_id}
-            loading={isTypesLoading}
+            loading={isTypesLoading && leaveTypes.length === 0}
             className="mb-4"
           />
 
@@ -294,7 +301,7 @@ export function LeaveRequestScreen() {
 
     </MainTemplate>
   );
-}
+};
 
 const styles = StyleSheet.create({
   scrollContent: {
@@ -302,4 +309,7 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LeaveRequestScreen;
+export const LeaveRequestScreen = withObservables([], () => ({
+  leaveTypes: database.collections.get<LeaveTypeModel>('leave_types').query().observe(),
+}))(BaseLeaveRequestScreen);
+
