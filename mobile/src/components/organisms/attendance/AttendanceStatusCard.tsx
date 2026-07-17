@@ -2,9 +2,9 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { Clock } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../../app/hooks/useTheme';
-import { ActiveShiftTimer } from '../molecules/ActiveShiftTimer';
-import { ClockResponse } from '../../api/attendance/types';
+import { useTheme } from '../../../app/hooks/useTheme';
+import { ActiveShiftTimer } from '../../molecules/ActiveShiftTimer';
+import { ClockResponse } from '../../../api/attendance/types';
 
 interface AttendanceStatusCardProps {
   isClockedIn: boolean;

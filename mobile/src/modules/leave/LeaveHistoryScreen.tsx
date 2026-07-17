@@ -7,7 +7,7 @@ import { Card } from '../../components/atoms/Card';
 import { Badge } from '../../components/atoms/Badge';
 import { useLeaveRequestsQuery, useLeaveTypesQuery } from '../../app/hooks/useLeave';
 import { formatDisplayDate, parseISODate } from '../../utils/leavePolicy';
-import { LeaveHistoryCard } from './components/LeaveHistoryCard';
+import { LeaveHistoryCard } from '../../components/organisms/leave/LeaveHistoryCard';
 import { EmptyState } from '../../components/molecules/EmptyState';
 import { Calendar } from 'lucide-react-native';
 
@@ -56,7 +56,7 @@ export function LeaveHistoryScreen() {
           contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
           ListEmptyComponent={
             <View className="py-12">
-              <EmptyState 
+              <EmptyState
                 title={t('leave_history_empty_title', 'No Leave History')}
                 description={t('leave_history_empty')}
                 icon={<Calendar size={48} color={colors.muted} />}
@@ -81,12 +81,12 @@ export function LeaveHistoryScreen() {
             }
 
             return (
-              <LeaveHistoryCard 
-                item={item} 
-                typeName={typeName} 
-                displayStart={displayStart} 
-                displayEnd={displayEnd} 
-                duration={duration} 
+              <LeaveHistoryCard
+                item={item}
+                typeName={typeName}
+                displayStart={displayStart}
+                displayEnd={displayEnd}
+                duration={duration}
               />
             );
           }}

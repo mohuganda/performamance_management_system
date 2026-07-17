@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../app/hooks/useTheme';
-import { Card } from '../../../components/atoms/Card';
-import { Badge } from '../../../components/atoms/Badge';
+import { Card } from '../../atoms/Card';
+import { Badge } from '../../atoms/Badge';
 import { LeaveRequest } from '../../../api/leave/types';
 
 interface LeaveHistoryCardProps {

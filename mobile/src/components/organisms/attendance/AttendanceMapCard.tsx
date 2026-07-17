@@ -3,7 +3,7 @@ import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'rea
 import MapView, { Marker, Circle } from 'react-native-maps';
 import { Navigation } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../../app/hooks/useTheme';
+import { useTheme } from '../../../app/hooks/useTheme';
 
 interface AttendanceMapCardProps {
   coords: { latitude: number; longitude: number; accuracy?: number } | null;

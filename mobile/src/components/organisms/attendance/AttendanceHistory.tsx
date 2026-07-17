@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { CheckCircle, HelpCircle, RefreshCw } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../../app/hooks/useTheme';
-import { ClockResponse } from '../../api/attendance/types';
+import { useTheme } from '../../../app/hooks/useTheme';
+import { ClockResponse } from '../../../api/attendance/types';
 
 interface AttendanceHistoryProps {
   isLoading: boolean;

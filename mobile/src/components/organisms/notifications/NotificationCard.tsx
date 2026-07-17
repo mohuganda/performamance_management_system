@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Linking } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../app/hooks/useTheme';
-import { Card } from '../../../components/atoms/Card';
+import { Card } from '../../atoms/Card';
 import { NotificationRow } from '../../../api/notifications/types';
 import { formatDisplayDate, parseISODate } from '../../../utils/leavePolicy';
 import { Bell, Info, AlertTriangle, CheckCircle, XCircle } from 'lucide-react-native';

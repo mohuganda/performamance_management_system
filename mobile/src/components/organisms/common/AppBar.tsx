@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft } from 'lucide-react-native';
 import { View, TouchableOpacity, Text } from 'react-native';
 
-import { useTheme } from '../../app/hooks/useTheme';
+import { useTheme } from '../../../app/hooks/useTheme';
 
 interface AppBarProps {
     title: string;

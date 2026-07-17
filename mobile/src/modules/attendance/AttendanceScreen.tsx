@@ -18,9 +18,9 @@ import { useAttendanceListQuery, useClockMutation } from '../../app/hooks/useAtt
 import { useLocationPermission } from '../../app/hooks/useLocationPermission';
 import { LocationPermissionModal } from '../../components/molecules/LocationPermissionModal';
 import { attendanceNotesSchema } from '../../app/schemas/attendance';
-import { AttendanceStatusCard } from '../../components/organisms/AttendanceStatusCard';
-import { AttendanceMapCard } from '../../components/organisms/AttendanceMapCard';
-import { AttendanceHistory } from '../../components/organisms/AttendanceHistory';
+import { AttendanceStatusCard } from '../../components/organisms/attendance/AttendanceStatusCard';
+import { AttendanceMapCard } from '../../components/organisms/attendance/AttendanceMapCard';
+import { AttendanceHistory } from '../../components/organisms/attendance/AttendanceHistory';
 import { useOosRequestsQuery } from '../../app/hooks/useOos';
 import { getDistanceMeters } from '../../utils/haversine';
 import { Toaster } from '../../utils/toast';

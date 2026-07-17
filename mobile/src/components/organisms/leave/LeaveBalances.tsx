@@ -2,9 +2,9 @@ import React from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../../app/hooks/useTheme';
-import { Card } from '../atoms/Card';
-import { useLeaveBalancesQuery, useLeaveTypesQuery } from '../../app/hooks/useLeave';
+import { useTheme } from '../../../app/hooks/useTheme';
+import { Card } from '../../atoms/Card';
+import { useLeaveBalancesQuery, useLeaveTypesQuery } from '../../../app/hooks/useLeave';
 
 // SVG Progress Circle Component
 interface ProgressCircleProps {

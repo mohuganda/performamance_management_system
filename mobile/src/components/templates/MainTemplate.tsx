@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { Screen } from './Screen';
-import { AppBar } from '../organisms/AppBar';
+import { AppBar } from '../organisms/common/AppBar';
 
 interface MainTemplateProps {
   title: string;

@@ -7,7 +7,7 @@ import { Card } from '../../components/atoms/Card';
 import { EmptyState } from '../../components/molecules/EmptyState';
 import { useNotificationsInfiniteQuery, useMarkReadMutation, useMarkAllReadMutation, useUnreadCountQuery } from '../../app/hooks/useNotifications';
 import { NotificationRow } from '../../api/notifications/types';
-import { NotificationCard } from './components/NotificationCard';
+import { NotificationCard } from '../../components/organisms/notifications/NotificationCard';
 import { Bell } from 'lucide-react-native';
 
 export function NotificationsScreen() {

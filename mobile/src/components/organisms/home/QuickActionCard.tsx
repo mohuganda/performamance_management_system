@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { ChevronRight, LucideIcon } from 'lucide-react-native';
-import { useTheme } from '../../app/hooks/useTheme';
+import { useTheme } from '../../../app/hooks/useTheme';
 
 interface QuickActionCardProps {
   title: string;

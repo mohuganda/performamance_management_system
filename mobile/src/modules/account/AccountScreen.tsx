@@ -9,7 +9,7 @@ import { useTheme } from '../../app/hooks/useTheme';
 import { LayoutTemplate } from '../../components/templates/LayoutTemplate';
 import { UserProfilePicture } from '../../components/molecules/UserAvatar';
 import { Badge } from '../../components/atoms/Badge';
-import { QuickActionCard } from '../../components/organisms/QuickActionCard';
+import { QuickActionCard } from '../../components/organisms/home/QuickActionCard';
 
 export function AccountScreen() {
   const { t } = useTranslation();

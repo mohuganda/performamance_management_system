@@ -5,9 +5,9 @@ import { Calendar, MapPin, FileText, ChevronRight, HelpCircle } from 'lucide-rea
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../app/hooks/useTheme';
 import { MainTemplate } from '../../components/templates';
-import { LeaveBalances } from '../../components/organisms/LeaveBalances';
+import { LeaveBalances } from '../../components/organisms/leave/LeaveBalances';
 import { LeaveGuideModal } from '../../components/organisms/modals/LeaveGuideModal';
-import { QuickActionCard } from '../../components/organisms/QuickActionCard';
+import { QuickActionCard } from '../../components/organisms/home/QuickActionCard';
 
 export function LeaveScreen() {
   const { t } = useTranslation();

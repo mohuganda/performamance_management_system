@@ -5,9 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { MainTemplate } from '../../components/templates';
 import { useTheme } from '../../app/hooks/useTheme';
 import { useAuthStore } from '../../stores/authStore';
-import { OosHistoryTab } from './components/OosHistoryTab';
-import { OosRequestTab } from './components/OosRequestTab';
-import { OosApprovalsTab } from './components/OosApprovalsTab';
+import { OosHistoryTab } from '../../components/organisms/oos/OosHistoryTab';
+import { OosRequestTab } from '../../components/organisms/oos/OosRequestTab';
+import { OosApprovalsTab } from '../../components/organisms/oos/OosApprovalsTab';
 import { FileText, MapPin, CheckSquare } from 'lucide-react-native';
 
 export function OosScreen() {

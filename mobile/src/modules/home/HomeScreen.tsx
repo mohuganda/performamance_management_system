@@ -7,10 +7,10 @@ import { useAuthStore } from '../../stores/authStore';
 import { useTheme } from '../../app/hooks/useTheme';
 import { LayoutTemplate } from '../../components/templates/LayoutTemplate';
 import { Clock, Calendar, MapPin, CheckSquare, Activity } from 'lucide-react-native';
-import { HomeHeader } from '../../components/organisms/HomeHeader';
-import { ActionCard } from '../../components/organisms/ActionCard';
-import { StatCard } from '../../components/organisms/StatCard';
-import { AnnouncementBanner } from '../../components/organisms/AnnouncementBanner';
+import { HomeHeader } from '../../components/organisms/home/HomeHeader';
+import { ActionCard } from '../../components/organisms/home/ActionCard';
+import { StatCard } from '../../components/organisms/common/StatCard';
+import { AnnouncementBanner } from '../../components/organisms/home/AnnouncementBanner';
 import { useApprovalsInboxQuery } from '../../app/hooks/useApprovals';
 
 export function HomeScreen() {

@@ -3,12 +3,12 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SvgXml } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
-import { useAuthStore } from '../../stores/authStore';
-import { useTheme } from '../../app/hooks/useTheme';
-import { UserProfilePicture } from '../molecules/UserAvatar';
-import { NotificationIcon } from '../molecules/NotificationIcon';
-import { useUnreadCountQuery } from '../../app/hooks/useNotifications';
-import { LOGO_SVG } from '../../assets/logoSvg';
+import { useAuthStore } from '../../../stores/authStore';
+import { useTheme } from '../../../app/hooks/useTheme';
+import { UserProfilePicture } from '../../molecules/UserAvatar';
+import { NotificationIcon } from '../../molecules/NotificationIcon';
+import { useUnreadCountQuery } from '../../../app/hooks/useNotifications';
+import { LOGO_SVG } from '../../../assets/logoSvg';
 
 export function HomeHeader() {
   const { t } = useTranslation();

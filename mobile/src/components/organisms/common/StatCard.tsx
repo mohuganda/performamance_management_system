@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, View, Text } from 'react-native';
-import { useTheme } from '../../app/hooks/useTheme';
+import { useTheme } from '../../../app/hooks/useTheme';
 
 export interface StatCardProps {
   title: string;
