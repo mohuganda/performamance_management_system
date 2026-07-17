@@ -225,5 +225,13 @@
   "profile_update_failed": "Update Failed",
   "profile_update_failed_desc": "Failed to update profile. Please try again.",
   "profile_update_success": "Profile Updated",
-  "profile_update_success_desc": "Your profile changes have been saved."
+  "profile_update_success_desc": "Your profile changes have been saved.",
+  
+  "notifications_empty_title": "All Caught Up!",
+  "notifications_empty_desc": "You have no new notifications right now.",
+  "notifications_mark_all_read": "Mark all as read",
+  "notifications_mark_read": "Mark as read",
+  "notifications_unread": "Unread",
+  "notifications_error": "Failed to load notifications",
+  "notifications_action_button": "View Details"
 }

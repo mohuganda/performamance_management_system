@@ -7,6 +7,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useTheme } from '../../app/hooks/useTheme';
 import { UserProfilePicture } from '../molecules/UserAvatar';
 import { NotificationIcon } from '../molecules/NotificationIcon';
+import { useUnreadCountQuery } from '../../app/hooks/useNotifications';
 import { LOGO_SVG } from '../../assets/logoSvg';
 
 export function HomeHeader() {
@@ -14,6 +15,8 @@ export function HomeHeader() {
   const navigation = useNavigation<any>();
   const { user } = useAuthStore();
   const { colors } = useTheme();
+  
+  const { data: unreadCount } = useUnreadCountQuery();
 
   return (
     <View
@@ -40,7 +43,7 @@ export function HomeHeader() {
       <View className="flex-row items-center gap-3">
         <NotificationIcon
           onPress={() => navigation.navigate('Notifications')}
-          badgeCount={2}
+          badgeCount={unreadCount ?? 0}
         />
         <TouchableOpacity
           onPress={() => navigation.navigate('Profile')}
