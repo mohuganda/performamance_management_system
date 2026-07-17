@@ -7,10 +7,13 @@ import { Card } from '../../components/atoms/Card';
 import { UserAvatar } from '../../components/atoms/UserAvatar';
 import { Badge } from '../../components/atoms/Badge';
 import { MainTemplate } from '../../components/templates';
-import { useProfileQuery, useUpdateProfileMutation } from '../../app/hooks/useProfile';
+import { useProfileSync, useUpdateProfileMutation } from '../../app/hooks/useProfile';
 import { InteractiveSignaturePad } from '../../components/molecules/InteractiveSignaturePad';
 import { pick, types } from '@react-native-documents/picker';
 import { colors } from '../../theme/colors';
+import withObservables from '@nozbe/with-observables';
+import { database } from '../../db/index';
+import ProfileModel from '../../db/models/ProfileModel';
 
 const fileUriToBase64 = async (uri: string): Promise<string> => {
   const response = await fetch(uri);
@@ -25,17 +28,14 @@ const fileUriToBase64 = async (uri: string): Promise<string> => {
   });
 };
 
-export function ProfileScreen() {
+function BaseProfileScreen({ dbProfile }: { dbProfile?: ProfileModel[] }) {
   const { t } = useTranslation();
   const { logout, user } = useAuthStore();
   const [signatureModalVisible, setSignatureModalVisible] = useState(false);
 
-  const { data: profile, isLoading, refetch, isFetching } = useProfileQuery();
+  // Background sync trigger
+  const { isLoading, refetch, isFetching } = useProfileSync();
   const updateMutation = useUpdateProfileMutation();
-
-  const handleSignOut = async () => {
-    await logout();
-  };
 
   const handlePickPhoto = async () => {
     try {
@@ -56,9 +56,22 @@ export function ProfileScreen() {
     updateMutation.mutate({ signature_image: signatureDataUrl });
   };
 
+  const activeDbProfile = dbProfile && dbProfile.length > 0 ? dbProfile[0] : null;
+
+  let staff = null;
+  let dbUser = null;
+
+  if (activeDbProfile) {
+    try {
+      staff = JSON.parse(activeDbProfile.staffData);
+      dbUser = JSON.parse(activeDbProfile.userData);
+    } catch (e) {
+      console.warn('Failed to parse ProfileModel JSON');
+    }
+  }
+
   // We merge authStore user and fetched profile user
-  const currentUser: any = profile?.user || user;
-  const staff = profile?.staff;
+  const currentUser: any = dbUser || user;
 
   return (
     <MainTemplate title={t('profile_title')} showBack={true}>
@@ -198,3 +211,7 @@ export function ProfileScreen() {
     </MainTemplate>
   );
 }
+
+export const ProfileScreen = withObservables([], () => ({
+  dbProfile: database.collections.get<ProfileModel>('profiles').query().observe(),
+}))(BaseProfileScreen);

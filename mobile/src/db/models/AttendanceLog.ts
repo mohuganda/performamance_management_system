@@ -7,7 +7,7 @@ export default class AttendanceLog extends Model {
   @field('remote_id') remoteId!: number | null;
   @field('action') action!: string;
   @field('clocked_at') clockedAt!: string;
-  @field('created_at') createdAt!: string | null;
+  @field('server_created_at') createdAt!: string | null;
   @field('latitude') latitude!: number;
   @field('longitude') longitude!: number;
   @field('accuracy_meters') accuracyMeters!: number | null;

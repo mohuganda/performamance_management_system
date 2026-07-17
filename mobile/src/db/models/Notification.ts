@@ -11,6 +11,6 @@ export default class Notification extends Model {
   @field('message') message!: string;
   @field('action_url') actionUrl!: string | null;
   @field('is_read') isRead!: boolean;
-  @field('created_at') createdAt!: string;
+  @field('server_created_at') createdAt!: string;
   @field('read_at') readAt!: string | null;
 }
