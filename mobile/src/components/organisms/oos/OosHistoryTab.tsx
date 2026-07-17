@@ -1,25 +1,31 @@
 import React, { useMemo } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useOosRequestsQuery, useOosReasonsQuery } from '../../../app/hooks/useOos';
+import { useOosRequestsSync, useOosReasonsQuery } from '../../../app/hooks/useOos';
 import { useTheme } from '../../../app/hooks/useTheme';
 import { FileText, MapPin, Calendar, CheckCircle2, AlertTriangle, Clock, RefreshCw } from 'lucide-react-native';
+import withObservables from '@nozbe/with-observables';
+import { database } from '../../../db';
+import OosRequestModel from '../../../db/models/OosRequest';
 
-export function OosHistoryTab() {
+interface OosHistoryTabProps {
+  requests: OosRequestModel[];
+}
+
+const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
   const { t } = useTranslation();
   const { colors } = useTheme();
 
-  const requestsQuery = useOosRequestsQuery();
+  const requestsSync = useOosRequestsSync();
   const reasonsQuery = useOosReasonsQuery();
 
   const sortedRequests = useMemo(() => {
-    const list = Array.isArray(requestsQuery.data) ? requestsQuery.data : [];
-    return [...list].sort((a, b) => {
-      const dateA = new Date(a.start_date).getTime();
-      const dateB = new Date(b.start_date).getTime();
+    return [...requests].sort((a, b) => {
+      const dateA = new Date(a.startDate).getTime();
+      const dateB = new Date(b.startDate).getTime();
       return dateB - dateA;
     });
-  }, [requestsQuery.data]);
+  }, [requests]);
 
   const reasonsMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -31,7 +37,7 @@ export function OosHistoryTab() {
     return map;
   }, [reasonsQuery.data]);
 
-  if (requestsQuery.isLoading || reasonsQuery.isLoading) {
+  if (requestsSync.isLoading && requests.length === 0) {
     return (
       <View className="flex-1 justify-center items-center py-12">
         <ActivityIndicator size="small" color={colors.primary} />
@@ -105,11 +111,11 @@ export function OosHistoryTab() {
         {sortedRequests.map((req) => {
           const statusStyle = getStatusStyles(req.status);
           const StatusIcon = statusStyle.Icon;
-          const reasonLabel = reasonsMap.get(req.reason_id) || 'Travel Assignment';
+          const reasonLabel = reasonsMap.get(req.reasonId) || 'Travel Assignment';
 
           return (
             <View
-              key={req.id}
+              key={req.remoteId || req.id}
               className="p-4 border shadow-sm rounded-none"
               style={{
                 backgroundColor: colors.surface,
@@ -133,7 +139,7 @@ export function OosHistoryTab() {
               <View className="flex-row items-center gap-2 mb-2">
                 <Calendar size={14} color={colors.muted} />
                 <Text className="text-xs font-medium" style={{ color: colors.text }}>
-                  {req.start_date} to {req.end_date}
+                  {req.startDate} to {req.endDate}
                 </Text>
               </View>
 
@@ -142,26 +148,26 @@ export function OosHistoryTab() {
                 <MapPin size={14} color={colors.muted} />
                 <View className="flex-1">
                   <Text className="text-xs font-bold" style={{ color: colors.text }}>
-                    {req.destination_name}
+                    {req.destinationName}
                   </Text>
-                  {req.destination_address && (
+                  {req.destinationAddress && (
                     <Text className="text-[11px] mt-0.5" style={{ color: colors.muted }}>
-                      {req.destination_address}
+                      {req.destinationAddress}
                     </Text>
                   )}
                 </View>
               </View>
 
               {/* Deliverables / Remarks details */}
-              {(req.expected_deliverables || req.remarks) && (
+              {(req.expectedDeliverables || req.remarks) && (
                 <View className="mt-3 pt-3 border-t space-y-2" style={{ borderColor: `${colors.border}60` }}>
-                  {req.expected_deliverables && (
+                  {req.expectedDeliverables && (
                     <View>
                       <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colors.muted }}>
                         {t('oos_form_deliverables')}
                       </Text>
                       <Text className="text-xs mt-0.5" style={{ color: colors.text }}>
-                        {req.expected_deliverables}
+                        {req.expectedDeliverables}
                       </Text>
                     </View>
                   )}
@@ -183,5 +189,8 @@ export function OosHistoryTab() {
       </View>
     </ScrollView>
   );
-}
-export default OosHistoryTab;
+};
+
+export const OosHistoryTab = withObservables([], () => ({
+  requests: database.collections.get<OosRequestModel>('oos_requests').query().observe(),
+}))(BaseOosHistoryTab);

@@ -11,7 +11,7 @@ import { HomeHeader } from '../../components/organisms/home/HomeHeader';
 import { ActionCard } from '../../components/organisms/home/ActionCard';
 import { StatCard } from '../../components/organisms/common/StatCard';
 import { AnnouncementBanner } from '../../components/organisms/home/AnnouncementBanner';
-import { useApprovalsInboxQuery } from '../../app/hooks/useApprovals';
+import { useApprovalsInboxSync } from '../../app/hooks/useApprovals';
 
 export function HomeScreen() {
   const { t } = useTranslation();
@@ -27,7 +27,7 @@ export function HomeScreen() {
     'dashboard.hr',
   ]);
 
-  const { data: inboxData } = useApprovalsInboxQuery();
+  const { data: inboxData } = useApprovalsInboxSync();
   const stats = inboxData?.stats;
 
   return (

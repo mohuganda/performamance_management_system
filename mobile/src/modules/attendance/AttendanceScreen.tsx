@@ -21,13 +21,14 @@ import { attendanceNotesSchema } from '../../app/schemas/attendance';
 import { AttendanceStatusCard } from '../../components/organisms/attendance/AttendanceStatusCard';
 import { AttendanceMapCard } from '../../components/organisms/attendance/AttendanceMapCard';
 import { AttendanceHistory } from '../../components/organisms/attendance/AttendanceHistory';
-import { useOosRequestsQuery } from '../../app/hooks/useOos';
+import { useOosRequestsSync } from '../../app/hooks/useOos';
 import { getDistanceMeters } from '../../utils/haversine';
 import { Toaster } from '../../utils/toast';
 import { getApiErrorMessage } from '../../api/client';
 import withObservables from '@nozbe/with-observables';
 import { database } from '../../db';
 import AttendanceLog from '../../db/models/AttendanceLog';
+import OosRequestModel from '../../db/models/OosRequest';
 
 // Default map coordinate centered on Kampala, Uganda if location is loading
 const DEFAULT_COORDS = {
@@ -39,9 +40,10 @@ const DEFAULT_COORDS = {
 
 interface AttendanceScreenProps {
   clocks: AttendanceLog[];
+  oosRequests: OosRequestModel[];
 }
 
-const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks }) => {
+const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks, oosRequests }) => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
 
@@ -67,20 +69,19 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks }) => {
   // TanStack Query Hooks (ListSync triggers background update)
   const clocksQuery = useAttendanceListSync();
   const clockMutation = useClockMutation();
-  const oosQuery = useOosRequestsQuery();
+  useOosRequestsSync(); // Just to trigger background sync
 
   // Find active approved OOS request for today
   const activeOosRequest = useMemo(() => {
-    if (!oosQuery.data) return null;
     const todayStr = new Date().toISOString().split('T')[0];
-    return oosQuery.data.find((req) => {
+    return oosRequests.find((req) => {
       const isApproved = req.status === 'approved';
       if (!isApproved) return false;
-      const start = req.start_date.split('T')[0];
-      const end = req.end_date.split('T')[0];
+      const start = req.startDate.split('T')[0];
+      const end = req.endDate.split('T')[0];
       return todayStr >= start && todayStr <= end;
     });
-  }, [oosQuery.data]);
+  }, [oosRequests]);
 
   // Compute distance from current location to approved OOS coordinates
   const oosDistance = useMemo(() => {
@@ -88,15 +89,15 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks }) => {
     return getDistanceMeters(
       coords.latitude,
       coords.longitude,
-      activeOosRequest.destination_latitude,
-      activeOosRequest.destination_longitude
+      activeOosRequest.destinationLatitude,
+      activeOosRequest.destinationLongitude
     );
   }, [coords, activeOosRequest]);
 
   // Determine if user is within the approved OOS geofence bounds (500m fallback)
   const isWithinOosGeofence = useMemo(() => {
     if (oosDistance === null || !activeOosRequest) return false;
-    return oosDistance <= (activeOosRequest.geofence_radius_meters || 500);
+    return oosDistance <= (activeOosRequest.geofenceRadiusMeters || 500);
   }, [oosDistance, activeOosRequest]);
 
   // Background GPS Position capture loop
@@ -202,7 +203,7 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks }) => {
         longitude: coords.longitude,
         accuracy_meters: coords.accuracy,
         notes: notes.trim(),
-        location_label: activeOosRequest ? activeOosRequest.destination_name : undefined,
+        location_label: activeOosRequest ? activeOosRequest.destinationName : undefined,
       });
 
       if (response === null) {
@@ -279,7 +280,7 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks }) => {
                 <View className="flex-row items-center gap-2 mb-1">
                   <MapPin size={16} color={isWithinOosGeofence ? colors.success : colors.warning} />
                   <Text className="font-bold text-xs flex-1" style={{ color: colors.text }}>
-                    {t('oos_active_deployment', { destination: activeOosRequest.destination_name })}
+                    {t('oos_active_deployment', { destination: activeOosRequest.destinationName })}
                   </Text>
                 </View>
                 {oosDistance !== null ? (
@@ -408,4 +409,5 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks }) => {
 
 export const AttendanceScreen = withObservables([], () => ({
   clocks: database.collections.get<AttendanceLog>('attendance_logs').query().observe(),
+  oosRequests: database.collections.get<OosRequestModel>('oos_requests').query().observe(),
 }))(BaseAttendanceScreen);

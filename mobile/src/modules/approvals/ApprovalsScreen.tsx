@@ -1,18 +1,21 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { MainTemplate } from '../../components/templates';
-import { useApprovalsInboxQuery, useActApprovalMutation } from '../../app/hooks/useApprovals';
+import { useApprovalsInboxSync, useActApprovalMutation } from '../../app/hooks/useApprovals';
 import { useTheme } from '../../app/hooks/useTheme';
 import { Card } from '../../components/atoms/Card';
-import { Badge } from '../../components/atoms/Badge';
 import { EmptyState } from '../../components/molecules/EmptyState';
-import { ApprovalInboxItem } from '../../api/approvals/types';
+import { ApprovalInboxItem, ApprovalInboxStats } from '../../api/approvals/types';
 import { CalendarDays, MapPin, Activity, CheckCircle2, Clock, XCircle } from 'lucide-react-native';
+import withObservables from '@nozbe/with-observables';
+import { database } from '../../db';
+import ApprovalTask from '../../db/models/ApprovalTask';
+import { ApprovalsDbService } from '../../db/services/ApprovalsDbService';
 
 type FilterTab = 'all' | 'leave' | 'oos' | 'performance';
 
-function getModuleStyles(module: ApprovalInboxItem['module']) {
+function getModuleStyles(module: string) {
   switch (module) {
     case 'leave':
       return { bg: '#E0F2FE', text: '#0369A1', icon: CalendarDays };
@@ -26,7 +29,7 @@ function getModuleStyles(module: ApprovalInboxItem['module']) {
   }
 }
 
-function matchesFilter(item: ApprovalInboxItem, filter: FilterTab) {
+function matchesFilter(item: ApprovalTask, filter: FilterTab) {
   if (filter === 'all') return true;
   if (filter === 'leave') return item.module === 'leave';
   if (filter === 'oos') return item.module === 'oos';
@@ -39,32 +42,65 @@ function waitingLabel(days: number) {
   return `${days} days`;
 }
 
-export function ApprovalsScreen() {
+interface ApprovalsScreenProps {
+  tasks: ApprovalTask[];
+}
+
+const BaseApprovalsScreen: React.FC<ApprovalsScreenProps> = ({ tasks }) => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
 
   const [filter, setFilter] = useState<FilterTab>('all');
   const [comments, setComments] = useState<Record<string, string>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [stats, setStats] = useState<ApprovalInboxStats | null>(null);
 
-  const { data, isLoading } = useApprovalsInboxQuery();
+  // Trigger background sync
+  const inboxSync = useApprovalsInboxSync();
   const actMutation = useActApprovalMutation();
 
-  const stats = data?.stats;
-  const filtered = useMemo(() => {
-    const rows = data?.pending ?? [];
-    return rows.filter((row) => matchesFilter(row, filter));
-  }, [filter, data?.pending]);
+  // Load stats from local storage on mount and when sync finishes
+  useEffect(() => {
+    ApprovalsDbService.getStats().then((localStats) => {
+      if (localStats) setStats(localStats);
+    });
+  }, [inboxSync.dataUpdatedAt]); // update stats when the background sync completes
 
-  const handleAct = (item: ApprovalInboxItem, approve: boolean) => {
-    setActiveId(item.id);
+  const filtered = useMemo(() => {
+    return tasks.filter((row) => matchesFilter(row, filter));
+  }, [filter, tasks]);
+
+  const handleAct = (item: ApprovalTask, approve: boolean) => {
+    if (!item.remoteId) return;
+
+    // Convert local Model back to the expected payload for the hook
+    const inboxItem: ApprovalInboxItem = {
+      id: item.remoteId,
+      module: item.module as any,
+      type_label: item.typeLabel,
+      staff_name: item.staffName,
+      title: item.title,
+      subtitle: item.subtitle,
+      status: item.status,
+      stage_name: item.stageName || undefined,
+      submitted_at: item.submittedAt || undefined,
+      waiting_days: item.waitingDays,
+      can_act: item.canAct,
+      approval_id: item.approvalId || undefined,
+      request_id: item.requestId || undefined,
+      report_id: item.reportId || undefined,
+      ppa_id: item.ppaId || undefined,
+      meta: item.metaString ? JSON.parse(item.metaString) : undefined,
+    };
+
+    setActiveId(item.remoteId);
     actMutation.mutate(
-      { item, approve, comments: comments[item.id] },
+      { item: inboxItem, approve, comments: comments[item.remoteId] },
       {
         onSuccess: () => {
           setComments((prev) => {
             const next = { ...prev };
-            delete next[item.id];
+            delete next[item.remoteId!];
             return next;
           });
           setActiveId(null);
@@ -132,7 +168,7 @@ export function ApprovalsScreen() {
           {renderTabs()}
         </View>
 
-        {isLoading ? (
+        {inboxSync.isLoading && tasks.length === 0 ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
@@ -178,11 +214,13 @@ export function ApprovalsScreen() {
             ) : (
               <View className="gap-4">
                 {filtered.map((item) => {
+                  const remoteId = item.remoteId!;
                   const style = getModuleStyles(item.module);
-                  const isMutating = actMutation.isPending && activeId === item.id;
+                  const isMutating = actMutation.isPending && activeId === remoteId;
+                  const meta = item.metaString ? JSON.parse(item.metaString) : null;
 
                   return (
-                    <Card key={item.id} className="p-4">
+                    <Card key={remoteId} className="p-4">
                       <View className="flex-row justify-between items-start mb-3">
                         <View className="flex-row flex-wrap gap-2 items-center flex-1 pr-2">
                           <View
@@ -190,12 +228,12 @@ export function ApprovalsScreen() {
                             style={{ backgroundColor: style.bg }}
                           >
                             <Text className="text-xs font-medium normal-case" style={{ color: style.text }}>
-                              {item.type_label}
+                              {item.typeLabel}
                             </Text>
                           </View>
-                          {item.stage_name && (
+                          {item.stageName && (
                             <Text className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">
-                              {item.stage_name}
+                              {item.stageName}
                             </Text>
                           )}
                         </View>
@@ -204,13 +242,13 @@ export function ApprovalsScreen() {
                             {t('approvals_waiting')}
                           </Text>
                           <Text className="text-xs font-bold" style={{ color: colors.text }}>
-                            {waitingLabel(item.waiting_days)}
+                            {waitingLabel(item.waitingDays)}
                           </Text>
                         </View>
                       </View>
 
                       <Text className="text-base font-bold mb-1" style={{ color: colors.text }}>
-                        {item.staff_name}
+                        {item.staffName}
                       </Text>
                       <Text className="text-sm font-medium mb-1" style={{ color: colors.text }}>
                         {item.title}
@@ -219,14 +257,14 @@ export function ApprovalsScreen() {
                         {item.subtitle}
                       </Text>
 
-                      {typeof item.meta?.reason === 'string' && item.meta.reason && (
+                      {typeof meta?.reason === 'string' && meta.reason && (
                         <View className="mt-2 p-3 bg-gray-50 rounded-md border border-gray-100">
                           <Text className="text-xs font-bold text-gray-700 mb-1">{t('approvals_reason')}</Text>
-                          <Text className="text-sm text-gray-800">{item.meta.reason}</Text>
+                          <Text className="text-sm text-gray-800">{meta.reason}</Text>
                         </View>
                       )}
 
-                      {item.can_act && (
+                      {item.canAct && (
                         <View className="mt-4 pt-4 border-t" style={{ borderTopColor: colors.border }}>
                           <TextInput
                             className="border rounded-md px-3 py-2 text-sm mb-3 min-h-[60px]"
@@ -238,8 +276,8 @@ export function ApprovalsScreen() {
                             }}
                             placeholder={t('approvals_comments_optional')}
                             placeholderTextColor={colors.muted}
-                            value={comments[item.id] || ''}
-                            onChangeText={(val) => setComments(p => ({ ...p, [item.id]: val }))}
+                            value={comments[remoteId] || ''}
+                            onChangeText={(val) => setComments(p => ({ ...p, [remoteId]: val }))}
                             multiline
                             numberOfLines={2}
                             editable={!isMutating}
@@ -296,4 +334,8 @@ export function ApprovalsScreen() {
       </KeyboardAvoidingView>
     </MainTemplate>
   );
-}
+};
+
+export const ApprovalsScreen = withObservables([], () => ({
+  tasks: database.collections.get<ApprovalTask>('approval_tasks').query().observe(),
+}))(BaseApprovalsScreen);

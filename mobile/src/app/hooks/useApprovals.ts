@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import approvalsService from '../../api/approvals/service';
@@ -8,58 +8,27 @@ import {
   ApprovalInboxStats,
 } from '../../api/approvals/types';
 import { useSyncStore } from '../../stores/syncStore';
+import { ApprovalsDbService } from '../../db/services/ApprovalsDbService';
 
-export function useApprovalsInboxQuery() {
+export function useApprovalsInboxSync() {
   const queue = useSyncStore((state) => state.queue);
 
-  const queryResult = useQuery<ApprovalsInboxResponse, Error>({
-    queryKey: ['approvals', 'inbox'],
+  return useQuery({
+    queryKey: ['approvals', 'inbox_sync'],
     queryFn: async () => {
-      return await approvalsService.inbox();
+      const data = await approvalsService.inbox();
+      
+      const queuedApprovalIds = queue
+        .filter((mut) => mut.type === 'APPROVAL_ACTION')
+        .map((mut) => mut.payload?.original_item_id as string)
+        .filter(Boolean);
+        
+      await ApprovalsDbService.saveStats(data.stats);
+      await ApprovalsDbService.syncInbox(data.pending, queuedApprovalIds);
+      
+      return data;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes cache
   });
-
-  const mergedData = useMemo(() => {
-    if (!queryResult.data) return queryResult.data;
-
-    // Find any approval actions in the sync queue
-    const queuedApprovalIds = queue
-      .filter((mut) => mut.type === 'APPROVAL_ACTION')
-      .map((mut) => mut.payload?.original_item_id as string)
-      .filter(Boolean);
-
-    // Filter out items that have a pending action in the offline queue
-    const updatedPending = queryResult.data.pending.filter(
-      (item) => !queuedApprovalIds.includes(item.id)
-    );
-
-    // Recalculate stats based on removed items
-    const removedItems = queryResult.data.pending.filter(
-      (item) => queuedApprovalIds.includes(item.id)
-    );
-
-    const stats: ApprovalInboxStats = { ...queryResult.data.stats };
-    
-    for (const item of removedItems) {
-      stats.pending_total--;
-      if (item.module === 'leave') stats.leave_pending--;
-      if (item.module === 'oos') stats.oos_pending--;
-      if (item.module === 'performance') stats.performance_pending--;
-      if (item.module === 'ppa') stats.ppa_pending--;
-    }
-
-    return {
-      ...queryResult.data,
-      stats,
-      pending: updatedPending,
-    };
-  }, [queryResult.data, queue]);
-
-  return {
-    ...queryResult,
-    data: mergedData,
-  };
 }
 
 export function useActApprovalMutation() {
@@ -112,22 +81,29 @@ export function useActApprovalMutation() {
           endpoint,
           payload: { ...payload, original_item_id: item.id },
         });
+        await ApprovalsDbService.removeOptimisticTask(item.id);
         return { offline: true };
       }
 
       // If online, use specific service method
+      let result;
       if (item.module === 'leave') {
-        return await approvalsService.approveLeave(item.approval_id!, payload);
+        result = await approvalsService.approveLeave(item.approval_id!, payload);
       } else if (item.module === 'oos') {
-        return await approvalsService.approveOos(item.approval_id!, payload);
+        result = await approvalsService.approveOos(item.approval_id!, payload);
       } else if (item.module === 'ppa') {
-        return await approvalsService.reviewPpa(payload);
+        result = await approvalsService.reviewPpa(payload);
       } else if (item.module === 'performance') {
-        return await approvalsService.reviewAppraisal(payload);
+        result = await approvalsService.reviewAppraisal(payload);
       }
+      
+      // On success locally remove it right away for snappiness
+      await ApprovalsDbService.removeOptimisticTask(item.id);
+      
+      return result;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['approvals', 'inbox_sync'] });
       // Invalidate relevant modules so their lists refresh
       queryClient.invalidateQueries({ queryKey: ['leave'] });
       queryClient.invalidateQueries({ queryKey: ['oos'] });

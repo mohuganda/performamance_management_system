@@ -1,14 +1,13 @@
-import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import oosService from '../../api/out-of-station/service';
 import {
   OosReason,
-  OosRequest,
   OosSubmissionPayload,
   OosApproval,
 } from '../../api/out-of-station/types';
 import { useSyncStore } from '../../stores/syncStore';
+import { OosDbService } from '../../db/services/OosDbService';
 
 export function useOosReasonsQuery() {
   return useQuery<OosReason[], Error>({
@@ -20,49 +19,15 @@ export function useOosReasonsQuery() {
   });
 }
 
-export function useOosRequestsQuery() {
-  const queue = useSyncStore((state) => state.queue);
-
-  const queryResult = useQuery<OosRequest[], Error>({
-    queryKey: ['oos', 'requests'],
+export function useOosRequestsSync() {
+  return useQuery({
+    queryKey: ['oos', 'requests_sync'],
     queryFn: async () => {
-      return await oosService.listRequests();
+      const data = await oosService.listRequests();
+      await OosDbService.syncRequests(data);
+      return data;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes cache
   });
-
-  const mergedData = useMemo(() => {
-    if (!queryResult.data) return queryResult.data;
-
-    // Optimistic previews: extract and format unsynced items from sync queue
-    const queuedRequests = queue
-      .filter((mut) => mut.type === 'OOS_REQUEST')
-      .map((mut, index) => {
-        const payload = mut.payload as OosSubmissionPayload;
-        return {
-          id: -Number(mut.id.replace(/\D/g, '').substring(0, 6)) || -(index + 1),
-          reason_id: Number(payload.reason_id),
-          start_date: payload.start_date,
-          end_date: payload.end_date,
-          remarks: payload.remarks,
-          expected_deliverables: payload.expected_deliverables,
-          attachment_url: payload.attachment_url,
-          destination_name: payload.destination_name,
-          destination_address: payload.destination_address,
-          destination_latitude: payload.destination_latitude,
-          destination_longitude: payload.destination_longitude,
-          geofence_radius_meters: payload.geofence_radius_meters ?? 500,
-          status: 'pending_sync' as const,
-        } as OosRequest;
-      });
-
-    return [...queuedRequests, ...queryResult.data];
-  }, [queryResult.data, queue]);
-
-  return {
-    ...queryResult,
-    data: mergedData,
-  };
 }
 
 export function useOosPendingApprovalsQuery() {
@@ -92,13 +57,14 @@ export function useCreateOosMutation() {
           endpoint: '/mobile/out-of-station/requests',
           payload: cleanPayload,
         });
+        await OosDbService.addOptimisticRequest(cleanPayload);
         return { offline: true };
       }
 
       return await oosService.createRequest(cleanPayload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['oos'] });
+      queryClient.invalidateQueries({ queryKey: ['oos', 'requests_sync'] });
     },
   });
 }
