@@ -53,7 +53,7 @@ sed -i '' "s/versionName \".*\"/versionName \"$NEW_VERSION\"/" $GRADLE_FILE
 echo "Android updated"
 
 # ---- STEP 6: UPDATE iOS ----
-PLIST_FILE=ios/KhubApp/Info.plist
+PLIST_FILE=ios/mobile/Info.plist
 
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $NEW_VERSION" $PLIST_FILE
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" $PLIST_FILE
