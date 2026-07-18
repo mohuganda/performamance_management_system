@@ -29,6 +29,7 @@ import withObservables from '@nozbe/with-observables';
 import { database } from '../../db';
 import AttendanceLog from '../../db/models/AttendanceLog';
 import OosRequestModel from '../../db/models/OosRequest';
+import { Input } from '../../components/atoms/Input';
 
 // Default map coordinate centered on Kampala, Uganda if location is loading
 const DEFAULT_COORDS = {
@@ -333,20 +334,20 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks, oosRequ
                   {t('attendance_notes_label')}
                 </Text>
               </View>
-              <TextInput
+              <Input
                 value={notes}
                 onChangeText={handleNotesChange}
                 placeholder={t('attendance_notes_placeholder')}
                 multiline
                 numberOfLines={3}
-                className="w-full px-3 py-2.5 rounded-none border text-sm text-left"
-                style={{
-                  backgroundColor: isDark ? '#1C1C1E' : '#F9F9F9',
-                  borderColor: notesError ? colors.error : colors.border,
-                  color: colors.text,
-                  textAlignVertical: 'top',
-                  minHeight: 70,
-                }}
+                className="w-full py-2.5 rounded-none text-sm text-left"
+                // style={{
+                //   backgroundColor: isDark ? '#1C1C1E' : '#F9F9F9',
+                //   borderColor: notesError ? colors.error : colors.border,
+                //   color: colors.text,
+                //   textAlignVertical: 'top',
+                //   minHeight: 70,
+                // }}
                 placeholderTextColor={isDark ? '#55555C' : '#9CA3AF'}
               />
               {notesError && (
