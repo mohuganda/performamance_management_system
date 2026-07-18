@@ -20,6 +20,7 @@ interface SyncState {
   processQueue: () => Promise<void>;
   clearFailedQueue: () => void;
   removeFromFailedQueue: (id: string) => void;
+  discardFailedMutation: (id: string) => Promise<void>;
 }
 
 export const useSyncStore = create<SyncState>()(
@@ -45,15 +46,15 @@ export const useSyncStore = create<SyncState>()(
           try {
             const response = await syncService.processMutation(mutation);
             
-            // Phase 10: Reconciliation - Update local record with server response
             if (mutation.localRecordId && mutation.modelTable) {
               await database.write(async () => {
                 try {
-                  const collection = database.collections.get<Model & { remoteId?: number | null, status?: string }>(mutation.modelTable!);
+                  const collection = database.collections.get<Model & { remoteId?: number | null, status?: string, syncError?: string | null }>(mutation.modelTable!);
                   const record = await collection.find(mutation.localRecordId!);
                   await record.update((r: any) => {
                     if (response.id !== undefined) r.remoteId = response.id;
                     if (response.status !== undefined) r.status = response.status;
+                    r.syncError = null;
                   });
                 } catch (e) {
                   console.warn('Could not find or update local record during reconciliation', e);
@@ -61,7 +62,7 @@ export const useSyncStore = create<SyncState>()(
               });
             }
 
-            remainingQueue.shift(); // remove item from top of queue on success
+            remainingQueue.shift();
             set({ queue: [...remainingQueue] });
           } catch (err) {
             console.error('Failed to sync offline mutation', mutation.id, err);
@@ -77,6 +78,24 @@ export const useSyncStore = create<SyncState>()(
               if (status && status >= 400 && status < 500 && status !== 408) {
                 console.warn(`Non-retryable error (${status}) for mutation ${mutation.id}. Moving to failed queue.`);
                 
+                const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message;
+                
+                // Phase 11: Conflict Resolution - Tag local record
+                if (mutation.localRecordId && mutation.modelTable) {
+                  await database.write(async () => {
+                    try {
+                      const collection = database.collections.get<Model & { status?: string, syncError?: string | null }>(mutation.modelTable!);
+                      const record = await collection.find(mutation.localRecordId!);
+                      await record.update((r: any) => {
+                        r.status = 'sync_failed';
+                        r.syncError = errorMessage;
+                      });
+                    } catch (e) {
+                      console.warn('Could not tag local record with sync error', e);
+                    }
+                  });
+                }
+
                 remainingQueue.shift();
                 set((state) => ({
                   queue: [...remainingQueue],
@@ -84,7 +103,7 @@ export const useSyncStore = create<SyncState>()(
                     ...(state.failedQueue || []),
                     {
                       ...mutation,
-                      error: err.response?.data?.message || err.response?.data?.error || err.message,
+                      error: errorMessage,
                       failedAt: new Date().toISOString(),
                     },
                   ],
@@ -100,6 +119,25 @@ export const useSyncStore = create<SyncState>()(
 
       clearFailedQueue: () => set({ failedQueue: [] }),
       removeFromFailedQueue: (id) => set((state) => ({ failedQueue: state.failedQueue.filter((m) => m.id !== id) })),
+      
+      discardFailedMutation: async (id: string) => {
+        const { failedQueue, removeFromFailedQueue } = get();
+        const mutation = failedQueue.find(m => m.id === id);
+        
+        if (mutation && mutation.localRecordId && mutation.modelTable) {
+          await database.write(async () => {
+            try {
+              const collection = database.collections.get<Model>(mutation.modelTable!);
+              const record = await collection.find(mutation.localRecordId!);
+              await record.destroyPermanently();
+            } catch (e) {
+              console.warn('Failed to delete local record for discarded mutation', e);
+            }
+          });
+        }
+        
+        removeFromFailedQueue(id);
+      },
     }),
     {
       name: 'sync-queue-storage',

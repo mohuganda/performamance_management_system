@@ -5,6 +5,7 @@ import { useTheme } from '../../../app/hooks/useTheme';
 import { Card } from '../../atoms/Card';
 import { Badge } from '../../atoms/Badge';
 import { LeaveRequest } from '../../../api/leave/types';
+import { AlertTriangle } from 'lucide-react-native';
 
 interface LeaveHistoryCardProps {
   item: LeaveRequest;
@@ -24,6 +25,8 @@ export function LeaveHistoryCard({ item, typeName, displayStart, displayEnd, dur
         return <Badge label={t('leave_status_draft')} variant="gray" />;
       case 'pending_sync':
         return <Badge label={t('leave_status_pending_sync')} variant="info" />;
+      case 'sync_failed':
+        return <Badge label={t('leave_status_sync_failed', 'Sync Failed')} variant="error" />;
       case 'pending':
         return <Badge label={t('leave_status_pending')} variant="warning" />;
       case 'approved':
@@ -35,41 +38,37 @@ export function LeaveHistoryCard({ item, typeName, displayStart, displayEnd, dur
     }
   };
 
+  const isSyncFailed = item.status === 'sync_failed';
+
   return (
-    <Card className="p-4 space-y-3">
+    <Card className={`p-4 space-y-3 ${isSyncFailed ? 'border-l-4 border-l-red-500' : ''}`}>
       <View className="flex-row justify-between items-start">
-        <View className="flex-1 pr-2">
-          <Text className="text-base font-bold" style={{ color: colors.text }}>
+        <View className="flex-1 mr-2">
+          <Text className="text-base font-bold mb-1" style={{ color: colors.text }}>
             {typeName}
           </Text>
-          <Text className="text-xs mt-1" style={{ color: colors.muted }}>
-            {displayStart} — {displayEnd}
+          <Text className="text-sm" style={{ color: colors.muted }}>
+            {displayStart} - {displayEnd}
           </Text>
         </View>
-        {renderStatusBadge(item.status)}
+        <View className="items-end">
+          {renderStatusBadge(item.status)}
+          {duration !== undefined && (
+            <Text className="text-xs mt-1 font-medium" style={{ color: colors.muted }}>
+              {duration} {duration === 1 ? t('common_day', 'Day') : t('common_days', 'Days')}
+            </Text>
+          )}
+        </View>
       </View>
-
-      {duration !== undefined && (
-        <View className="flex-row justify-between border-t border-b border-gray-50 dark:border-zinc-900 py-2 my-1">
-          <Text className="text-xs font-semibold" style={{ color: colors.muted }}>
-            Duration:
-          </Text>
-          <Text className="text-xs font-bold" style={{ color: colors.text }}>
-            {t('leave_days_count', { count: duration })}
+      
+      {isSyncFailed && item.syncError && (
+        <View className="bg-red-50 dark:bg-red-900/20 p-2 rounded mt-2 flex-row items-start">
+          <AlertTriangle size={14} color="#ef4444" style={{ marginTop: 2, marginRight: 6 }} />
+          <Text className="text-xs text-red-600 dark:text-red-400 flex-1">
+            {item.syncError}
           </Text>
         </View>
       )}
-
-      {/* {item.reason ? (
-        <View className="space-y-1">
-          <Text className="text-xs font-bold" style={{ color: colors.muted }}>
-            Reason:
-          </Text>
-          <Text className="text-sm opacity-90" style={{ color: colors.text }}>
-            {item.reason}
-          </Text>
-        </View>
-      ) : null} */}
     </Card>
   );
 }

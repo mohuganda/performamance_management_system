@@ -9,8 +9,9 @@ export type AppStackParamList = {
   Notifications: undefined;
   Settings: undefined;
   OutOfStation: undefined;
-  LeaveRequest: undefined;
+  LeaveRequest: { editMode?: boolean; localRecordId?: string } | undefined;
   LeaveHistory: undefined;
+  SyncIssues: undefined;
 };
 
 export type AppTabParamList = {

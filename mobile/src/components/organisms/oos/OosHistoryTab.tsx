@@ -39,18 +39,24 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
 
   if (requestsSync.isLoading && requests.length === 0) {
     return (
-      <View className="flex-1 justify-center items-center py-12">
+      <View className="flex-1 justify-center items-center py-10">
         <ActivityIndicator size="small" color={colors.primary} />
+        <Text className="text-xs mt-3" style={{ color: colors.muted }}>
+          {t('oos_history_loading')}
+        </Text>
       </View>
     );
   }
 
-  if (sortedRequests.length === 0) {
+  if (requests.length === 0) {
     return (
-      <View className="flex-1 justify-center items-center py-12 px-6">
-        <FileText size={40} color={colors.muted} style={{ opacity: 0.5, marginBottom: 12 }} />
-        <Text className="text-sm font-semibold text-center" style={{ color: colors.muted }}>
-          {t('oos_history_empty')}
+      <View className="flex-1 justify-center items-center py-10 px-6">
+        <FileText size={32} color={colors.border} className="mb-4" />
+        <Text className="text-sm font-medium text-center" style={{ color: colors.text }}>
+          {t('oos_history_empty_title')}
+        </Text>
+        <Text className="text-xs text-center mt-1" style={{ color: colors.muted }}>
+          {t('oos_history_empty_subtitle')}
         </Text>
       </View>
     );
@@ -82,6 +88,14 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
           Icon: RefreshCw,
           color: '#3B82F6',
         };
+      case 'sync_failed':
+        return {
+          bg: 'bg-red-500/10 dark:bg-red-500/20',
+          border: 'border-red-500/30',
+          text: 'text-red-700 dark:text-red-400',
+          Icon: AlertTriangle,
+          color: colors.error,
+        };
       case 'draft':
         return {
           bg: 'bg-gray-500/10 dark:bg-gray-500/20',
@@ -112,14 +126,15 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
           const statusStyle = getStatusStyles(req.status);
           const StatusIcon = statusStyle.Icon;
           const reasonLabel = reasonsMap.get(req.reasonId) || 'Travel Assignment';
+          const isSyncFailed = req.status === 'sync_failed';
 
           return (
             <View
               key={req.remoteId || req.id}
-              className="p-4 border shadow-sm rounded-none"
+              className={`p-4 border shadow-sm rounded-none ${isSyncFailed ? 'border-l-4 border-l-red-500' : ''}`}
               style={{
                 backgroundColor: colors.surface,
-                borderColor: colors.border,
+                borderColor: isSyncFailed ? '#ef4444' : colors.border,
               }}
             >
               {/* Header: Reason & Status */}
@@ -130,7 +145,9 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
                 <View className={`flex-row items-center gap-1 px-2.5 py-1 border ${statusStyle.bg} ${statusStyle.border}`}>
                   <StatusIcon size={12} color={statusStyle.color} />
                   <Text className={`text-[10px] font-bold capitalize ${statusStyle.text}`}>
-                    {req.status === 'pending_sync' ? t('oos_pending_sync_status') : t(`oos_${req.status}_status`, { defaultValue: req.status })}
+                    {req.status === 'pending_sync' ? t('oos_pending_sync_status', 'Pending Sync') : 
+                     req.status === 'sync_failed' ? t('oos_sync_failed_status', 'Sync Failed') :
+                     t(`oos_${req.status}_status`, { defaultValue: req.status })}
                   </Text>
                 </View>
               </View>
@@ -171,16 +188,26 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
                       </Text>
                     </View>
                   )}
+                  
                   {req.remarks && (
                     <View>
                       <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colors.muted }}>
                         {t('oos_form_remarks')}
                       </Text>
-                      <Text className="text-xs mt-0.5" style={{ color: colors.muted }}>
+                      <Text className="text-xs mt-0.5" style={{ color: colors.text }}>
                         {req.remarks}
                       </Text>
                     </View>
                   )}
+                </View>
+              )}
+              
+              {isSyncFailed && req.syncError && (
+                <View className="bg-red-50 dark:bg-red-900/20 p-2 rounded mt-3 flex-row items-start">
+                  <AlertTriangle size={14} color="#ef4444" style={{ marginTop: 2, marginRight: 6 }} />
+                  <Text className="text-xs text-red-600 dark:text-red-400 flex-1">
+                    {req.syncError}
+                  </Text>
                 </View>
               )}
             </View>

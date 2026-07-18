@@ -6,9 +6,10 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { AlertCircle } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
+import { useSyncStore } from '../../stores/syncStore';
 import { useTheme } from '../../app/hooks/useTheme';
 import { MainTemplate } from '../../components/templates';
 import { Input } from '../../components/atoms/Input';
@@ -34,6 +35,7 @@ import { getApiErrorMessage } from '../../api/client';
 import withObservables from '@nozbe/with-observables';
 import { database } from '../../db';
 import LeaveTypeModel from '../../db/models/LeaveTypeModel';
+import LeaveRequestModel from '../../db/models/LeaveRequest';
 
 interface LeaveRequestScreenProps {
   leaveTypes: LeaveTypeModel[];
@@ -41,7 +43,10 @@ interface LeaveRequestScreenProps {
 
 const BaseLeaveRequestScreen: React.FC<LeaveRequestScreenProps> = ({ leaveTypes }) => {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const discardFailedMutation = useSyncStore((state) => state.discardFailedMutation);
+  const { editMode, localRecordId, queueId } = route.params || {};
   const { colors } = useTheme();
 
   // Queries & Mutations
@@ -61,6 +66,27 @@ const BaseLeaveRequestScreen: React.FC<LeaveRequestScreenProps> = ({ leaveTypes 
   const [isUploading, setIsUploading] = useState(false);
   const [formAlert, setFormAlert] = useState<{ type: 'error' | 'warning' | 'success'; message: string } | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  React.useEffect(() => {
+    if (editMode && localRecordId) {
+      const loadRecord = async () => {
+        try {
+          const collection = database.collections.get<LeaveRequestModel>('leave_requests');
+          const record = await collection.find(localRecordId);
+          setForm({
+            leave_type_id: String(record.leaveTypeId),
+            start_date: record.startDate,
+            end_date: record.endDate,
+            reason: record.reason,
+          });
+          // Also set attachments if needed, but not implemented for offline sync yet
+        } catch (e) {
+          console.warn('Failed to load optimistic record for edit', e);
+        }
+      };
+      loadRecord();
+    }
+  }, [editMode, localRecordId]);
 
   const selectedType = React.useMemo(() => {
     if (!leaveTypes || !form.leave_type_id) return undefined;
@@ -167,7 +193,10 @@ const BaseLeaveRequestScreen: React.FC<LeaveRequestScreenProps> = ({ leaveTypes 
     };
 
     createMutation.mutate(payload, {
-      onSuccess: (res: any) => {
+      onSuccess: async (res: any) => {
+        if (queueId) {
+          await discardFailedMutation(queueId);
+        }
         if (res?.offline) {
           Toaster.info(t('leave_success_queued'), 'Offline Mode');
           navigation.goBack();
@@ -249,7 +278,7 @@ const BaseLeaveRequestScreen: React.FC<LeaveRequestScreenProps> = ({ leaveTypes 
               <Text className="text-sm font-bold" style={{ color: colors.text }}>
                 Duration Calculated:
               </Text>
-              <Text className="text-base font-black text-success">
+              <Text className="text-base font-black" style={{ color: colors.success }}>
                 {t('leave_days_count', { count: leaveDays })}
               </Text>
             </View>
@@ -265,7 +294,7 @@ const BaseLeaveRequestScreen: React.FC<LeaveRequestScreenProps> = ({ leaveTypes 
             multiline={true}
             numberOfLines={4}
             textAlignVertical="top"
-            className="h-28"
+            className="h-28 "
           />
 
           {/* Reusable AttachmentPicker Molecule */}

@@ -20,4 +20,5 @@ export default class OosRequest extends Model {
   @field('server_created_at') createdAt!: string | null;
   @field('submitted_at') submittedAt!: string | null;
   @field('staff_name') staffName!: string | null;
+  @field('sync_error') syncError!: string | null;
 }

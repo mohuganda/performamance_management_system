@@ -26,10 +26,11 @@ export interface LeaveRequest {
   leave_type_id: number;
   start_date: string;
   end_date: string;
-  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'pending_sync';
+  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'pending_sync' | 'sync_failed';
   reason: string;
   medical_report_url?: string;
   days_requested?: number;
+  syncError?: string | null;
 }
 
 export interface LeaveSubmissionPayload {

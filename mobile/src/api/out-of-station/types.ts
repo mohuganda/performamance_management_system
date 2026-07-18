@@ -17,10 +17,11 @@ export interface OosRequest {
   destination_latitude: number;
   destination_longitude: number;
   geofence_radius_meters: number;
-  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'pending_sync';
+  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'pending_sync' | 'sync_failed';
   created_at?: string;
   submitted_at?: string;
   staff_name?: string;
+  syncError?: string | null;
 }
 
 export interface OosSubmissionPayload {

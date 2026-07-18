@@ -12,4 +12,5 @@ export default class LeaveRequest extends Model {
   @field('reason') reason!: string;
   @field('medical_report_url') medicalReportUrl!: string | null;
   @field('days_requested') daysRequested!: number | null;
+  @field('sync_error') syncError!: string | null;
 }
