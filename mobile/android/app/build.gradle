@@ -101,8 +101,8 @@ android {
         applicationId "ug.go.moh.pms"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1784292359
-        versionName "1.0.1"
+        versionCode 1784368779
+        versionName "1.0.2"
 
         // Inject manifest placeholders for AndroidManifest.xml
         manifestPlaceholders = [

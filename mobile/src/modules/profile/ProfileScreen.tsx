@@ -220,7 +220,7 @@ const ProfileDataObserver = withObservables([], () => ({
 export const ProfileScreen = () => {
   const { t } = useTranslation();
   return (
-    <MainTemplate title={t('profile_title')} showBack={false}>
+    <MainTemplate title={t('profile_title')} showBack={true}>
       <ProfileDataObserver />
     </MainTemplate>
   );
