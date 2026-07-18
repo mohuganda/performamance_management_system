@@ -15,6 +15,7 @@ import { Clock, MessageSquare, CheckCircle, AlertTriangle, MapPin } from 'lucide
 import { MainTemplate } from '../../components/templates';
 import { useTheme } from '../../app/hooks/useTheme';
 import { useAttendanceListSync, useClockMutation } from '../../app/hooks/useAttendance';
+import { showAlert } from '../../stores/alertStore';
 import { useLocationPermission } from '../../app/hooks/useLocationPermission';
 import { LocationPermissionModal } from '../../components/molecules/LocationPermissionModal';
 import { attendanceNotesSchema } from '../../app/schemas/attendance';
@@ -184,7 +185,7 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks, oosRequ
   };
 
   // Execute Clock In / Out Mutation
-  const handleClockAction = async () => {
+  const handleClockAction = () => {
     if (!coords) {
       Toaster.error(t('attendance_err_no_gps'));
       return;
@@ -196,27 +197,40 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks, oosRequ
     }
 
     const action = isClockedIn ? 'out' : 'in';
+    const actionLabel = isClockedIn ? t('attendance_btn_clock_out') : t('attendance_btn_clock_in');
+    const confirmMessage = isClockedIn 
+      ? t('attendance_confirm_clock_out', 'Are you sure you want to clock out for the day?') 
+      : t('attendance_confirm_clock_in', 'Are you sure you want to clock in now?');
 
-    try {
-      const response = await clockMutation.mutateAsync({
-        action,
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        accuracy_meters: coords.accuracy,
-        notes: notes.trim(),
-        location_label: activeOosRequest ? activeOosRequest.destinationName : undefined,
-      });
+    showAlert({
+      type: 'info',
+      title: actionLabel,
+      message: confirmMessage,
+      cancelText: t('common_cancel', 'Cancel'),
+      confirmText: actionLabel,
+      onConfirm: async () => {
+        try {
+          const response = await clockMutation.mutateAsync({
+            action,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            accuracy_meters: coords.accuracy,
+            notes: notes.trim(),
+            location_label: activeOosRequest ? activeOosRequest.destinationName : undefined,
+          });
 
-      if (response === null) {
-        Toaster.info(t('attendance_sync_offline'));
-      } else {
-        Toaster.success(t('attendance_sync_success'));
+          if (response === null) {
+            Toaster.info(t('attendance_sync_offline'));
+          } else {
+            Toaster.success(t('attendance_sync_success'));
+          }
+
+          setNotes(''); // Clear notes after submission
+        } catch (err: unknown) {
+          Toaster.error(getApiErrorMessage(err, 'Failed to submit attendance request.'));
+        }
       }
-
-      setNotes(''); // Clear notes after submission
-    } catch (err: unknown) {
-      Toaster.error(getApiErrorMessage(err, 'Failed to submit attendance request.'));
-    }
+    });
   };
 
   // Formats time strings nicely for the activity feed
@@ -341,13 +355,6 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks, oosRequ
                 multiline
                 numberOfLines={3}
                 className="w-full py-2.5 rounded-none text-sm text-left"
-                // style={{
-                //   backgroundColor: isDark ? '#1C1C1E' : '#F9F9F9',
-                //   borderColor: notesError ? colors.error : colors.border,
-                //   color: colors.text,
-                //   textAlignVertical: 'top',
-                //   minHeight: 70,
-                // }}
                 placeholderTextColor={isDark ? '#55555C' : '#9CA3AF'}
               />
               {notesError && (

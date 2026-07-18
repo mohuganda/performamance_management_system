@@ -12,6 +12,7 @@ import { queryClient } from './src/app/queryClient';
 import { LogBox } from 'react-native';
 import { toastConfig } from './src/utils/toast';
 import Toast from 'react-native-toast-message';
+import { GlobalAlertModal } from './src/components/organisms/modals/GlobalAlertModal';
 
 LogBox.ignoreAllLogs();
 
@@ -39,6 +40,7 @@ export default function App() {
           <NavigationContainer>
             {isAuthenticated ? <AppNavigator /> : <AuthNavigator />}
           </NavigationContainer>
+          <GlobalAlertModal />
           <Toast config={toastConfig} />
         </SafeAreaProvider>
       </QueryClientProvider>

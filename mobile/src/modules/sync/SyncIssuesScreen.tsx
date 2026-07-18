@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../app/hooks/useTheme';
 import { MainTemplate } from '../../components/templates';
 import { useSyncStore } from '../../stores/syncStore';
 import { FailedQueuedMutation } from '../../stores/syncStore';
+import { showAlert } from '../../stores/alertStore';
 import { Trash2, Edit3, AlertTriangle } from 'lucide-react-native';
 import { Card } from '../../components/atoms/Card';
 import { EmptyState } from '../../components/molecules/EmptyState';
@@ -17,20 +18,16 @@ export const SyncIssuesScreen = ({ navigation }: any) => {
   const discardFailedMutation = useSyncStore((state) => state.discardFailedMutation);
 
   const handleDiscard = (id: string) => {
-    Alert.alert(
-      t('sync_issue_discard_title', 'Discard Request'),
-      t('sync_issue_discard_desc', 'Are you sure you want to permanently delete this failed request?'),
-      [
-        { text: t('common_cancel', 'Cancel'), style: 'cancel' },
-        { 
-          text: t('common_discard', 'Discard'), 
-          style: 'destructive',
-          onPress: () => {
-            discardFailedMutation(id);
-          }
-        }
-      ]
-    );
+    showAlert({
+      type: 'warning',
+      title: t('sync_issue_discard_title', 'Discard Request'),
+      message: t('sync_issue_discard_desc', 'Are you sure you want to permanently delete this failed request?'),
+      cancelText: t('common_cancel', 'Cancel'),
+      confirmText: t('common_discard', 'Discard'),
+      onConfirm: () => {
+        discardFailedMutation(id);
+      }
+    });
   };
 
   const handleEdit = (item: FailedQueuedMutation) => {
@@ -40,9 +37,17 @@ export const SyncIssuesScreen = ({ navigation }: any) => {
       navigation.navigate('LeaveRequest', { editMode: true, localRecordId: item.localRecordId, queueId: item.id });
     } else if (item.type === 'OOS_REQUEST') {
       // Need to add edit capability to OutOfStation
-      Alert.alert('Not Implemented', 'Edit for OOS requests coming soon.');
+      showAlert({
+        type: 'info',
+        title: 'Not Implemented',
+        message: 'Edit for OOS requests coming soon.',
+      });
     } else {
-      Alert.alert('Cannot Edit', 'This type of request cannot be edited. Please discard and try again.');
+      showAlert({
+        type: 'error',
+        title: 'Cannot Edit',
+        message: 'This type of request cannot be edited. Please discard and try again.',
+      });
     }
   };
 

@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Settings, Palette, LogOut, ChevronRight, Check } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
+import { showAlert } from '../../stores/alertStore';
 import { useThemeStore } from '../../app/store/useThemeStore';
 import { useTheme } from '../../app/hooks/useTheme';
 import { LayoutTemplate } from '../../components/templates/LayoutTemplate';
@@ -20,8 +21,17 @@ export function AccountScreen() {
 
   const [themeModalVisible, setThemeModalVisible] = useState(false);
 
-  const handleLogout = async () => {
-    await logout();
+  const handleLogout = () => {
+    showAlert({
+      type: 'warning',
+      title: t('account_sign_out', 'Sign Out'),
+      message: t('account_sign_out_confirm', 'Are you sure you want to sign out of your account?'),
+      cancelText: t('common_cancel', 'Cancel'),
+      confirmText: t('account_sign_out', 'Sign Out'),
+      onConfirm: async () => {
+        await logout();
+      }
+    });
   };
 
   const getThemeModeLabel = (mode: string) => {
