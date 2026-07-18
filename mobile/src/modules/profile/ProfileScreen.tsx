@@ -74,9 +74,10 @@ function BaseProfileScreen({ dbProfile }: { dbProfile?: ProfileModel[] }) {
   const currentUser: any = dbUser || user;
 
   return (
-    <MainTemplate title={t('profile_title')} showBack={true}>
+    <>
       <ScrollView
-        className="flex-1"
+        className="flex-1 bg-gray-50 dark:bg-gray-900"
+        contentContainerStyle={{ paddingBottom: 40 }}
         refreshControl={
           <RefreshControl refreshing={isFetching || isLoading} onRefresh={refetch} colors={[colors.primary.DEFAULT]} />
         }
@@ -208,10 +209,19 @@ function BaseProfileScreen({ dbProfile }: { dbProfile?: ProfileModel[] }) {
         onOK={handleSignatureSave}
       />
 
-    </MainTemplate>
+    </>
   );
 }
 
-export const ProfileScreen = withObservables([], () => ({
+const ProfileDataObserver = withObservables([], () => ({
   dbProfile: database.collections.get<ProfileModel>('profiles').query().observe(),
 }))(BaseProfileScreen);
+
+export const ProfileScreen = () => {
+  const { t } = useTranslation();
+  return (
+    <MainTemplate title={t('profile_title')} showBack={false}>
+      <ProfileDataObserver />
+    </MainTemplate>
+  );
+};

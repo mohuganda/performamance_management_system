@@ -41,7 +41,7 @@ const BaseLeaveHistoryScreen: React.FC<LeaveHistoryScreenProps> = ({ requests, l
   }, [leaveTypes]);
 
   return (
-    <MainTemplate title={t('leave_history_title')} showBack={true}>
+    <>
       <FlatList
         data={requests}
         keyExtractor={(item) => item.id}
@@ -100,11 +100,20 @@ const BaseLeaveHistoryScreen: React.FC<LeaveHistoryScreenProps> = ({ requests, l
           );
         }}
       />
-    </MainTemplate>
+    </>
   );
 };
 
-export const LeaveHistoryScreen = withObservables([], () => ({
+const LeaveHistoryDataObserver = withObservables([], () => ({
   requests: database.collections.get<LeaveRequestModel>('leave_requests').query().observe(),
   leaveTypes: database.collections.get<LeaveTypeModel>('leave_types').query().observe(),
 }))(BaseLeaveHistoryScreen);
+
+export const LeaveHistoryScreen = () => {
+  const { t } = useTranslation();
+  return (
+    <MainTemplate title={t('leave_history_title')} showBack={true}>
+      <LeaveHistoryDataObserver />
+    </MainTemplate>
+  );
+};

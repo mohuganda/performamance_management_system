@@ -252,7 +252,7 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks, oosRequ
   }, [coords]);
 
   return (
-    <MainTemplate title={t('attendance_title')}>
+    <>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1"
@@ -403,11 +403,20 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks, oosRequ
         onCancel={() => setShowBlocked(false)}
         onConfirm={openSettings}
       />
-    </MainTemplate>
+    </>
   );
 };
 
-export const AttendanceScreen = withObservables([], () => ({
+const AttendanceDataObserver = withObservables([], () => ({
   clocks: database.collections.get<AttendanceLog>('attendance_logs').query().observe(),
   oosRequests: database.collections.get<OosRequestModel>('oos_requests').query().observe(),
 }))(BaseAttendanceScreen);
+
+export const AttendanceScreen = () => {
+  const { t } = useTranslation();
+  return (
+    <MainTemplate title={t('attendance_title')}>
+      <AttendanceDataObserver />
+    </MainTemplate>
+  );
+};

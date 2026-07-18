@@ -187,7 +187,7 @@ const BaseLeaveRequestScreen: React.FC<LeaveRequestScreenProps> = ({ leaveTypes 
   }, [leaveTypes]);
 
   return (
-    <MainTemplate title={t('leave_apply_title')} showBack={true}>
+    <>
       <ScrollView className="flex-1" contentContainerStyle={styles.scrollContent}>
         <View className="p-6 space-y-6">
           {formAlert && (
@@ -298,8 +298,7 @@ const BaseLeaveRequestScreen: React.FC<LeaveRequestScreenProps> = ({ leaveTypes 
           </View>
         </View>
       </ScrollView>
-
-    </MainTemplate>
+    </>
   );
 };
 
@@ -309,7 +308,16 @@ const styles = StyleSheet.create({
   },
 });
 
-export const LeaveRequestScreen = withObservables([], () => ({
+const LeaveRequestDataObserver = withObservables([], () => ({
   leaveTypes: database.collections.get<LeaveTypeModel>('leave_types').query().observe(),
 }))(BaseLeaveRequestScreen);
+
+export const LeaveRequestScreen = () => {
+  const { t } = useTranslation();
+  return (
+    <MainTemplate title={t('leave_apply_title')} showBack={true}>
+      <LeaveRequestDataObserver />
+    </MainTemplate>
+  );
+};
 

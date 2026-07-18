@@ -159,7 +159,7 @@ const BaseApprovalsScreen: React.FC<ApprovalsScreenProps> = ({ tasks }) => {
   );
 
   return (
-    <MainTemplate title={t('approvals')}>
+    <>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
@@ -332,10 +332,19 @@ const BaseApprovalsScreen: React.FC<ApprovalsScreenProps> = ({ tasks }) => {
           </ScrollView>
         )}
       </KeyboardAvoidingView>
-    </MainTemplate>
+    </>
   );
 };
 
-export const ApprovalsScreen = withObservables([], () => ({
+const ApprovalsDataObserver = withObservables([], () => ({
   tasks: database.collections.get<ApprovalTask>('approval_tasks').query().observe(),
 }))(BaseApprovalsScreen);
+
+export const ApprovalsScreen = () => {
+  const { t } = useTranslation();
+  return (
+    <MainTemplate title={t('approvals')}>
+      <ApprovalsDataObserver />
+    </MainTemplate>
+  );
+};

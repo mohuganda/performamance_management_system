@@ -84,11 +84,11 @@ const BaseLeaveBalancesScreen: React.FC<LeaveBalancesScreenProps> = ({ balances,
   }, [leaveTypes]);
 
   const isEmpty = balances.length === 0;
-  const isInitialLoading = isEmpty && (isBalancesLoading || isTypesLoading);
+  const isLoading = (isBalancesLoading && balances.length === 0) || (isTypesLoading && leaveTypes.length === 0);
 
   return (
-    <MainTemplate title={t('leave_balances_title')} showBack={true}>
-      {isInitialLoading && !isBalancesFetching ? (
+    <>
+      {isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -201,11 +201,20 @@ const BaseLeaveBalancesScreen: React.FC<LeaveBalancesScreenProps> = ({ balances,
           </View>
         </ScrollView>
       )}
-    </MainTemplate>
+    </>
   );
 };
 
-export const LeaveBalancesScreen = withObservables([], () => ({
+const LeaveBalancesDataObserver = withObservables([], () => ({
   balances: database.collections.get<LeaveBalanceModel>('leave_balances').query().observe(),
   leaveTypes: database.collections.get<LeaveTypeModel>('leave_types').query().observe(),
 }))(BaseLeaveBalancesScreen);
+
+export const LeaveBalancesScreen = () => {
+  const { t } = useTranslation();
+  return (
+    <MainTemplate title={t('leave_balances_title')} showBack={true}>
+      <LeaveBalancesDataObserver />
+    </MainTemplate>
+  );
+};
