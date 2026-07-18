@@ -33,12 +33,14 @@ export function useClockMutation() {
       const isOffline = isOfflineOverride || !netInfo.isConnected || !netInfo.isInternetReachable;
 
       if (isOffline) {
+        const newRecord = await AttendanceDbService.addOptimisticClock(cleanPayload);
         addMutation({
           type: 'CLOCK',
           endpoint: '/mobile/attendance/clock',
           payload: cleanPayload,
+          localRecordId: newRecord.id,
+          modelTable: 'attendance_logs',
         });
-        await AttendanceDbService.addOptimisticClock(cleanPayload);
         return null;
       }
 

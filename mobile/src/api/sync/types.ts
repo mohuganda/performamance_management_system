@@ -4,4 +4,6 @@ export interface QueuedMutation {
   endpoint: string;
   payload: any;
   method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  localRecordId?: string;
+  modelTable?: string;
 }

@@ -1,3 +1,7 @@
+#!/bin/bash
+
+# Update syncStore processQueue
+cat << 'INNER_EOF' > /tmp/patch_syncStore.ts
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { zustandStorage } from '../utils/asyncStorage';
@@ -107,3 +111,7 @@ export const useSyncStore = create<SyncState>()(
     }
   )
 );
+INNER_EOF
+
+mv /tmp/patch_syncStore.ts src/stores/syncStore.ts
+

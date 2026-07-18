@@ -52,12 +52,14 @@ export function useCreateOosMutation() {
       const isOffline = isOfflineOverride || !netInfo.isConnected || !netInfo.isInternetReachable;
 
       if (isOffline) {
+        const newRequest = await OosDbService.addOptimisticRequest(cleanPayload);
         addMutation({
           type: 'OOS_REQUEST',
           endpoint: '/mobile/out-of-station/requests',
           payload: cleanPayload,
+          localRecordId: newRequest.id,
+          modelTable: 'oos_requests',
         });
-        await OosDbService.addOptimisticRequest(cleanPayload);
         return { offline: true };
       }
 

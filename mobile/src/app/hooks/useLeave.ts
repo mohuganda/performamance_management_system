@@ -63,12 +63,14 @@ export function useCreateLeaveMutation() {
       const isOffline = isOfflineOverride || !netInfo.isConnected || !netInfo.isInternetReachable;
 
       if (isOffline) {
+        const newRequest = await LeaveDbService.addOptimisticRequest(cleanPayload);
         addMutation({
           type: 'LEAVE_REQUEST',
           endpoint: '/mobile/leave/requests',
           payload: cleanPayload,
+          localRecordId: newRequest.id,
+          modelTable: 'leave_requests',
         });
-        await LeaveDbService.addOptimisticRequest(cleanPayload);
         return { offline: true };
       }
 
