@@ -47,7 +47,9 @@ export function Select({ children, value, selected, menuProps, ...props }: Selec
       }}
       labelProps={{
         ...props.labelProps,
-        className: [props.labelProps?.className, 'text-ui-muted'].filter(Boolean).join(' '),
+        className: [props.labelProps?.className, 'text-[var(--oa-field-label-color)]']
+          .filter(Boolean)
+          .join(' '),
       }}
       value={value}
       selected={labelResolver}

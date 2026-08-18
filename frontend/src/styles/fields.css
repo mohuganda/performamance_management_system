@@ -1,0 +1,228 @@
+/**
+ * Floating labels (Settings → Appearance; on by default).
+ * Scoped to form fields only — never Material Tailwind Switch/Checkbox peers.
+ */
+
+:root {
+  --oa-label-size: calc(0.775rem + 1px);
+  --oa-label-weight: 679;
+  --oa-field-label-color: #607d8b;
+  --oa-field-label-focus: #424242;
+  --oa-field-border: #b0bec5;
+  --oa-field-border-hover: #90a4ae;
+  --oa-field-border-focus: #424242;
+  --oa-field-ring-focus: rgb(66 66 66 / 0.12);
+  --oa-field-text: #37474f;
+  --oa-placeholder-color: #90a4ae;
+}
+
+html.dark {
+  --oa-field-label-color: #a1a1aa;
+  --oa-field-label-focus: #f4f4f5;
+  --oa-field-border: #3f3f46;
+  --oa-field-border-hover: #52525b;
+  --oa-field-border-focus: #a1a1aa;
+  --oa-field-ring-focus: rgb(244 244 245 / 0.12);
+  --oa-field-text: #f4f4f5;
+  --oa-placeholder-color: #71717a;
+}
+
+/*
+ * Form-field peers only.
+ * Switch/Checkbox use input.peer[type=checkbox] with a sibling <label> thumb —
+ * those must never receive floating-label styles.
+ */
+html.floating-labels :is(
+  input.peer:not([type='checkbox']):not([type='radio']),
+  textarea.peer,
+  button.peer,
+  div.peer
+) {
+  background-color: var(--color-ui-surface, #fff) !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: var(--oa-field-border) !important;
+  border-top-color: var(--oa-field-border) !important;
+}
+
+html.floating-labels :is(
+  input.peer:not([type='checkbox']):not([type='radio']),
+  textarea.peer,
+  button.peer,
+  div.peer
+):hover {
+  border-color: var(--oa-field-border-hover) !important;
+  border-top-color: var(--oa-field-border-hover) !important;
+}
+
+html.floating-labels :is(
+  input.peer:not([type='checkbox']):not([type='radio']),
+  textarea.peer,
+  button.peer,
+  div.peer
+):focus,
+html.floating-labels div:focus-within > :is(button.peer, div.peer) {
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: var(--oa-field-border-focus) !important;
+  border-top-color: var(--oa-field-border-focus) !important;
+  box-shadow: 0 0 0 3px var(--oa-field-ring-focus);
+  outline: none !important;
+}
+
+/* Drop MT outline notch bars on form labels only */
+html.floating-labels :is(
+  input.peer:not([type='checkbox']):not([type='radio']),
+  textarea.peer,
+  button.peer,
+  div.peer
+) ~ label::before,
+html.floating-labels :is(
+  input.peer:not([type='checkbox']):not([type='radio']),
+  textarea.peer,
+  button.peer,
+  div.peer
+) ~ label::after {
+  content: none !important;
+  display: none !important;
+  border: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+html.floating-labels :is(
+  input.peer:not([type='checkbox']):not([type='radio']),
+  textarea.peer,
+  button.peer,
+  div.peer
+) ~ label {
+  top: 0 !important;
+  left: 0.75rem !important;
+  right: auto !important;
+  width: auto !important;
+  max-width: calc(100% - 1.5rem) !important;
+  height: auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  margin: 0 !important;
+  padding: 0 0.35rem !important;
+  transform: translateY(-50%) !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+  z-index: 4 !important;
+  background-color: var(--color-ui-surface, #fff) !important;
+  color: var(--oa-field-label-color) !important;
+  font-size: var(--oa-label-size) !important;
+  font-weight: var(--oa-label-weight) !important;
+  line-height: 1.2 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+html.floating-labels :is(
+  input.peer:not([type='checkbox']):not([type='radio']),
+  textarea.peer,
+  button.peer,
+  div.peer
+):focus ~ label,
+html.floating-labels div:focus-within > :is(button.peer, div.peer) ~ label {
+  color: var(--oa-field-label-focus) !important;
+}
+
+html.floating-labels div.relative.min-w-\[200px\]:has(> :is(button.peer, div.peer, input.peer:not([type='checkbox']))),
+html.floating-labels div.relative.w-full:has(> input.peer:not([type='checkbox'])),
+html.floating-labels div.relative.w-full:has(> textarea.peer) {
+  margin-top: 0.65rem;
+  overflow: visible;
+}
+
+/* --- Shared outlined float field (SearchableSelect / MultiSelect) --- */
+
+html.floating-labels .oa-float-field {
+  position: relative;
+  width: 100%;
+  margin-top: 0.65rem;
+  overflow: visible;
+  isolation: isolate;
+}
+
+html.floating-labels .oa-float-control {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.7rem;
+  padding: 0.85rem 2rem 0.45rem 0.85rem;
+  border: 1px solid var(--oa-field-border);
+  border-radius: var(--radius-md, 0.25rem);
+  background-color: var(--color-ui-surface, #fff);
+  color: var(--oa-field-text);
+  font-size: 0.9rem;
+  line-height: 1.35;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+html.floating-labels .oa-float-control:hover {
+  border-color: var(--oa-field-border-hover);
+}
+
+html.floating-labels .oa-float-control:focus,
+html.floating-labels .oa-float-field:focus-within .oa-float-control {
+  border-color: var(--oa-field-border-focus);
+  box-shadow: 0 0 0 3px var(--oa-field-ring-focus);
+}
+
+html.floating-labels .oa-float-control:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+html.floating-labels .oa-float-control.is-placeholder,
+html.floating-labels .oa-float-control::placeholder {
+  color: var(--oa-placeholder-color);
+}
+
+html.floating-labels .oa-float-label {
+  position: absolute;
+  top: 0;
+  left: 0.75rem;
+  z-index: 4;
+  margin: 0;
+  padding: 0 0.35rem;
+  transform: translateY(-50%);
+  background-color: var(--color-ui-surface, #fff);
+  color: var(--oa-field-label-color);
+  font-size: var(--oa-label-size);
+  font-weight: var(--oa-label-weight);
+  line-height: 1.2;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  pointer-events: none;
+  max-width: calc(100% - 1.5rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html.floating-labels .oa-float-field:focus-within .oa-float-label {
+  color: var(--oa-field-label-focus);
+}
+
+html.floating-labels .rounded-sm.border form,
+html.floating-labels .rounded-sm.border .grid,
+html.floating-labels form.grid {
+  overflow: visible;
+}
+
+/* Keep scrollable modals working — never force overflow:visible on the card shell */
+html.floating-labels .max-h-\[90vh\].overflow-y-auto,
+html.floating-labels .overflow-y-auto.rounded-sm.border {
+  overflow-x: hidden;
+  overflow-y: auto !important;
+}

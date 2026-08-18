@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, X } from 'lucide-react'
 import { cn } from '@/utils/cn'
+import { useUiPreferencesStore } from '@/stores/uiPreferencesStore'
 import type { SearchableSelectOption } from './SearchableSelect'
 
 type SearchableMultiSelectProps = {
@@ -24,6 +25,7 @@ export function SearchableMultiSelect({
   disabled = false,
   className,
 }: SearchableMultiSelectProps) {
+  const floatingLabels = useUiPreferencesStore((s) => s.floatingLabels)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
@@ -42,8 +44,6 @@ export function SearchableMultiSelect({
       return haystack.includes(needle)
     })
   }, [options, query])
-
-  const labelFloated = open || values.length > 0 || (!open && Boolean(emptyLabel))
 
   useEffect(() => {
     if (!open) return
@@ -91,132 +91,146 @@ export function SearchableMultiSelect({
     setQuery('')
   }
 
-  return (
-    <div ref={rootRef} className={cn('relative min-w-[200px] w-full', className)}>
-      <div className={cn('relative min-h-10 w-full min-w-[200px]', disabled && 'opacity-50')}>
+  const dropdown = open ? (
+    <div
+      className="absolute z-50 mt-1 max-h-96 w-full overflow-auto rounded-md border border-ui-border bg-ui-surface p-1 shadow-lg"
+      role="listbox"
+      aria-multiselectable
+    >
+      {filtered.length === 0 ? (
+        <p className="px-3 py-3 text-sm text-ui-muted">No matches for “{query.trim()}”.</p>
+      ) : (
+        filtered.map((option) => {
+          const isActive = values.includes(option.value)
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={isActive}
+              className={cn(
+                'flex w-full items-start gap-2 rounded-md px-3 py-2 text-left text-sm leading-tight text-ui-text transition-all hover:bg-ui-subtle',
+                isActive && 'bg-ui-subtle font-medium',
+              )}
+              onClick={() => toggle(option.value)}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block font-normal leading-tight text-ui-text">{option.label}</span>
+                {option.description ? (
+                  <span className="mt-0.5 block text-xs text-ui-muted">{option.description}</span>
+                ) : null}
+              </span>
+              {isActive ? <Check className="mt-0.5 h-4 w-4 shrink-0" /> : null}
+            </button>
+          )
+        })
+      )}
+    </div>
+  ) : null
+
+  const controlInner = (
+    <>
+      {open ? (
+        <input
+          ref={inputRef}
+          type="text"
+          disabled={disabled}
+          value={query}
+          placeholder={placeholder}
+          onChange={(e) => setQuery(e.target.value)}
+          className="w-full bg-transparent text-sm text-ui-text outline-none placeholder:text-ui-muted"
+        />
+      ) : (
+        <div className="flex min-h-6 flex-wrap items-center gap-1.5">
+          {selectedOptions.length === 0 ? (
+            <span className="text-ui-muted">{emptyLabel ?? 'Select…'}</span>
+          ) : (
+            selectedOptions.map((option) => (
+              <span
+                key={option.value}
+                className="inline-flex max-w-full items-center gap-1 rounded bg-moh-green/10 px-2 py-0.5 text-xs text-moh-green"
+              >
+                <span className="truncate">{option.label}</span>
+                <button
+                  type="button"
+                  className="rounded hover:bg-moh-green/15"
+                  aria-label={`Remove ${option.label}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    remove(option.value)
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))
+          )}
+        </div>
+      )}
+      <button
+        type="button"
+        disabled={disabled}
+        className="absolute top-1/2 right-2 grid h-5 w-5 -translate-y-1/2 place-items-center text-ui-muted"
+        aria-label={open ? 'Close options' : 'Open options'}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (disabled) return
+          if (open) {
+            setOpen(false)
+            setQuery('')
+          } else {
+            openField()
+          }
+        }}
+      >
+        <ChevronDown className={cn('h-5 w-5 transition', open && 'rotate-180')} />
+      </button>
+    </>
+  )
+
+  if (!floatingLabels) {
+    return (
+      <div ref={rootRef} className={cn('relative min-w-0 w-full', className)}>
+        <label className="mb-1.5 block text-sm font-semibold text-ui-text">{label}</label>
         <div
           role="combobox"
           aria-expanded={open}
           aria-haspopup="listbox"
           className={cn(
-            'peer min-h-10 w-full rounded-[7px] border border-blue-gray-200 bg-transparent px-3 py-2 font-sans text-sm font-normal text-blue-gray-700 outline outline-0 transition-all',
-            open && 'border-2 border-gray-900 border-t-transparent',
-            labelFloated && !open && 'border-t-transparent',
-            disabled && 'cursor-not-allowed bg-blue-gray-50',
+            'relative flex min-h-[42px] items-center rounded-md border bg-ui-surface px-3 py-2 pr-10 shadow-sm transition',
+            open
+              ? 'border-[var(--oa-field-border-focus)] ring-[3px] ring-[var(--oa-field-ring-focus)]'
+              : 'border-ui-border',
+            disabled && 'cursor-not-allowed opacity-50',
             !open && 'cursor-pointer',
           )}
           onClick={() => !open && openField()}
         >
-          {open ? (
-            <input
-              ref={inputRef}
-              type="text"
-              disabled={disabled}
-              value={query}
-              placeholder={placeholder}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full bg-transparent pr-8 text-sm text-blue-gray-700 outline-none placeholder:text-blue-gray-400"
-            />
-          ) : (
-            <div className="flex min-h-6 flex-wrap items-center gap-1.5 pr-8">
-              {selectedOptions.length === 0 ? (
-                <span className="text-blue-gray-400">{emptyLabel ?? 'Select…'}</span>
-              ) : (
-                selectedOptions.map((option) => (
-                  <span
-                    key={option.value}
-                    className="inline-flex max-w-full items-center gap-1 rounded bg-moh-green/10 px-2 py-0.5 text-xs text-moh-green"
-                  >
-                    <span className="truncate">{option.label}</span>
-                    <button
-                      type="button"
-                      className="rounded hover:bg-moh-green/15"
-                      aria-label={`Remove ${option.label}`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        remove(option.value)
-                      }}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))
-              )}
-            </div>
-          )}
-
-          <button
-            type="button"
-            disabled={disabled}
-            className="absolute top-2/4 right-2 grid h-5 w-5 -translate-y-2/4 place-items-center text-blue-gray-400"
-            aria-label={open ? 'Close options' : 'Open options'}
-            onClick={(e) => {
-              e.stopPropagation()
-              if (disabled) return
-              if (open) {
-                setOpen(false)
-                setQuery('')
-              } else {
-                openField()
-              }
-            }}
-          >
-            <ChevronDown className={cn('h-5 w-5 transition', open && 'rotate-180')} />
-          </button>
+          {controlInner}
         </div>
-
-        <label
-          className={cn(
-            'pointer-events-none absolute left-0 flex h-full w-full select-none font-normal text-blue-gray-400 transition-all',
-            !labelFloated
-              ? 'text-sm leading-[3.75] peer-disabled:text-blue-gray-400 before:border-t-transparent after:border-t-transparent'
-              : 'text-[11px] leading-tight before:border-t-2 after:border-t-2',
-            labelFloated && 'text-[11px] leading-tight before:border-t after:border-t',
-            '-top-1.5 before:mr-1 before:ml-1 before:block before:h-1.5 before:w-2.5 before:rounded-tl-md before:border-l before:border-blue-gray-200 before:transition-all after:ml-1 after:block after:h-1.5 after:flex-grow after:rounded-tr-md after:border-r after:border-blue-gray-200 after:transition-all',
-            open && 'text-[11px] leading-tight text-gray-900 before:border-l-2 before:border-blue-gray-200 after:border-r-2 after:border-blue-gray-200',
-            labelFloated && !open && 'text-[11px] text-blue-gray-400',
-          )}
-        >
-          {label}
-        </label>
+        {dropdown}
       </div>
+    )
+  }
 
-      {open ? (
-        <div
-          className="absolute z-50 mt-1 max-h-96 w-full overflow-auto rounded-md border border-blue-gray-50 bg-white p-1 shadow-lg shadow-blue-gray-500/10"
-          role="listbox"
-          aria-multiselectable
-        >
-          {filtered.length === 0 ? (
-            <p className="px-3 py-3 text-sm text-blue-gray-500">No matches for “{query.trim()}”.</p>
-          ) : (
-            filtered.map((option) => {
-              const isActive = values.includes(option.value)
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="option"
-                  aria-selected={isActive}
-                  className={cn(
-                    'flex w-full items-start gap-2 rounded-md px-3 py-2 text-left text-sm leading-tight transition-all hover:bg-blue-gray-50 hover:bg-opacity-80 hover:text-blue-gray-900',
-                    isActive && 'bg-blue-gray-50 bg-opacity-80 text-blue-gray-900',
-                  )}
-                  onClick={() => toggle(option.value)}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-normal leading-tight text-blue-gray-700">{option.label}</span>
-                    {option.description ? (
-                      <span className="mt-0.5 block text-xs text-blue-gray-500">{option.description}</span>
-                    ) : null}
-                  </span>
-                  {isActive ? <Check className="mt-0.5 h-4 w-4 shrink-0" /> : null}
-                </button>
-              )
-            })
-          )}
-        </div>
-      ) : null}
+  return (
+    <div ref={rootRef} className={cn('oa-float-field relative min-w-[200px] w-full', className)}>
+      <div
+        role="combobox"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className={cn(
+          'oa-float-control relative !pr-10',
+          disabled && 'cursor-not-allowed opacity-50',
+          !open && 'cursor-pointer',
+          selectedOptions.length === 0 && !open && 'is-placeholder',
+        )}
+        onClick={() => !open && openField()}
+      >
+        {controlInner}
+      </div>
+      <label className="oa-float-label">{label}</label>
+      {dropdown}
     </div>
   )
 }

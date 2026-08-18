@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Card, Textarea, Typography } from '@material-tailwind/react'
 import { differenceInCalendarDays, format, parseISO } from 'date-fns'
@@ -26,6 +27,7 @@ function validateLeaveForm(
     start_date: string
     end_date: string
     reason: string
+    oic_staff_id: string
   },
   policy: LeavePolicyConfig | undefined,
   leaveType: { code?: string; advance_notice_days?: number | null } | undefined,
@@ -35,6 +37,7 @@ function validateLeaveForm(
   if (!form.end_date) return 'Enter an end date.'
   const dateError = validateLeaveDates(form, policy, leaveType)
   if (dateError) return dateError
+  if (!form.oic_staff_id) return 'Select an Officer in Charge (OIC) for your leave period.'
   if (!form.reason.trim()) return 'Provide a reason for your leave request.'
   return null
 }
@@ -75,6 +78,7 @@ export function LeavePage() {
     start_date: '',
     end_date: '',
     reason: '',
+    oic_staff_id: '',
     submit: true,
   })
   const [approvalComment, setApprovalComment] = useState('')
@@ -91,6 +95,13 @@ export function LeavePage() {
   const typesQuery = useQuery({
     queryKey: ['leave', 'types'],
     queryFn: () => leaveService.listTypes(),
+  })
+
+  const oicQuery = useQuery({
+    queryKey: ['leave', 'oic-candidates'],
+    queryFn: () => leaveService.listOicCandidates(),
+    enabled: Boolean(staffId) && canCreate,
+    staleTime: 60_000,
   })
 
   const configQuery = useQuery({
@@ -121,11 +132,12 @@ export function LeavePage() {
         end_date: form.end_date,
         reason: form.reason,
         medical_report_url: serializeAttachments(attachments),
+        oic_staff_id: Number(form.oic_staff_id),
         submit,
       }),
     onSuccess: (_data, submit) => {
       queryClient.invalidateQueries({ queryKey: ['leave'] })
-      setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', submit: true })
+      setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', oic_staff_id: '', submit: true })
       setAttachments([])
       const message = submit
         ? 'Your leave request has been submitted for supervisor approval.'
@@ -210,6 +222,13 @@ export function LeavePage() {
         title="Leave Management"
         subtitle="Apply for leave and track approvals through your configured workflow"
       />
+      {hasPermission('leave.plans.view') ? (
+        <p className="mb-4 text-sm">
+          <Link to="/leave-plan" className="font-medium text-moh-green underline-offset-2 hover:underline">
+            Manage annual leave plan →
+          </Link>
+        </p>
+      ) : null}
 
       <ProcessGuide title="How leave application works" steps={LEAVE_STEPS} />
 
@@ -420,6 +439,21 @@ export function LeavePage() {
                 className="rounded-sm"
               />
               <div className="md:col-span-2">
+                <SearchableSelect
+                  label="Officer in charge (OIC)"
+                  value={form.oic_staff_id}
+                  placeholder="Search who will cover while you are away…"
+                  emptyLabel="Select OIC"
+                  allowClear={false}
+                  options={(Array.isArray(oicQuery.data) ? oicQuery.data : []).map((c) => ({
+                    value: String(c.staff_id),
+                    label: c.name,
+                    description: c.job_title,
+                  }))}
+                  onChange={(v) => setForm((f) => ({ ...f, oic_staff_id: v }))}
+                />
+              </div>
+              <div className="md:col-span-2">
                 <Textarea
                   {...mt}
                   label="Reason"
@@ -483,6 +517,7 @@ export function LeavePage() {
                 <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
                   <th className="py-2 pr-4">Type</th>
                   <th className="py-2 pr-4">Period</th>
+                  <th className="py-2 pr-4">OIC</th>
                   <th className="py-2 pr-4">Status</th>
                   <th className="py-2">Days</th>
                 </tr>
@@ -497,6 +532,7 @@ export function LeavePage() {
                       <td className="py-2 pr-4">
                         {String(row.start_date).slice(0, 10)} – {String(row.end_date).slice(0, 10)}
                       </td>
+                      <td className="py-2 pr-4">{String(row.oic_name ?? '—')}</td>
                       <td className="py-2 pr-4 font-medium capitalize text-moh-green">
                         {String(row.status ?? 'pending')}
                       </td>

@@ -182,6 +182,9 @@ Ensure `facility_hr` also has **skip if unresolved** enabled so requests proceed
 - Copy exhibited on notice boards.
 - Heads of unit ensure staff take leave when due.
 
+PMS supports **annual leave plans** at `/leave-plan` (plan-only; staff still submit leave requests separately).
+Leave applications require an **Officer in Charge (OIC)**. Employees and primary supervisors receive reminders 7 and 1 day before planned or approved leave starts (configurable under Settings → Notifications).
+
 ### 6.2 Carry-over and forfeiture
 
 | Rule | Description |

@@ -3,13 +3,17 @@ import {
   applyDocumentTheme,
   useThemeStore,
 } from '@/stores/themeStore'
+import {
+  applyFloatingLabels,
+  useUiPreferencesStore,
+} from '@/stores/uiPreferencesStore'
 
 /**
- * Applies the persisted theme preference to <html> and keeps it in sync
- * with OS changes when preference is "system".
+ * Applies persisted theme + UI preferences to <html>.
  */
 export function ThemeSync() {
   const preference = useThemeStore((s) => s.preference)
+  const floatingLabels = useUiPreferencesStore((s) => s.floatingLabels)
 
   useEffect(() => {
     applyDocumentTheme(preference)
@@ -21,6 +25,10 @@ export function ThemeSync() {
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
   }, [preference])
+
+  useEffect(() => {
+    applyFloatingLabels(floatingLabels)
+  }, [floatingLabels])
 
   return null
 }

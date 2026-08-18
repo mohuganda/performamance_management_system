@@ -394,7 +394,20 @@ type LeaveRequest struct {
 	AdvanceNoticeMet        bool   `gorm:"default:false"`
 	ApprovalStage           string `gorm:"default:supervisor"`
 	CarryOverRequested      bool   `gorm:"default:false"`
+	OicStaffID              *uint  `gorm:"column:oic_staff_id"`
 }
+
+type LeavePlan struct {
+	orm.Model
+	StaffID      uint
+	CalendarYear int
+	StartDate    time.Time
+	EndDate      time.Time
+	DaysPlanned  int
+	Notes        *string
+}
+
+func (LeavePlan) TableName() string { return "leave_plans" }
 
 type LeaveApproval struct {
 	orm.Model

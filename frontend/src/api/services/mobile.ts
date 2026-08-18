@@ -42,9 +42,16 @@ export const leaveService = {
     end_date: string
     reason: string
     medical_report_url?: string
+    oic_staff_id: number
     submit: boolean
   }) => {
     const { data } = await apiClient.post('/mobile/leave/requests', payload)
+    return data
+  },
+  listOicCandidates: async () => {
+    const { data } = await apiClient.get<
+      Array<{ staff_id: number; name: string; job_title?: string }>
+    >('/mobile/leave/oic-candidates')
     return data
   },
   approve: async (id: number, payload: { approve: boolean; comments?: string }) => {

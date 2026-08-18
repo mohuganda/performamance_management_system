@@ -15,6 +15,7 @@ import { LoginPage } from '@/modules/auth/LoginPage'
 import { ActivateAccountPage } from '@/modules/auth/ActivateAccountPage'
 import { ApprovalsPage } from '@/modules/approvals/ApprovalsPage'
 import { LeavePage } from '@/modules/leave/LeavePage'
+import { LeavePlanPage } from '@/modules/leave/LeavePlanPage'
 import { OutOfStationPage } from '@/modules/out-of-station/OutOfStationPage'
 import { AttendancePage } from '@/modules/attendance/AttendancePage'
 import { PerformancePage } from '@/modules/performance/PerformancePage'
@@ -111,6 +112,14 @@ function AuthenticatedApp() {
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="performance" element={<PerformancePage />} />
         <Route path="performance/reports" element={<PerformanceReportsPage />} />
+        <Route
+          path="leave-plan"
+          element={
+            <RequirePermission permission="leave.plans.view">
+              <LeavePlanPage />
+            </RequirePermission>
+          }
+        />
         <Route
           path="leave"
           element={

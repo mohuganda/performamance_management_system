@@ -407,7 +407,7 @@ export function StaffManagementPage() {
         >
           <Card
             {...mt}
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-sm border border-moh-green/20 p-6 shadow-xl"
+            className="relative z-50 max-h-[90vh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-sm border border-moh-green/20 p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <Typography {...mt} className="text-lg font-bold text-moh-green">

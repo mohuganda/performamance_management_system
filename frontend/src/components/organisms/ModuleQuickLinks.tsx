@@ -11,6 +11,14 @@ const modules = [
     accent: 'border-uganda-yellow',
   },
   {
+    path: '/leave-plan',
+    label: 'Leave plan',
+    sub: 'Annual leave roster',
+    icon: CalendarDays,
+    permission: 'leave.plans.view',
+    accent: 'border-moh-green',
+  },
+  {
     path: '/leave',
     label: 'Leave',
     sub: 'Balances & requests',

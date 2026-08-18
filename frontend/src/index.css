@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @config '../tailwind.config.cjs';
 @import './styles/toast.css';
+@import './styles/fields.css';
 
 @theme {
   /* Professional grey UI — values overridden under .dark */

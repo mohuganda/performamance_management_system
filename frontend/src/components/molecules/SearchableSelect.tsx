@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, X } from 'lucide-react'
 import { cn } from '@/utils/cn'
+import { useUiPreferencesStore } from '@/stores/uiPreferencesStore'
 
 export type SearchableSelectOption = {
   value: string
@@ -18,10 +19,9 @@ type SearchableSelectProps = {
   disabled?: boolean
   className?: string
   allowClear?: boolean
+  /** Defaults from Settings → floating labels preference */
   labelPosition?: 'floating' | 'top'
 }
-
-type FieldState = 'close' | 'open' | 'withValue'
 
 export function SearchableSelect({
   label,
@@ -33,8 +33,10 @@ export function SearchableSelect({
   disabled = false,
   className,
   allowClear = true,
-  labelPosition = 'floating',
+  labelPosition,
 }: SearchableSelectProps) {
+  const floatingLabels = useUiPreferencesStore((s) => s.floatingLabels)
+  const resolvedLabelPosition = labelPosition ?? (floatingLabels ? 'floating' : 'top')
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
@@ -55,7 +57,6 @@ export function SearchableSelect({
   }, [options, query])
 
   const displayValue = selected?.label ?? (value ? '' : emptyLabel) ?? ''
-  const fieldState: FieldState = open ? 'open' : displayValue ? 'withValue' : 'close'
 
   useEffect(() => {
     if (!open) return
@@ -149,14 +150,16 @@ export function SearchableSelect({
     </div>
   ) : null
 
-  if (labelPosition === 'top') {
+  if (resolvedLabelPosition === 'top') {
     return (
       <div ref={rootRef} className={cn('relative min-w-0 w-full', className)}>
         <label className="mb-1.5 block text-sm font-semibold text-ui-text">{label}</label>
         <div
           className={cn(
-            'flex min-h-[42px] items-center gap-2 rounded-lg border bg-ui-surface px-3 py-2 shadow-sm transition',
-            open ? 'border-moh-green ring-2 ring-moh-green/15' : 'border-ui-border',
+            'flex min-h-[42px] items-center gap-2 rounded-md border bg-ui-surface px-3 py-2 shadow-sm transition',
+            open
+              ? 'border-[var(--oa-field-border-focus)] ring-[3px] ring-[var(--oa-field-ring-focus)]'
+              : 'border-ui-border',
             disabled && 'cursor-not-allowed opacity-50',
           )}
         >
@@ -221,89 +224,77 @@ export function SearchableSelect({
   }
 
   return (
-    <div ref={rootRef} className={cn('relative min-w-[200px] w-full', className)}>
-      <div className={cn('relative h-10 w-full min-w-[200px]', disabled && 'opacity-50')}>
-        <div
-          role="combobox"
-          aria-expanded={open}
-          aria-haspopup="listbox"
-          className={cn(
-            'peer h-full w-full rounded-[7px] border border-blue-gray-200 bg-transparent px-3 py-2.5 font-sans text-sm font-normal text-ui-text outline outline-0 transition-all',
-            open && 'border-2 border-gray-900 border-t-transparent',
-            fieldState === 'withValue' && !open && 'border-t-transparent',
-            disabled && 'cursor-not-allowed bg-blue-gray-50',
-            !open && 'cursor-pointer',
-          )}
-          onClick={() => !open && openField()}
-        >
-          {open ? (
-            <input
-              ref={inputRef}
-              type="text"
-              disabled={disabled}
-              value={query}
-              placeholder={placeholder}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full bg-transparent pr-14 text-sm text-ui-text outline-none placeholder:text-ui-muted"
-            />
-          ) : (
-            <span className="absolute top-2/4 left-3 block max-w-[calc(100%-3rem)] -translate-y-2/4 truncate pt-0.5 text-left text-ui-text">
-              {displayValue}
-            </span>
-          )}
+    <div ref={rootRef} className={cn('oa-float-field relative min-w-[200px] w-full', className)}>
+      <div
+        role="combobox"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className={cn(
+          'oa-float-control relative flex items-center gap-2 !pr-10',
+          disabled && 'cursor-not-allowed opacity-50',
+          !open && 'cursor-pointer',
+          !displayValue && !open && 'is-placeholder',
+        )}
+        onClick={() => !open && openField()}
+      >
+        {open ? (
+          <input
+            ref={inputRef}
+            type="text"
+            disabled={disabled}
+            value={query}
+            placeholder={placeholder}
+            onChange={(e) => setQuery(e.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-sm text-ui-text outline-none placeholder:text-[var(--oa-placeholder-color)]"
+          />
+        ) : (
+          <span
+            className={cn(
+              'block min-w-0 flex-1 truncate text-left text-sm',
+              displayValue ? 'text-ui-text' : 'text-[var(--oa-placeholder-color)]',
+            )}
+          >
+            {displayValue || emptyLabel || placeholder}
+          </span>
+        )}
 
-          <div className="absolute top-2/4 right-2 flex -translate-y-2/4 items-center gap-0.5">
-            {allowClear && value && !open ? (
-              <button
-                type="button"
-                disabled={disabled}
-                className="rounded p-0.5 text-ui-muted hover:bg-ui-subtle hover:text-ui-text"
-                aria-label="Clear selection"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  choose('')
-                }}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            ) : null}
+        <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-0.5">
+          {allowClear && value && !open ? (
             <button
               type="button"
               disabled={disabled}
-              className="grid h-5 w-5 place-items-center text-ui-muted"
-              aria-label={open ? 'Close options' : 'Open options'}
+              className="rounded p-0.5 text-ui-muted hover:bg-ui-subtle hover:text-ui-text"
+              aria-label="Clear selection"
               onClick={(e) => {
                 e.stopPropagation()
-                if (disabled) return
-                if (open) {
-                  setOpen(false)
-                  setQuery('')
-                } else {
-                  openField()
-                }
+                choose('')
               }}
             >
-              <ChevronDown className={cn('h-5 w-5 transition', open && 'rotate-180')} />
+              <X className="h-4 w-4" />
             </button>
-          </div>
+          ) : null}
+          <button
+            type="button"
+            disabled={disabled}
+            className="grid h-5 w-5 place-items-center text-ui-muted"
+            aria-label={open ? 'Close options' : 'Open options'}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (disabled) return
+              if (open) {
+                setOpen(false)
+                setQuery('')
+              } else {
+                openField()
+              }
+            }}
+          >
+            <ChevronDown className={cn('h-5 w-5 transition', open && 'rotate-180')} />
+          </button>
         </div>
-
-        <label
-          className={cn(
-            'pointer-events-none absolute left-0 flex h-full w-full select-none font-normal text-ui-muted transition-all',
-            fieldState === 'close'
-              ? 'text-sm leading-[3.75] peer-disabled:text-ui-muted before:border-t-transparent after:border-t-transparent'
-              : 'text-[11px] leading-tight before:border-t-2 after:border-t-2',
-            fieldState === 'withValue' && 'text-[11px] leading-tight before:border-t after:border-t',
-            '-top-1.5 before:mr-1 before:block before:h-1.5 before:w-2.5 before:rounded-tl-md before:border-l before:border-blue-gray-200 before:transition-all after:ml-1 after:block after:h-1.5 after:flex-grow after:rounded-tr-md after:border-r after:border-blue-gray-200 after:transition-all',
-            open && 'text-[11px] leading-tight text-gray-900 before:border-l-2 before:border-blue-gray-200 after:border-r-2 after:border-blue-gray-200',
-            fieldState === 'withValue' && !open && 'text-[11px] text-ui-muted',
-          )}
-        >
-          {label}
-        </label>
       </div>
 
+      <label className="oa-float-label">{label}</label>
       {dropdown}
     </div>
   )

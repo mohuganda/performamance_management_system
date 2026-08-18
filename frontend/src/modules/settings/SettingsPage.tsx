@@ -31,6 +31,7 @@ import {
   hasAnyAdminSettingsPermission,
 } from '@/constants/settingsPermissions'
 import { useAuthStore } from '@/stores/appStore'
+import { useUiPreferencesStore } from '@/stores/uiPreferencesStore'
 import { mt } from '@/utils/mt'
 import { notifyApiError, toast } from '@/features/toast'
 import { cn } from '@/utils/cn'
@@ -124,6 +125,8 @@ export function SettingsPage() {
   const { quarter, setQuarter } = useAuthStore()
   const queryClient = useQueryClient()
   const { hasPermission } = useAuthStore()
+  const floatingLabels = useUiPreferencesStore((s) => s.floatingLabels)
+  const setFloatingLabels = useUiPreferencesStore((s) => s.setFloatingLabels)
   const [searchParams, setSearchParams] = useSearchParams()
   const canPrefsAdmin = canManagePreferencesAdmin(hasPermission)
   const canLists = canAccessSettingsTab(hasPermission, 'lists')
@@ -405,6 +408,14 @@ export function SettingsPage() {
             description="Choose light, dark, or match your device. Your choice is saved on this browser."
           >
             <ThemeAppearancePicker />
+            <div className="mt-4">
+              <ToggleRow
+                label="Floating field labels"
+                hint="Sit labels on the input border (Material-style). On by default — turn off to place labels above fields."
+                checked={floatingLabels}
+                onChange={setFloatingLabels}
+              />
+            </div>
           </SettingsSection>
 
           {canPrefsAdmin ? (

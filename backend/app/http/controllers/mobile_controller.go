@@ -112,11 +112,34 @@ func (c *MobileController) ListLeaveRequests(ctx http.Context) http.Response {
 	if err != nil || staffID == 0 {
 		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
 	}
-	rows, err := c.leave.ListForStaff(staffID)
+	rows, err := c.leave.ListRowsForStaff(staffID)
 	if err != nil {
 		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
 	}
 	return ctx.Response().Success().Json(rows)
+}
+
+// ListOicCandidates godoc
+// @Summary      List staff candidates for Officer in Charge
+// @Tags         mobile-leave
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200 {object} map[string]any
+// @Router       /api/v1/mobile/leave/oic-candidates [get]
+func (c *MobileController) ListOicCandidates(ctx http.Context) http.Response {
+	staffID, _ := staffIDFromContext(ctx)
+	candidates, err := services.NewSupervisorService().ListSupervisorCandidates()
+	if err != nil {
+		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
+	}
+	out := make([]services.SupervisorCandidate, 0, len(candidates))
+	for _, cnd := range candidates {
+		if cnd.StaffID == staffID {
+			continue
+		}
+		out = append(out, cnd)
+	}
+	return ctx.Response().Success().Json(out)
 }
 
 type leaveRequestBody struct {
@@ -125,6 +148,7 @@ type leaveRequestBody struct {
 	EndDate          string `json:"end_date"`
 	Reason           string `json:"reason"`
 	MedicalReportURL string `json:"medical_report_url"`
+	OicStaffID       uint   `json:"oic_staff_id"`
 	Submit           bool   `json:"submit"`
 }
 
@@ -162,6 +186,7 @@ func (c *MobileController) CreateLeaveRequest(ctx http.Context) http.Response {
 		EndDate:          end,
 		Reason:           body.Reason,
 		MedicalReportURL: body.MedicalReportURL,
+		OicStaffID:       body.OicStaffID,
 	})
 	if err != nil {
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})

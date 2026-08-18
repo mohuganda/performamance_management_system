@@ -110,6 +110,10 @@ func (s *InAppNotificationService) MarkAllRead(userID uint) error {
 	return err
 }
 
+func (s *InAppNotificationService) Notify(userID uint, notifType, category, title, message, dedupeKey, actionURL string) error {
+	return s.upsert(userID, notifType, category, title, message, dedupeKey, actionURL)
+}
+
 func (s *InAppNotificationService) upsert(userID uint, notifType, category, title, message, dedupeKey, actionURL string) error {
 	dedupeKey = strings.TrimSpace(dedupeKey)
 	if dedupeKey == "" {

@@ -191,6 +191,16 @@ func (s *SettingsService) notificationsConfig() map[string]any {
 			"days_before": s.GetString("notifications.supervisor_approval.days_before", "3,1"),
 			"description": "Remind supervisors to approve leave, travel, and performance plans",
 		},
+		"leave_plan_reminder": map[string]any{
+			"enabled":     s.GetBool("notifications.leave_plan_reminder.enabled", true),
+			"days_before": s.GetString("notifications.leave_reminder.days_before", "7,1"),
+			"description": "Remind employees and primary supervisors before planned annual leave starts",
+		},
+		"leave_start_reminder": map[string]any{
+			"enabled":     s.GetBool("notifications.leave_start_reminder.enabled", true),
+			"days_before": s.GetString("notifications.leave_reminder.days_before", "7,1"),
+			"description": "Remind employees and primary supervisors before approved leave starts",
+		},
 		"in_app_email_copy": map[string]any{
 			"enabled":     s.GetBool("notifications.in_app.email_copy", true),
 			"description": "Send an email copy when in-app notifications are created for a user",

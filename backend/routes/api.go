@@ -196,10 +196,18 @@ func Api() {
 			auth.Prefix("mobile").Group(func(mobile route.Router) {
 				mobile.Get("/approvals/inbox", mobileController.ApprovalsInbox)
 
+				leavePlanController := controllers.NewLeavePlanController()
+				mobile.Middleware(middleware.Permission("leave.plans.view")).Get("/leave-plans", leavePlanController.ListMine)
+				mobile.Middleware(middleware.Permission("leave.plans.view_team")).Get("/leave-plans/team", leavePlanController.ListTeam)
+				mobile.Middleware(middleware.Permission("leave.plans.manage")).Post("/leave-plans", leavePlanController.Create)
+				mobile.Middleware(middleware.Permission("leave.plans.manage")).Put("/leave-plans/{id}", leavePlanController.Update)
+				mobile.Middleware(middleware.Permission("leave.plans.manage")).Delete("/leave-plans/{id}", leavePlanController.Delete)
+
 				mobile.Middleware(middleware.Permission("leave.requests.view")).Get("/leave/config", mobileController.LeaveConfig)
 				mobile.Middleware(middleware.Permission("leave.requests.view")).Get("/leave/types", mobileController.ListLeaveTypes)
 				mobile.Middleware(middleware.Permission("leave.requests.view")).Get("/leave/balances", mobileController.ListLeaveBalances)
 				mobile.Middleware(middleware.Permission("leave.requests.view")).Get("/leave/requests", mobileController.ListLeaveRequests)
+				mobile.Middleware(middleware.Permission("leave.requests.create")).Get("/leave/oic-candidates", mobileController.ListOicCandidates)
 				mobile.Middleware(middleware.Permission("leave.requests.create")).Post("/leave/requests", mobileController.CreateLeaveRequest)
 				mobile.Middleware(middleware.Permission("leave.requests.approve")).Post("/leave/approvals/{id}", mobileController.ApproveLeave)
 				mobile.Middleware(middleware.Permission("leave.requests.approve")).Get("/leave/pending-approvals", mobileController.ListPendingLeaveApprovals)

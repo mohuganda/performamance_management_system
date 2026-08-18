@@ -92,6 +92,14 @@ export const navGroups: NavGroup[] = [
     icon: Clock,
     items: [
       {
+        id: 'leave-plan',
+        label: 'Leave plan',
+        path: '/leave-plan',
+        icon: CalendarDays,
+        description: 'Plan annual leave blocks for the year',
+        permission: 'leave.plans.view',
+      },
+      {
         id: 'leave',
         label: 'Leave',
         path: '/leave',
