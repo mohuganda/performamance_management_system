@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { dashboardService } from '@/api/services/pms'
 import { DashboardDrilldownPanel, useDashboardDrilldown } from '@/components/dashboard/DashboardDrilldownPanel'
 import { DashboardHeader } from '@/components/organisms/DashboardHeader'
+import { EmployeeBiodataSummaryCard } from '@/components/molecules/EmployeeBiodataSummary'
 import { ProgressBar } from '@/components/molecules/ProgressBar'
 import { SummaryCard } from '@/components/molecules/SummaryCard'
 import { Card } from '@/components/atoms/Card'
@@ -53,8 +54,9 @@ export function SupervisorDashboard() {
             context={`Team: ${(data.team as string) ?? '—'}`}
             quarter={quarter}
           />
+          <EmployeeBiodataSummaryCard />
 
-          <Card>
+          <Card className="dashboard-flat-card">
             <ProgressBar
               value={teamCompletion.percent ?? 0}
               label="Team Task Completion"

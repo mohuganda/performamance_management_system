@@ -183,11 +183,12 @@ func Api() {
 				kpi.Middleware(middleware.Permission("kpi.catalog.manage")).Delete("/kpis/{id}", kpiAdminController.DeactivateKpi)
 				kpi.Middleware(middleware.Permission("kpi.assignments.view")).Get("/assignments", kpiAdminController.ListAssignments)
 				kpi.Middleware(middleware.Permission("kpi.assignments.manage")).Post("/assignments", kpiAdminController.CreateAssignment)
+				kpi.Middleware(middleware.Permission("kpi.assignments.manage")).Post("/assignments/bulk-remove", kpiAdminController.DeactivateAssignmentsBulk)
 				kpi.Middleware(middleware.Permission("kpi.assignments.manage")).Delete("/assignments/{id}", kpiAdminController.DeactivateAssignment)
 				kpi.Middleware(middleware.Permission("kpi.assignments.view", "kpi.assignments.manage")).Get("/jobs", kpiAdminController.ListJobs)
 				kpi.Middleware(middleware.Permission("kpi.assignments.view", "kpi.assignments.manage")).Get("/departments", kpiAdminController.ListDepartments)
 				kpi.Middleware(middleware.Permission("kpi.assignments.view", "kpi.assignments.manage")).Get("/assignment-targets", kpiAdminController.AssignmentTargets)
-				kpi.Middleware(middleware.Permission("kpi.assignments.manage")).Get("/staff-search", kpiAdminController.SearchStaff)
+				kpi.Middleware(middleware.Permission("kpi.assignments.view", "kpi.assignments.manage")).Get("/staff-search", kpiAdminController.SearchStaff)
 			})
 
 			auth.Post("/uploads", uploadController.UploadAttachment)
@@ -195,6 +196,12 @@ func Api() {
 
 			auth.Prefix("mobile").Group(func(mobile route.Router) {
 				mobile.Get("/approvals/inbox", mobileController.ApprovalsInbox)
+				mobile.Get("/approvals/detail", mobileController.ApprovalDetail)
+				// Assigned approvers are authorized in-service; keep these reachable from the unified inbox.
+				mobile.Post("/leave/approvals/{id}", mobileController.ApproveLeave)
+				mobile.Get("/leave/pending-approvals", mobileController.ListPendingLeaveApprovals)
+				mobile.Post("/out-of-station/approvals/{id}", mobileController.ApproveOos)
+				mobile.Get("/out-of-station/pending-approvals", mobileController.ListPendingOosApprovals)
 
 				leavePlanController := controllers.NewLeavePlanController()
 				mobile.Middleware(middleware.Permission("leave.plans.view")).Get("/leave-plans", leavePlanController.ListMine)
@@ -209,14 +216,10 @@ func Api() {
 				mobile.Middleware(middleware.Permission("leave.requests.view")).Get("/leave/requests", mobileController.ListLeaveRequests)
 				mobile.Middleware(middleware.Permission("leave.requests.create")).Get("/leave/oic-candidates", mobileController.ListOicCandidates)
 				mobile.Middleware(middleware.Permission("leave.requests.create")).Post("/leave/requests", mobileController.CreateLeaveRequest)
-				mobile.Middleware(middleware.Permission("leave.requests.approve")).Post("/leave/approvals/{id}", mobileController.ApproveLeave)
-				mobile.Middleware(middleware.Permission("leave.requests.approve")).Get("/leave/pending-approvals", mobileController.ListPendingLeaveApprovals)
 
 				mobile.Middleware(middleware.Permission("oos.requests.view")).Get("/out-of-station/reasons", mobileController.ListOosReasons)
 				mobile.Middleware(middleware.Permission("oos.requests.view")).Get("/out-of-station/requests", mobileController.ListOosRequests)
 				mobile.Middleware(middleware.Permission("oos.requests.create")).Post("/out-of-station/requests", mobileController.CreateOosRequest)
-				mobile.Middleware(middleware.Permission("oos.requests.approve")).Post("/out-of-station/approvals/{id}", mobileController.ApproveOos)
-				mobile.Middleware(middleware.Permission("oos.requests.approve")).Get("/out-of-station/pending-approvals", mobileController.ListPendingOosApprovals)
 
 				mobile.Middleware(middleware.Permission("attendance.clock")).Post("/attendance/clock", mobileController.Clock)
 				mobile.Middleware(middleware.Permission("attendance.view")).Get("/attendance/clocks", mobileController.ListAttendance)
@@ -232,6 +235,8 @@ func Api() {
 				mobile.Middleware(middleware.Permission("performance.view")).Post("/performance/appraisal", mobileController.SavePerformanceAppraisal)
 				mobile.Middleware(middleware.Permission("performance.view")).Get("/performance/appraisal", mobileController.GetPerformanceAppraisal)
 				mobile.Middleware(middleware.Permission("performance.view")).Post("/performance/ppa/review", mobileController.ReviewPerformancePpa)
+				mobile.Middleware(middleware.Permission("performance.view")).Get("/performance/ppa/review-detail", mobileController.GetPpaReviewDetail)
+				mobile.Middleware(middleware.Permission("performance.view")).Get("/performance/report/review-detail", mobileController.GetReportReviewDetail)
 				mobile.Middleware(middleware.Permission("performance.view")).Get("/performance/pending-appraisals", mobileController.ListPendingAppraisalReviews)
 				mobile.Middleware(middleware.Permission("performance.view")).Post("/performance/appraisal/review", mobileController.ReviewPerformanceAppraisal)
 				mobile.Get("/performance/status-report", mobileController.PerformanceStatusReport)

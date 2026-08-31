@@ -154,10 +154,8 @@ func (s *HrmAttendService) MonthlySummaries(months int) []HrmAttendSummary {
 	if live := s.fetchLiveSummaries(months); len(live) > 0 {
 		return live
 	}
-	if isProductionDeployment() {
-		return nil
-	}
-	return s.demoSummaries(months)
+	// Prefer empty over fabricated demo curves so dashboards stay realistic.
+	return nil
 }
 
 func (s *HrmAttendService) fetchLiveSummaries(months int) []HrmAttendSummary {

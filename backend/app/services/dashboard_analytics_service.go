@@ -294,13 +294,45 @@ func (s *DashboardAnalyticsService) oosRatesByDistrict() map[string]float64 {
 	return out
 }
 
+func (s *DashboardAnalyticsService) monthlyOosFromClocks(months int) map[string]float64 {
+	out := map[string]float64{}
+	if months <= 0 {
+		months = 4
+	}
+	now := time.Now()
+	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -(months-1), 0)
+	var clocks []models.AttendanceClock
+	_ = facades.Orm().Query().Where("clocked_at >= ?", start).Get(&clocks)
+	type bucket struct{ total, verified int }
+	byMonth := map[string]*bucket{}
+	for _, clk := range clocks {
+		key := clk.ClockedAt.Format("Jan 2006")
+		b := byMonth[key]
+		if b == nil {
+			b = &bucket{}
+			byMonth[key] = b
+		}
+		b.total++
+		if clk.VerificationStatus == "verified_oos" || clk.VerificationStatus == "at_duty_station" {
+			b.verified++
+		}
+	}
+	for key, b := range byMonth {
+		if b.total == 0 {
+			continue
+		}
+		out[key] = math.Round(float64(b.verified)/float64(b.total)*1000) / 10
+	}
+	return out
+}
+
 func (s *DashboardAnalyticsService) AttendanceTrends(months int) map[string]any {
 	if months <= 0 {
 		months = 4
 	}
 
 	hrmRows := s.hrm.MonthlySummaries(months)
-	monthlyOos := map[string]float64{}
+	monthlyOos := s.monthlyOosFromClocks(months)
 	source := "mysql"
 
 	if s.doris.Available() {
@@ -309,28 +341,46 @@ func (s *DashboardAnalyticsService) AttendanceTrends(months int) map[string]any 
 			source = "doris"
 		}
 		if rates, err := s.doris.MonthlyOosRates(months); err == nil && len(rates) > 0 {
-			monthlyOos = rates
+			for k, v := range rates {
+				if v > 0 {
+					monthlyOos[k] = v
+				}
+			}
 		}
 	}
 
-	labels := make([]string, 0, len(hrmRows))
-	hrmSeries := make([]float64, 0, len(hrmRows))
-	oosSeries := make([]float64, 0, len(hrmRows))
-	combined := make([]float64, 0, len(hrmRows))
+	labels := make([]string, 0, months)
+	hrmSeries := make([]float64, 0, months)
+	oosSeries := make([]float64, 0, months)
+	combined := make([]float64, 0, months)
 
-	oosBase := s.nationalOosRate()
-	for i, row := range hrmRows {
-		labels = append(labels, row.Month)
-		hrmSeries = append(hrmSeries, row.DutyStationPercent)
-		oos := monthlyOos[row.Month]
-		if oos == 0 {
-			oos = oosBase + float64(i%3) - 1
-			if oos < 70 {
-				oos = 70
+	if len(hrmRows) > 0 {
+		for _, row := range hrmRows {
+			labels = append(labels, row.Month)
+			hrmSeries = append(hrmSeries, row.DutyStationPercent)
+			oos := monthlyOos[row.Month]
+			oosSeries = append(oosSeries, oos)
+			if row.DutyStationPercent > 0 && oos > 0 {
+				combined = append(combined, math.Round((oos*0.35+row.DutyStationPercent*0.65)*10)/10)
+			} else if row.DutyStationPercent > 0 {
+				combined = append(combined, math.Round(row.DutyStationPercent*10)/10)
+			} else {
+				combined = append(combined, oos)
 			}
 		}
-		oosSeries = append(oosSeries, math.Round(oos*10)/10)
-		combined = append(combined, math.Round((oos*0.35+row.DutyStationPercent*0.65)*10)/10)
+	} else {
+		now := time.Now()
+		for i := months - 1; i >= 0; i-- {
+			label := now.AddDate(0, -i, 0).Format("Jan 2006")
+			oos := monthlyOos[label]
+			if oos <= 0 {
+				continue
+			}
+			labels = append(labels, label)
+			hrmSeries = append(hrmSeries, 0)
+			oosSeries = append(oosSeries, oos)
+			combined = append(combined, oos)
+		}
 	}
 
 	return map[string]any{
@@ -340,8 +390,8 @@ func (s *DashboardAnalyticsService) AttendanceTrends(months int) map[string]any 
 			"pms_out_of_station":   oosSeries,
 			"combined_full_record": combined,
 		},
-		"target":  s.AttendanceTarget(),
-		"source":  source,
+		"target": s.AttendanceTarget(),
+		"source": source,
 	}
 }
 
@@ -364,7 +414,7 @@ func (s *DashboardAnalyticsService) nationalOosRate() float64 {
 		}
 	}
 	if total == 0 {
-		return 89.5
+		return 0
 	}
 	return math.Round(float64(verified)/float64(total)*1000) / 10
 }
@@ -393,6 +443,9 @@ func (s *DashboardAnalyticsService) NationalAttendanceSummary() map[string]any {
 func (s *DashboardAnalyticsService) StaffAttendanceSummary(staffID uint) []map[string]any {
 	target := s.AttendanceTarget()
 	months := []time.Time{
+		time.Now().AddDate(0, -5, 0),
+		time.Now().AddDate(0, -4, 0),
+		time.Now().AddDate(0, -3, 0),
 		time.Now().AddDate(0, -2, 0),
 		time.Now().AddDate(0, -1, 0),
 		time.Now(),
@@ -408,43 +461,46 @@ func (s *DashboardAnalyticsService) StaffAttendanceSummary(staffID uint) []map[s
 			Where("clocked_at < ?", end).
 			Get(&clocks)
 
-		oosDays := map[string]bool{}
 		verified := 0
 		for _, clk := range clocks {
-			day := clk.ClockedAt.Format("2006-01-02")
-			oosDays[day] = true
 			if clk.VerificationStatus == "verified_oos" || clk.VerificationStatus == "at_duty_station" {
 				verified++
 			}
 		}
-		oosPct := 88.0
-		if len(clocks) > 0 {
+		oosPct := 0.0
+		hasOos := len(clocks) > 0
+		if hasOos {
 			oosPct = math.Round(float64(verified)/float64(len(clocks))*1000) / 10
 		}
 		yearMonth := start.Format("2006-01")
-		hrmPct := 94.0
-		if pct, ok := s.hrm.StaffMonthlyPercent(staffID, yearMonth); ok {
-			hrmPct = pct
+		hrmPct, hasHrm := s.hrm.StaffMonthlyPercent(staffID, yearMonth)
+		if !hasOos && !hasHrm {
+			continue
 		}
-		combined := math.Round((oosPct*0.35+hrmPct*0.65)*10) / 10
+		combined := 0.0
+		switch {
+		case hasOos && hasHrm:
+			combined = math.Round((oosPct*0.35+hrmPct*0.65)*10) / 10
+		case hasHrm:
+			combined = math.Round(hrmPct*10) / 10
+		default:
+			combined = oosPct
+		}
 		status := "on_target"
 		if combined < target {
 			status = "below_target"
 		}
 		rows = append(rows, map[string]any{
-			"month":              start.Format("January"),
+			"month":                  start.Format("Jan 2006"),
 			"oos_attendance_percent": oosPct,
 			"hrm_summary_percent":    hrmPct,
 			"combined_percent":       combined,
 			"target":                 target,
 			"oos_clock_events":       len(clocks),
 			"status":                 status,
+			"has_hrm":                hasHrm,
+			"has_oos":                hasOos,
 		})
-	}
-	if len(rows) == 0 {
-		return []map[string]any{
-			{"month": "July", "oos_attendance_percent": 90, "hrm_summary_percent": 95, "combined_percent": 93.2, "target": target, "status": "below_target"},
-		}
 	}
 	return rows
 }

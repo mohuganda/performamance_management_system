@@ -6,6 +6,7 @@ import { Briefcase, Camera, Contact, PenLine, Shield, UserCircle } from 'lucide-
 import { authService } from '@/api/services/auth'
 import { leaveService } from '@/api/services/mobile'
 import { AuthenticatorSetupCard } from '@/components/molecules/AuthenticatorSetupCard'
+import { EmployeeBiodataSummary } from '@/components/molecules/EmployeeBiodataSummary'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
 import { UserAvatar } from '@/components/atoms/UserAvatar'
@@ -167,6 +168,8 @@ export function ProfilePage() {
         variant="profile"
         onRetry={() => meQuery.refetch()}
       >
+        <EmployeeBiodataSummary staff={staff} className="mb-6" />
+
         <div className="grid gap-6 lg:grid-cols-3">
           <Card {...mt} className="rounded-sm border border-moh-green/15 p-4 lg:col-span-1">
             <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
@@ -271,9 +274,35 @@ export function ProfilePage() {
                 <ProfileField label="Salary grade" value={staff.salary_grade} />
                 <ProfileField label="Cadre" value={staff.cadre} />
                 <ProfileField label="Region" value={staff.region} />
-                <ProfileField label="Supervisor" value={staff.supervisor_name} />
                 <ProfileField label="iHRIS last sync" value={formatDateTime(staff.ihris_last_sync_at)} />
               </ProfileFieldGrid>
+              {(staff.supervisors?.length ?? 0) > 0 || staff.supervisor_name ? (
+                <div className="mt-4 border-t border-gray-100 pt-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Supervisors
+                  </p>
+                  <ul className="space-y-2 text-sm">
+                    {(staff.supervisors?.length
+                      ? [...staff.supervisors].sort((a, b) => a.sequence - b.sequence)
+                      : [{ sequence: 1, supervisor_staff_id: 0, supervisor_name: staff.supervisor_name }]
+                    ).map((sup) => (
+                      <li key={`${sup.sequence}-${sup.supervisor_staff_id}`} className="flex flex-col">
+                        <span className="font-medium text-gray-900">
+                          {sup.sequence === 1 ? 'Primary' : `Supervisor ${sup.sequence}`}:{' '}
+                          {formatLabel(sup.supervisor_name)}
+                        </span>
+                        {sup.supervisor_job_title ? (
+                          <span className="text-xs text-gray-500">{sup.supervisor_job_title}</span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="mt-4 border-t border-gray-100 pt-3 text-sm text-amber-800">
+                  No supervisors assigned yet. Contact HR if this looks wrong.
+                </p>
+              )}
             </ProfileSection>
 
             <ProfileSection title="Personal & Contact" icon={Contact}>

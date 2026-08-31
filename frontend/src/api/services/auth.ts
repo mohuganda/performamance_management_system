@@ -40,6 +40,13 @@ export interface MeAccountInfo {
   activation_completed_at?: string | null
 }
 
+export interface StaffSupervisorSlot {
+  sequence: number
+  supervisor_staff_id: number
+  supervisor_name?: string
+  supervisor_job_title?: string
+}
+
 export interface StaffProfileDetail {
   staff_id: number
   ihris_pid: string
@@ -66,6 +73,7 @@ export interface StaffProfileDetail {
   employment_terms?: string
   salary_grade?: string
   supervisor_name?: string
+  supervisors?: StaffSupervisorSlot[]
   ihris_last_sync_at?: string
 }
 

@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -521,6 +522,19 @@ func NewDashboardService() *DashboardService {
 	}
 }
 
+func (s *DashboardService) staffClockedOn(staffID uint, day time.Time) bool {
+	start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.Local)
+	end := start.Add(24 * time.Hour)
+	var clocks []models.AttendanceClock
+	_ = facades.Orm().Query().
+		Where("staff_id", staffID).
+		Where("clocked_at >= ?", start).
+		Where("clocked_at < ?", end).
+		Limit(1).
+		Get(&clocks)
+	return len(clocks) > 0
+}
+
 func (s *DashboardService) HealthWorkerDashboard(staffID uint, quarter string) map[string]any {
 	cacheKey := fmt.Sprintf("pms:dashboard:health_worker:%d:%s", staffID, quarter)
 	if raw := facades.Cache().Get(cacheKey, ""); raw != nil {
@@ -534,6 +548,137 @@ func (s *DashboardService) HealthWorkerDashboard(staffID uint, quarter string) m
 
 	perf := NewPerformanceService()
 	overall, _ := perf.OverallRatingForStaff(staffID)
+	now := time.Now()
+
+	tasksDue := make([]map[string]any, 0, 4)
+	if !s.staffClockedOn(staffID, now) {
+		tasksDue = append(tasksDue, map[string]any{"task": "Clock in/out (today)", "status": "pending"})
+	}
+	yesterday := now.AddDate(0, 0, -1)
+	if yesterday.Weekday() != time.Saturday && yesterday.Weekday() != time.Sunday && !s.staffClockedOn(staffID, yesterday) {
+		tasksDue = append(tasksDue, map[string]any{
+			"task":   fmt.Sprintf("Clock in/out (%s)", yesterday.Format("2 Jan 2006")),
+			"status": "missed",
+			"action": "explain",
+		})
+	}
+
+	upcoming := make([]map[string]any, 0, 4)
+	quarterlyTasks := make([]map[string]any, 0, 6)
+	completedTasks := 0
+	totalTasks := 0
+
+	fy, fyErr := currentFinancialYear()
+	ppaStatus := strings.TrimSpace(overall.PpaStatus)
+	if fyErr == nil {
+		duePPA := fy.StartDate.AddDate(0, 1, 0)
+		daysPPA := int(duePPA.Sub(now).Hours() / 24)
+		switch ppaStatus {
+		case "", "draft", "returned":
+			totalTasks++
+			quarterlyTasks = append(quarterlyTasks, map[string]any{
+				"id": "HW-PPA", "description": "Complete and submit annual performance plan",
+				"due_date": duePPA.Format("2006-01-02"), "status": "pending", "action": "Review", "action_url": "/performance",
+			})
+			if daysPPA >= 0 && daysPPA <= 14 {
+				upcoming = append(upcoming, map[string]any{
+					"task": "Submit performance plan", "days_remaining": daysPPA, "severity": "warning",
+				})
+			}
+		case "supervisor_review":
+			totalTasks++
+			quarterlyTasks = append(quarterlyTasks, map[string]any{
+				"id": "HW-PPA", "description": "Performance plan awaiting supervisor approval",
+				"due_date": duePPA.Format("2006-01-02"), "status": "in_progress", "action": "Review", "action_url": "/performance",
+			})
+		case "approved":
+			totalTasks++
+			completedTasks++
+			quarterlyTasks = append(quarterlyTasks, map[string]any{
+				"id": "HW-PPA", "description": "Annual performance plan approved",
+				"due_date": duePPA.Format("2006-01-02"), "status": "completed", "action": "Review", "action_url": "/performance",
+			})
+		}
+	}
+
+	var reports []models.PerformanceReport
+	if fyErr == nil {
+		_ = facades.Orm().Query().
+			Where("staff_id", staffID).
+			Where("financial_year_id", fy.ID).
+			Get(&reports)
+	}
+	reportByType := map[string]models.PerformanceReport{}
+	for _, r := range reports {
+		reportByType[r.ReportType] = r
+	}
+	for _, period := range []string{"q1", "midterm", "q3", "endterm"} {
+		totalTasks++
+		label := map[string]string{
+			"q1": "Q1 progress report", "midterm": "Mid-term appraisal",
+			"q3": "Q3 progress report", "endterm": "End-term appraisal",
+		}[period]
+		rep, ok := reportByType[period]
+		status := "pending"
+		action := "Start"
+		if ok {
+			switch rep.Status {
+			case "approved":
+				status = "completed"
+				action = "Review"
+				completedTasks++
+			case "submitted", "supervisor_review", "under_review":
+				status = "in_progress"
+				action = "Review"
+			case "returned":
+				status = "pending"
+				action = "Start"
+			default:
+				if rep.Status != "" {
+					status = rep.Status
+				}
+			}
+		}
+		quarterlyTasks = append(quarterlyTasks, map[string]any{
+			"id":          fmt.Sprintf("HW-%s", strings.ToUpper(period)),
+			"description": label,
+			"due_date":    "",
+			"status":      status,
+			"action":      action,
+			"action_url":  "/performance",
+		})
+	}
+
+	leavePending, _ := facades.Orm().Query().Model(&models.LeaveRequest{}).
+		Where("staff_id", staffID).
+		Where("status IN ?", []string{"submitted", "pending", "supervisor_review"}).
+		Count()
+	totalTasks++
+	leaveStatus := "pending"
+	leaveAction := "Apply"
+	if leavePending > 0 {
+		leaveStatus = "in_progress"
+		leaveAction = "View"
+	} else {
+		approvedLeave, _ := facades.Orm().Query().Model(&models.LeaveRequest{}).
+			Where("staff_id", staffID).
+			Where("status", "approved").
+			Count()
+		if approvedLeave > 0 {
+			leaveStatus = "completed"
+			leaveAction = "View"
+			completedTasks++
+		}
+	}
+	quarterlyTasks = append(quarterlyTasks, map[string]any{
+		"id": "HW-LEAVE", "description": "Submit leave requests for the quarter",
+		"due_date": "", "status": leaveStatus, "action": leaveAction, "action_url": "/leave",
+	})
+
+	percent := 0
+	if totalTasks > 0 {
+		percent = int(math.Round(float64(completedTasks) / float64(totalTasks) * 100))
+	}
 
 	payload := map[string]any{
 		"role":    "health_worker",
@@ -547,31 +692,16 @@ func (s *DashboardService) HealthWorkerDashboard(staffID uint, quarter string) m
 			"financial_year":   overall.FinancialYear,
 		},
 		"task_completion": map[string]any{
-			"percent":   55,
-			"completed": 8,
-			"total":     14,
+			"percent":   percent,
+			"completed": completedTasks,
+			"total":     totalTasks,
 		},
 		"immediate_focus": map[string]any{
-			"tasks_due_this_week": []map[string]any{
-				{"task": "Clock in/out (today)", "status": "pending"},
-				{"task": "Clock in/out (yesterday)", "status": "missed", "action": "explain"},
-			},
-			"upcoming_deadlines": []map[string]any{
-				{"task": "Acknowledge performance plan", "days_remaining": 3, "severity": "warning"},
-				{"task": "Submit Q1 leave requests", "days_remaining": 5, "severity": "warning"},
-			},
+			"tasks_due_this_week": tasksDue,
+			"upcoming_deadlines":  upcoming,
 		},
-		"quarterly_tasks": []map[string]any{
-			{"id": "HW-01", "description": "Review annual performance plan", "due_date": "2026-07-15", "status": "pending", "action": "Review"},
-			{"id": "HW-02", "description": "Complete self-appraisal", "due_date": "2026-09-30", "status": "in_progress", "action": "Start"},
-			{"id": "HW-03", "description": "Submit Q1 leave requests", "due_date": "2026-08-01", "status": "pending", "action": "Apply"},
-		},
+		"quarterly_tasks":    quarterlyTasks,
 		"attendance_summary": s.analytics.StaffAttendanceSummary(staffID),
-		"notifications": []map[string]any{
-			{"type": "error", "message": "MISSED: You did not clock in on 15 July 2026. Please provide reason."},
-			{"type": "warning", "message": "UPCOMING: Performance plan acknowledgment due in 3 days."},
-			{"type": "success", "message": "COMPLETED: Your Q1 leave request for 5 days was approved."},
-		},
 	}
 
 	for k, v := range s.analytics.AnalyticsBundle("staff", staffID) {
@@ -586,71 +716,187 @@ func (s *DashboardService) HealthWorkerDashboard(staffID uint, quarter string) m
 	return payload
 }
 
-func (s *DashboardService) SupervisorDashboard(team string, quarter string) map[string]any {
+func (s *DashboardService) SupervisorDashboard(staffID uint, team string, quarter string) map[string]any {
+	pendingApprovals := make([]map[string]any, 0)
+	if staffID > 0 {
+		if inbox, err := NewApprovalsInboxService().Inbox(staffID); err == nil {
+			for _, item := range inbox.Pending {
+				if len(pendingApprovals) >= 20 {
+					break
+				}
+				refID := item.ApprovalID
+				switch item.Module {
+				case "ppa":
+					refID = item.PpaID
+				case "performance":
+					refID = item.ReportID
+				}
+				pendingApprovals = append(pendingApprovals, map[string]any{
+					"type":       item.TypeLabel,
+					"staff_name": item.StaffName,
+					"details":    item.Title,
+					"date":       item.SubmittedAt,
+					"action":     "Review",
+					"action_url": fmt.Sprintf("/approvals/%s/%d", item.Module, refID),
+				})
+			}
+		}
+	}
+
+	teamMembers := make([]map[string]any, 0)
+	onTrack, atRisk, offTrack := 0, 0, 0
+	if staffID > 0 {
+		var links []models.StaffSupervisor
+		_ = facades.Orm().Query().
+			Where("supervisor_staff_id", staffID).
+			Where("is_current", true).
+			Get(&links)
+		perf := NewPerformanceService()
+		seen := map[uint]bool{}
+		for _, link := range links {
+			var contract models.StaffContract
+			if err := facades.Orm().Query().Where("id", link.StaffContractID).First(&contract); err != nil || contract.StaffID == 0 {
+				continue
+			}
+			if seen[contract.StaffID] {
+				continue
+			}
+			seen[contract.StaffID] = true
+			var staff models.Staff
+			_ = facades.Orm().Query().Where("id", contract.StaffID).First(&staff)
+			name := staffDisplayName(staff)
+			if name == "" {
+				name = fmt.Sprintf("Staff #%d", contract.StaffID)
+			}
+			overall, _ := perf.OverallRatingForStaff(contract.StaffID)
+			pct := int(math.Round(overall.OverallNormalized))
+			status := "on_track"
+			switch {
+			case overall.OverallNormalized >= 80:
+				onTrack++
+			case overall.OverallNormalized >= 60:
+				status = "at_risk"
+				atRisk++
+			case overall.OverallNormalized <= 0 && overall.PpaStatus != "approved":
+				status = "at_risk"
+				atRisk++
+				pct = 0
+			default:
+				status = "off_track"
+				offTrack++
+			}
+			teamMembers = append(teamMembers, map[string]any{
+				"staff_name": name,
+				"tasks_due":  4,
+				"completed":  0,
+				"percent":    pct,
+				"status":     status,
+			})
+		}
+	}
+
+	total := len(teamMembers)
+	teamPct := 0
+	if total > 0 {
+		teamPct = int(math.Round(float64(onTrack) / float64(total) * 100))
+	}
+	if team == "" {
+		team = "My team"
+	}
+
+	pipCandidates := make([]map[string]any, 0)
+	for _, m := range teamMembers {
+		if m["status"] == "off_track" {
+			pipCandidates = append(pipCandidates, map[string]any{
+				"staff_name": m["staff_name"],
+				"reason":     fmt.Sprintf("Performance at %v%% — below expected track", m["percent"]),
+				"action":     "Review",
+				"action_url": "/approvals",
+			})
+		}
+	}
+
 	return map[string]any{
 		"role":    "supervisor",
 		"team":    team,
 		"quarter": quarter,
 		"team_task_completion": map[string]any{
-			"percent":  75,
-			"on_track": 6,
-			"total":    8,
+			"percent":  teamPct,
+			"on_track": onTrack,
+			"total":    total,
 		},
 		"summary_cards": map[string]any{
-			"total_staff": 8,
-			"on_track":    6,
-			"at_risk":     1,
-			"off_track":   1,
+			"total_staff": total,
+			"on_track":    onTrack,
+			"at_risk":     atRisk,
+			"off_track":   offTrack,
 		},
-		"pending_approvals": []map[string]any{
-			{"type": "Leave", "staff_name": "J. Nakato", "details": "Annual leave - 5 days", "date": "2026-07-10", "action": "Approve/Reject"},
-			{"type": "Appr", "staff_name": "P. Okello", "details": "Q1 self-appraisal", "date": "2026-07-12", "action": "Review"},
-		},
-		"team_members": []map[string]any{
-			{"staff_name": "Dr. Ismail Wadembere", "tasks_due": 14, "completed": 12, "percent": 86, "status": "on_track"},
-			{"staff_name": "J. Nakato", "tasks_due": 14, "completed": 10, "percent": 71, "status": "at_risk"},
-			{"staff_name": "P. Okello", "tasks_due": 14, "completed": 8, "percent": 57, "status": "off_track"},
-		},
-		"pip_candidates": []map[string]any{
-			{"staff_name": "P. Okello", "reason": "Missed 3 tasks in Q1, Attendance <80%", "action": "Initiate PIP"},
-		},
+		"pending_approvals": pendingApprovals,
+		"team_members":      teamMembers,
+		"pip_candidates":    pipCandidates,
 	}
 }
 
 func (s *DashboardService) DepartmentHeadDashboard(staffID uint, quarter string) map[string]any {
 	org := s.org.ResolveForStaff(staffID)
+	facilities := s.org.ListFacilityPerformance(0)
+	summary := s.org.SummarizeFacilities(facilities)
+
+	onTrack := summary["on_track"]
+	atRisk := summary["at_risk"]
+	offTrack := summary["off_track"]
+	teamRows := make([]map[string]any, 0, len(facilities))
+	interventions := make([]map[string]any, 0)
+	sumPct := 0
+	for _, row := range facilities {
+		sumPct += row.AvgTaskPercent
+		teamRows = append(teamRows, map[string]any{
+			"team":             row.Facility,
+			"staff":            row.Staff,
+			"avg_task_percent": row.AvgTaskPercent,
+			"attendance":       row.Attendance,
+			"status":           row.Status,
+		})
+		if row.Status == "off_track" {
+			interventions = append(interventions, map[string]any{
+				"team":    row.Facility,
+				"reason":  fmt.Sprintf("Task completion %d%%, attendance %d%%", row.AvgTaskPercent, row.Attendance),
+				"actions": []string{"Schedule Meeting", "Review team"},
+			})
+		}
+	}
+	avgPct := 0
+	if len(facilities) > 0 {
+		avgPct = int(math.Round(float64(sumPct) / float64(len(facilities))))
+	}
+
+	trendQuarters := []map[string]any{
+		{"label": quarter, "value": avgPct},
+	}
+
 	payload := map[string]any{
 		"role":                  "department_head",
 		"org_context":           org,
 		"quarter":               quarter,
 		"task_completion_label": s.org.TaskCompletionLabel(org),
 		"task_completion": map[string]any{
-			"percent":  68,
-			"on_track": 4,
-			"total":    6,
+			"percent":  avgPct,
+			"on_track": onTrack,
+			"total":    len(facilities),
 		},
 		"summary_cards": map[string]any{
-			"total_teams": 6,
-			"total_staff": 45,
-			"on_track":    4,
-			"at_risk":     1,
-			"off_track":   1,
+			"total_teams": len(facilities),
+			"total_staff": summary["total_staff"],
+			"on_track":    onTrack,
+			"at_risk":     atRisk,
+			"off_track":   offTrack,
 		},
-		"team_performance": []map[string]any{
-			{"team": "Ward A – J. Mukasa", "staff": 8, "avg_task_percent": 86, "attendance": 94, "status": "on_track"},
-			{"team": "Ward D – P. Wasswa", "staff": 7, "avg_task_percent": 57, "attendance": 82, "status": "off_track"},
-		},
-		"intervention_required": []map[string]any{
-			{"team": "Ward D – P. Wasswa", "reason": "Task completion 57%, attendance below 85%", "actions": []string{"Schedule Meeting", "Initiate Team PIP"}},
-		},
+		"team_performance":      teamRows,
+		"intervention_required": interventions,
 		"trends": map[string]any{
-			"target": 85,
-			"actual": 68,
-			"quarters": []map[string]any{
-				{"label": "Q4 2024", "value": 72},
-				{"label": "Q1 2025", "value": 70},
-				{"label": "Q2 2026", "value": 68},
-			},
+			"target":   85,
+			"actual":   avgPct,
+			"quarters": trendQuarters,
 		},
 	}
 	for k, v := range s.analytics.AnalyticsBundle("national", 0) {

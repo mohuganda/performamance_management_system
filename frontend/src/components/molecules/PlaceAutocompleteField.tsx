@@ -2,7 +2,11 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Loader2, MapPin, Navigation, X } from 'lucide-react'
 import { useGoogleMapsApi } from '@/hooks/useGoogleMapsApi'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
-import type { PlacePrediction } from '@/types/google-maps.d'
+import {
+  fetchPlaceDetails,
+  fetchPlacePredictions,
+  type PlacePrediction,
+} from '@/api/services/places'
 import { cn } from '@/utils/cn'
 
 export type PlaceSelection = {
@@ -32,14 +36,14 @@ export function PlaceAutocompleteField({
   const listId = useId()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const placesHostRef = useRef<HTMLDivElement | null>(null)
-  const sessionTokenRef = useRef<object | null>(null)
+  const searchAbortRef = useRef<AbortController | null>(null)
 
   const { ready, error, apiKey, countryCodes } = useGoogleMapsApi()
   const debouncedQuery = useDebouncedValue(value.trim(), 280)
 
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [resolving, setResolving] = useState(false)
   const [predictions, setPredictions] = useState<PlacePrediction[]>([])
   const [activeIndex, setActiveIndex] = useState(-1)
   const [fetchError, setFetchError] = useState<string | null>(null)
@@ -50,8 +54,12 @@ export function PlaceAutocompleteField({
       : countryCodes.map((c) => c.toUpperCase()).join(', ')
 
   const fetchPredictions = useCallback(
-    (query: string) => {
-      if (!ready || !window.google?.maps?.places) return
+    async (query: string) => {
+      searchAbortRef.current?.abort()
+      if (!ready || !apiKey) {
+        setLoading(false)
+        return
+      }
       if (query.length < 2) {
         setPredictions([])
         setFetchError(null)
@@ -59,48 +67,43 @@ export function PlaceAutocompleteField({
         return
       }
 
+      const controller = new AbortController()
+      searchAbortRef.current = controller
       setLoading(true)
       setFetchError(null)
-      const service = new window.google.maps.places.AutocompleteService()
-      const request: {
-        input: string
-        componentRestrictions?: { country: string | string[] }
-        types?: string[]
-      } = {
-        input: query,
-        types: ['geocode', 'establishment'],
-      }
-      if (countryCodes.length > 0) {
-        request.componentRestrictions = {
-          country: countryCodes.length === 1 ? countryCodes[0] : countryCodes,
-        }
-      }
 
-      service.getPlacePredictions(request, (results, status) => {
-        setLoading(false)
-        const ok = window.google?.maps?.places?.PlacesServiceStatus?.OK ?? 'OK'
-        if (status !== ok) {
-          setPredictions([])
-          setFetchError(
-            status === 'ZERO_RESULTS'
-              ? 'No places found. Try a different search.'
-              : 'Could not load suggestions. Check your Maps API key and Places API access.',
-          )
-          return
-        }
-        setPredictions(results ?? [])
+      try {
+        const results = await fetchPlacePredictions({
+          apiKey,
+          input: query,
+          countryCodes,
+          signal: controller.signal,
+        })
+        if (controller.signal.aborted) return
+        setPredictions(results)
         setActiveIndex(-1)
-        if (!results?.length) {
-          setFetchError('No places found in the selected country. Try another search.')
+        if (!results.length) {
+          setFetchError('No places found. Try a different search.')
         }
-      })
+      } catch (err) {
+        if (controller.signal.aborted) return
+        setPredictions([])
+        setFetchError(err instanceof Error ? err.message : 'Could not load suggestions.')
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false)
+        }
+      }
     },
-    [ready, countryCodes],
+    [ready, apiKey, countryCodes],
   )
 
   useEffect(() => {
     if (!open) return
-    fetchPredictions(debouncedQuery)
+    void fetchPredictions(debouncedQuery)
+    return () => {
+      searchAbortRef.current?.abort()
+    }
   }, [debouncedQuery, fetchPredictions, open])
 
   useEffect(() => {
@@ -113,36 +116,32 @@ export function PlaceAutocompleteField({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const resolvePlace = (prediction: PlacePrediction) => {
-    if (!window.google?.maps?.places) return
-    if (!placesHostRef.current) return
-
-    const placesService = new window.google.maps.places.PlacesService(placesHostRef.current)
-    placesService.getDetails(
-      {
-        placeId: prediction.place_id,
-        fields: ['name', 'formatted_address', 'geometry'],
-      },
-      (place, status) => {
-        const ok = window.google?.maps?.places?.PlacesServiceStatus?.OK ?? 'OK'
-        if (status !== ok || !place?.geometry?.location) return
-
-        const lat = place.geometry.location.lat()
-        const lng = place.geometry.location.lng()
-        const name =
-          place.name?.trim() ||
-          prediction.structured_formatting?.main_text?.trim() ||
-          prediction.description
-        const address = place.formatted_address?.trim() || prediction.description
-
-        onChange(name)
-        onPlaceSelect({ name, address, latitude: lat, longitude: lng })
-        setOpen(false)
-        setPredictions([])
-        setActiveIndex(-1)
-        sessionTokenRef.current = null
-      },
-    )
+  const resolvePlace = async (prediction: PlacePrediction) => {
+    if (!apiKey || resolving) return
+    setResolving(true)
+    setFetchError(null)
+    try {
+      const place = await fetchPlaceDetails({ apiKey, placeId: prediction.place_id })
+      const name =
+        place.name ||
+        prediction.structured_formatting?.main_text?.trim() ||
+        prediction.description
+      onChange(name)
+      onPlaceSelect({
+        name,
+        address: place.address || prediction.description,
+        latitude: place.latitude,
+        longitude: place.longitude,
+      })
+      setOpen(false)
+      setPredictions([])
+      setActiveIndex(-1)
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : 'Could not resolve that place.')
+      setOpen(true)
+    } finally {
+      setResolving(false)
+    }
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -163,18 +162,16 @@ export function PlaceAutocompleteField({
     } else if (event.key === 'Enter') {
       event.preventDefault()
       const pick = predictions[activeIndex] ?? predictions[0]
-      if (pick) resolvePlace(pick)
+      if (pick) void resolvePlace(pick)
     } else if (event.key === 'Escape') {
       setOpen(false)
     }
   }
 
-  const showDropdown = open && (loading || predictions.length > 0 || Boolean(fetchError))
+  const showDropdown = open && (loading || resolving || predictions.length > 0 || Boolean(fetchError))
 
   return (
-    <div ref={containerRef} className={cn('relative', className)}>
-      <div ref={placesHostRef} className="hidden" aria-hidden />
-
+    <div ref={containerRef} className={cn('relative', open && 'z-[80]', className)}>
       <label htmlFor={listId} className="mb-1.5 block text-sm font-semibold text-ui-text">
         {label}
       </label>
@@ -206,7 +203,7 @@ export function PlaceAutocompleteField({
           }}
           onKeyDown={handleKeyDown}
         />
-        {loading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ui-muted" /> : null}
+        {loading || resolving ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ui-muted" /> : null}
         {value ? (
           <button
             type="button"
@@ -245,13 +242,15 @@ export function PlaceAutocompleteField({
         <ul
           id={`${listId}-listbox`}
           role="listbox"
-          className="absolute z-50 mt-2 max-h-80 w-full overflow-auto rounded-lg border border-ui-border bg-white py-1 shadow-lg"
+          className="absolute left-0 right-0 z-[90] mt-2 max-h-80 w-full overflow-auto rounded-lg border border-ui-border bg-white py-1 shadow-lg"
         >
-          {loading && predictions.length === 0 ? (
-            <li className="px-4 py-3 text-sm text-ui-muted">Searching places…</li>
+          {(loading || resolving) && predictions.length === 0 ? (
+            <li className="px-4 py-3 text-sm text-ui-muted">
+              {resolving ? 'Loading place details…' : 'Searching places…'}
+            </li>
           ) : null}
 
-          {!loading && fetchError ? (
+          {!loading && !resolving && fetchError ? (
             <li className="px-4 py-3 text-sm text-ui-muted">{fetchError}</li>
           ) : null}
 
@@ -268,12 +267,14 @@ export function PlaceAutocompleteField({
               <li key={prediction.place_id} role="option" aria-selected={activeIndex === index}>
                 <button
                   type="button"
+                  disabled={resolving}
                   className={cn(
                     'flex w-full items-start gap-3 px-4 py-3 text-left transition',
                     activeIndex === index ? 'bg-moh-green/8' : 'hover:bg-ui-subtle/80',
+                    resolving && 'opacity-60',
                   )}
                   onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() => resolvePlace(prediction)}
+                  onClick={() => void resolvePlace(prediction)}
                 >
                   <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ui-subtle text-moh-green">
                     <Navigation className="h-4 w-4" />

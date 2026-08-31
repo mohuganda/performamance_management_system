@@ -139,7 +139,7 @@ func (s *RbacSeeder) seedRolePermissions() error {
 		"hr_officer": {
 			"staff.view", "leave.requests.view", "leave.requests.approve",
 			"leave.plans.view", "leave.plans.manage", "leave.plans.view_team",
-			"leave.config.manage", "oos.requests.view", "attendance.view",
+			"leave.config.manage", "oos.requests.view", "oos.requests.approve", "attendance.view",
 			"dashboard.hr", "auth.users.manage", "performance.view", "performance.reports.view", "performance.manage",
 			"ihris.sync",
 			"kpi.catalog.view", "kpi.catalog.manage", "kpi.assignments.view", "kpi.assignments.manage",
@@ -163,9 +163,9 @@ func (s *RbacSeeder) seedRolePermissions() error {
 		},
 		"admin": {
 			"auth.users.manage", "auth.roles.manage", "auth.audit.view", "leave.config.manage", "leave.workflow.manage",
-			"staff.view", "leave.requests.view",
+			"staff.view", "leave.requests.view", "leave.requests.approve",
 			"leave.plans.view", "leave.plans.manage", "leave.plans.view_team",
-			"oos.requests.view",
+			"oos.requests.view", "oos.requests.approve",
 			"attendance.view", "ihris.sync", "dashboard.hr",
 			"performance.view", "performance.reports.view", "performance.manage",
 			"settings.manage",

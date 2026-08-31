@@ -12,7 +12,6 @@ import {
   Users,
   Clock,
   Briefcase,
-  Cog,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -127,20 +126,6 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    id: 'account',
-    label: 'Settings',
-    icon: Settings,
-    items: [
-      {
-        id: 'settings',
-        label: 'Settings',
-        path: '/settings',
-        icon: Settings,
-        description: 'Preferences, reference lists, and system configuration',
-      },
-    ],
-  },
-  {
     id: 'performance-reports',
     label: 'Reports',
     icon: ClipboardList,
@@ -190,30 +175,19 @@ export const navGroups: NavGroup[] = [
         anyPermission: true,
       },
       {
-        id: 'system-config',
-        label: 'System configuration',
-        path: '/admin/system',
-        icon: Cog,
-        description: 'iHRIS overwrite policy and integration defaults',
-        permission: [
-          'settings.manage',
-          'settings.lists.manage',
-          'settings.data_sources.manage',
-          'settings.email.manage',
-          'settings.notifications.manage',
-          'settings.performance.manage',
-          'settings.kpi.manage',
-          'settings.preferences.manage',
-        ],
-        anyPermission: true,
-      },
-      {
         id: 'rbac',
         label: 'Access Control',
         path: '/admin/rbac',
         icon: Shield,
         description: 'Roles, permissions, and user access',
         permission: 'auth.roles.manage',
+      },
+      {
+        id: 'settings',
+        label: 'Settings',
+        path: '/settings',
+        icon: Settings,
+        description: 'Preferences, reference lists, data sources, and system configuration',
       },
     ],
   },
@@ -229,7 +203,7 @@ export const adminNavItems: NavItem[] =
   navGroups.find((g) => g.id === 'administration')?.items ?? []
 
 export const settingsNavItem: NavItem =
-  navGroups.find((g) => g.id === 'account')?.items.find((i) => i.id === 'settings') ?? {
+  navGroups.find((g) => g.id === 'administration')?.items.find((i) => i.id === 'settings') ?? {
     id: 'settings',
     label: 'Settings',
     path: '/settings',

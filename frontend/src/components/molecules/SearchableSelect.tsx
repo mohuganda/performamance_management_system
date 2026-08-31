@@ -35,7 +35,11 @@ export function SearchableSelect({
   allowClear = true,
   labelPosition,
 }: SearchableSelectProps) {
-  const floatingLabels = useUiPreferencesStore((s) => s.floatingLabels)
+  const floatingLabelsPref = useUiPreferencesStore((s) => s.floatingLabels)
+  const floatingLabels =
+    typeof document !== 'undefined'
+      ? document.documentElement.classList.contains('floating-labels')
+      : floatingLabelsPref
   const resolvedLabelPosition = labelPosition ?? (floatingLabels ? 'floating' : 'top')
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -100,7 +104,7 @@ export function SearchableSelect({
 
   const dropdown = open ? (
     <div
-      className="absolute z-50 mt-1 max-h-96 w-full overflow-auto rounded-md border border-ui-border bg-ui-surface p-1 shadow-lg"
+      className="absolute left-0 right-0 z-[90] mt-1 max-h-96 w-full overflow-auto rounded-md border border-ui-border bg-ui-surface p-1 shadow-lg"
       role="listbox"
     >
       {emptyLabel ? (
@@ -152,7 +156,7 @@ export function SearchableSelect({
 
   if (resolvedLabelPosition === 'top') {
     return (
-      <div ref={rootRef} className={cn('relative min-w-0 w-full', className)}>
+      <div ref={rootRef} className={cn('relative min-w-0 w-full', open && 'z-[80]', className)}>
         <label className="mb-1.5 block text-sm font-semibold text-ui-text">{label}</label>
         <div
           className={cn(
@@ -224,7 +228,10 @@ export function SearchableSelect({
   }
 
   return (
-    <div ref={rootRef} className={cn('oa-float-field relative min-w-[200px] w-full', className)}>
+    <div
+      ref={rootRef}
+      className={cn('oa-float-field relative min-w-[200px] w-full', open && 'is-open z-[80]', className)}
+    >
       <div
         role="combobox"
         aria-expanded={open}

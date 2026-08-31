@@ -17,9 +17,10 @@ func NewSupervisorService() *SupervisorService {
 }
 
 type SupervisorAssignment struct {
-	Sequence          uint8  `json:"sequence"`
-	SupervisorStaffID uint   `json:"supervisor_staff_id"`
-	SupervisorName    string `json:"supervisor_name,omitempty"`
+	Sequence            uint8  `json:"sequence"`
+	SupervisorStaffID   uint   `json:"supervisor_staff_id"`
+	SupervisorName      string `json:"supervisor_name,omitempty"`
+	SupervisorJobTitle  string `json:"supervisor_job_title,omitempty"`
 }
 
 type SupervisorSlot struct {
@@ -119,6 +120,26 @@ func (s *SupervisorService) SupervisionMapForStaffIDs(staffIDs []uint) (map[uint
 		supervisorIDs = append(supervisorIDs, sup.SupervisorStaffID)
 	}
 	supervisorMap := loadStaffByIDs(supervisorIDs)
+	supervisorJobs := map[uint]string{}
+	if len(supervisorIDs) > 0 {
+		var supervisorContracts []models.StaffContract
+		_ = facades.Orm().Query().
+			Where("staff_id IN ?", supervisorIDs).
+			Where("contract_status", "active").
+			Get(&supervisorContracts)
+		supervisorJobIDs := make([]uint, 0, len(supervisorContracts))
+		jobBySupervisor := map[uint]uint{}
+		for _, c := range supervisorContracts {
+			jobBySupervisor[c.StaffID] = c.JobID
+			supervisorJobIDs = append(supervisorJobIDs, c.JobID)
+		}
+		jobsByID := loadJobsByIDs(supervisorJobIDs)
+		for staffID, jobID := range jobBySupervisor {
+			if job, ok := jobsByID[jobID]; ok {
+				supervisorJobs[staffID] = job.JobTitle
+			}
+		}
+	}
 
 	for _, staffID := range ids {
 		contract, ok := contractByStaff[staffID]
@@ -143,6 +164,9 @@ func (s *SupervisorService) SupervisionMapForStaffIDs(staffIDs []uint) (map[uint
 			}
 			if supervisor, ok := supervisorMap[sup.SupervisorStaffID]; ok {
 				assignment.SupervisorName = staffDisplayName(supervisor)
+			}
+			if title, ok := supervisorJobs[sup.SupervisorStaffID]; ok {
+				assignment.SupervisorJobTitle = title
 			}
 			row.Supervisors = append(row.Supervisors, assignment)
 		}
@@ -340,19 +364,13 @@ func (s *SupervisorService) GetStaffSupervisors(staffID uint) ([]SupervisorAssig
 }
 
 func (s *SupervisorService) assignSupervisorToSequence(contractID uint, sequence uint8, supervisorStaffID uint) error {
-	_, _ = facades.Orm().Query().
-		Model(&models.StaffSupervisor{}).
-		Where("staff_contract_id", contractID).
-		Where("approval_sequence", sequence).
-		Where("is_current", true).
-		Update("is_current", false)
-
+	// Unique key is (staff_contract_id, approval_sequence) — update in place on reassignment.
 	var existing models.StaffSupervisor
 	if err := facades.Orm().Query().
 		Where("staff_contract_id", contractID).
-		Where("supervisor_staff_id", supervisorStaffID).
 		Where("approval_sequence", sequence).
 		First(&existing); err == nil && existing.ID > 0 {
+		existing.SupervisorStaffID = supervisorStaffID
 		existing.IsCurrent = true
 		return facades.Orm().Query().Save(&existing)
 	}
@@ -370,7 +388,6 @@ func (s *SupervisorService) clearSupervisorSequence(contractID uint, sequence ui
 		Model(&models.StaffSupervisor{}).
 		Where("staff_contract_id", contractID).
 		Where("approval_sequence", sequence).
-		Where("is_current", true).
 		Update("is_current", false)
 	return err
 }

@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/goravel/framework/contracts/http"
@@ -620,6 +621,38 @@ func (c *MobileController) GetPerformanceAppraisal(ctx http.Context) http.Respon
 	return jsonResponse(ctx, http.StatusOK, bundle)
 }
 
+func (c *MobileController) GetPpaReviewDetail(ctx http.Context) http.Response {
+	staffID, _ := staffIDFromContext(ctx)
+	if staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	ppaID, _ := strconv.ParseUint(ctx.Request().Query("ppa_id", "0"), 10, 64)
+	if ppaID == 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "ppa_id is required"})
+	}
+	detail, err := c.performance.GetPpaReviewDetail(staffID, uint(ppaID))
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return jsonResponse(ctx, http.StatusOK, detail)
+}
+
+func (c *MobileController) GetReportReviewDetail(ctx http.Context) http.Response {
+	staffID, _ := staffIDFromContext(ctx)
+	if staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	reportID, _ := strconv.ParseUint(ctx.Request().Query("report_id", "0"), 10, 64)
+	if reportID == 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "report_id is required"})
+	}
+	detail, err := c.performance.GetReportReviewDetail(staffID, uint(reportID))
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return jsonResponse(ctx, http.StatusOK, detail)
+}
+
 func (c *MobileController) ListPendingAppraisalReviews(ctx http.Context) http.Response {
 	staffID, _ := staffIDFromContext(ctx)
 	if staffID == 0 {
@@ -661,6 +694,23 @@ func (c *MobileController) ApprovalsInbox(ctx http.Context) http.Response {
 		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
 	}
 	return jsonResponse(ctx, http.StatusOK, payload)
+}
+
+func (c *MobileController) ApprovalDetail(ctx http.Context) http.Response {
+	staffID, _ := staffIDFromContext(ctx)
+	if staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	module := strings.TrimSpace(ctx.Request().Query("module", ""))
+	refID, _ := strconv.ParseUint(ctx.Request().Query("id", "0"), 10, 64)
+	if module == "" || refID == 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "module and id are required"})
+	}
+	detail, err := c.approvals.Detail(staffID, module, uint(refID))
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return jsonResponse(ctx, http.StatusOK, detail)
 }
 
 func (c *MobileController) ReviewPerformancePpa(ctx http.Context) http.Response {

@@ -261,18 +261,46 @@ func (s *InAppNotificationService) syncStaffStatusNotifications(userID, staffID 
 	for _, req := range leaveRows {
 		notifType := "success"
 		title := "Leave request approved"
+		days := req.DaysRequested
 		if req.Status == "rejected" {
 			notifType = "error"
 			title = "Leave request rejected"
 		}
+		msg := fmt.Sprintf("Your leave request (%s to %s) was %s.", req.StartDate.Format("2 Jan 2006"), req.EndDate.Format("2 Jan 2006"), req.Status)
+		if days > 0 && req.Status == "approved" {
+			msg = fmt.Sprintf("COMPLETED: Your leave request for %d day(s) (%s to %s) was approved.", days, req.StartDate.Format("2 Jan 2006"), req.EndDate.Format("2 Jan 2006"))
+		}
 		if err := s.upsert(
 			userID, notifType, "leave",
 			title,
-			fmt.Sprintf("Your leave request (%s to %s) was %s.", req.StartDate.Format("2 Jan 2006"), req.EndDate.Format("2 Jan 2006"), req.Status),
+			msg,
 			fmt.Sprintf("leave-status:%d:%s", req.ID, req.Status),
 			"/leave",
 		); err != nil {
 			return err
+		}
+	}
+
+	now := time.Now()
+	yesterday := now.AddDate(0, 0, -1)
+	if yesterday.Weekday() != time.Saturday && yesterday.Weekday() != time.Sunday {
+		start := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.Local)
+		end := start.Add(24 * time.Hour)
+		var clocks []models.AttendanceClock
+		_ = facades.Orm().Query().
+			Where("staff_id", staffID).
+			Where("clocked_at >= ?", start).
+			Where("clocked_at < ?", end).
+			Limit(1).
+			Get(&clocks)
+		if len(clocks) == 0 {
+			_ = s.upsert(
+				userID, "error", "attendance",
+				"Missed clock-in",
+				fmt.Sprintf("MISSED: You did not clock in on %s. Please provide a reason.", yesterday.Format("2 January 2006")),
+				fmt.Sprintf("missed-clock:%s", yesterday.Format("2006-01-02")),
+				"/out-of-station",
+			)
 		}
 	}
 
@@ -284,11 +312,17 @@ func (s *InAppNotificationService) syncStaffStatusNotifications(userID, staffID 
 			Where("financial_year_id", fy.ID).
 			First(&ppa); err == nil && ppa.ID > 0 {
 			switch ppa.Status {
-			case "draft":
+			case "draft", "returned":
+				due := fy.StartDate.AddDate(0, 1, 0)
+				daysLeft := int(due.Sub(now).Hours() / 24)
+				msg := fmt.Sprintf("Your Performance Plan for %s is still in draft. Submit it for supervisor review.", fy.YearLabel)
+				if daysLeft >= 0 && daysLeft <= 14 {
+					msg = fmt.Sprintf("UPCOMING: Performance plan acknowledgment due in %d day(s).", daysLeft)
+				}
 				_ = s.upsert(
-					userID, "info", "performance",
+					userID, "warning", "performance",
 					"Complete your PPA",
-					fmt.Sprintf("Your Performance Plan for %s is still in draft. Submit it for supervisor review.", fy.YearLabel),
+					msg,
 					fmt.Sprintf("ppa-draft:%d", ppa.ID),
 					"/performance",
 				)
@@ -309,6 +343,14 @@ func (s *InAppNotificationService) syncStaffStatusNotifications(userID, staffID 
 					"/performance",
 				)
 			}
+		} else {
+			_ = s.upsert(
+				userID, "warning", "performance",
+				"Start your PPA",
+				fmt.Sprintf("UPCOMING: Create and submit your Performance Plan for %s.", fy.YearLabel),
+				fmt.Sprintf("ppa-missing:%d", fy.ID),
+				"/performance",
+			)
 		}
 	}
 	return nil

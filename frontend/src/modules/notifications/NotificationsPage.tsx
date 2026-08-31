@@ -58,7 +58,7 @@ export function NotificationsPage() {
     <div>
       <PageHeader
         title="Notifications"
-        subtitle="Approvals, deadlines, and system alerts for your account"
+        subtitle="Approvals, deadlines, and system alerts. Marked-as-read items stay here but no longer count on the bell."
         actions={
           unread > 0 ? (
             <Button

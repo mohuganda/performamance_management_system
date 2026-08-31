@@ -79,6 +79,40 @@ body {
   min-height: 100vh;
 }
 
+/* Dashboard metric/summary tiles: no box frame (accent is a child bar, not a border) */
+.dashboard-stat-card {
+  border: 0 !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+.dashboard-stat-card:hover,
+.dashboard-stat-card:focus,
+.dashboard-stat-card:focus-visible,
+.dashboard-stat-card[aria-pressed='true'] {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+/* Progress / flat tiles that should have no frame at all */
+.dashboard-flat-card {
+  border: 0 !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
 /* Soft remaps for components that hard-code light palette utilities. */
 html.dark .bg-white,
 html.dark .\!bg-white,
@@ -334,4 +368,88 @@ html.dark .to-moh-background\/40 {
   --tw-gradient-from: var(--color-ui-subtle) !important;
   --tw-gradient-to: var(--color-ui-surface) !important;
   --tw-gradient-stops: var(--tw-gradient-from), var(--color-ui-surface), var(--tw-gradient-to) !important;
+}
+
+/* ——— Top navigation chrome (Settings → Appearance; colors applied via JS) ——— */
+:root {
+  --nav-bg: #0b4f4a;
+  --nav-fg: #ffffff;
+  --nav-active: #fcdc04;
+  --nav-active-fg: #1a1a1a;
+  --nav-muted: rgba(255, 255, 255, 0.75);
+  --nav-border: rgba(255, 255, 255, 0.18);
+  --nav-hover: rgba(255, 255, 255, 0.12);
+  --nav-outline: rgba(255, 255, 255, 0.45);
+}
+
+.app-chrome {
+  color: var(--nav-fg);
+  background-color: var(--nav-bg) !important;
+}
+
+.app-nav-muted {
+  color: var(--nav-muted) !important;
+}
+
+.app-nav-item {
+  color: var(--nav-muted) !important;
+}
+
+.app-nav-item:hover {
+  background-color: var(--nav-hover) !important;
+  color: var(--nav-fg) !important;
+}
+
+.app-nav-item-active {
+  color: var(--nav-fg) !important;
+}
+
+.app-nav-item-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0.5rem;
+  right: 0.5rem;
+  height: 0.125rem;
+  background-color: var(--nav-active);
+}
+
+.app-nav-outline {
+  border-color: var(--nav-outline) !important;
+  color: var(--nav-fg) !important;
+  background-color: transparent !important;
+}
+
+.app-nav-outline:hover {
+  background-color: var(--nav-hover) !important;
+}
+
+.app-nav-chip-active {
+  background-color: var(--nav-active) !important;
+  color: var(--nav-active-fg) !important;
+  border-color: var(--nav-active) !important;
+}
+
+/* Header account controls on colored chrome */
+.app-chrome button,
+.app-chrome a[aria-label] {
+  color: var(--nav-muted);
+}
+
+.app-chrome button:hover,
+.app-chrome a[aria-label]:hover {
+  background-color: var(--nav-hover) !important;
+  color: var(--nav-fg) !important;
+}
+
+.app-chrome .text-ui-text {
+  color: var(--nav-fg) !important;
+}
+
+.app-chrome .text-ui-muted {
+  color: var(--nav-muted) !important;
+}
+
+.app-chrome .hover\:bg-ui-subtle:hover {
+  background-color: var(--nav-hover) !important;
 }

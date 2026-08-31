@@ -474,32 +474,33 @@ func (s *StaffAdminService) buildStaffListRow(st models.Staff, supervisionMap ma
 }
 
 type StaffProfileDetail struct {
-	StaffID            uint   `json:"staff_id"`
-	IhrisPID           string `json:"ihris_pid"`
-	Name               string `json:"name"`
-	Firstname          string `json:"firstname"`
-	Surname            string `json:"surname"`
-	Othername          string `json:"othername,omitempty"`
-	Nin                string `json:"nin,omitempty"`
-	Gender             string `json:"gender,omitempty"`
-	Email              string `json:"email,omitempty"`
-	Mobile             string `json:"mobile,omitempty"`
-	Telephone          string `json:"telephone,omitempty"`
-	Cadre              string `json:"cadre,omitempty"`
-	Region             string `json:"region,omitempty"`
-	JobTitle           string `json:"job_title,omitempty"`
-	FacilityName       string `json:"facility_name,omitempty"`
-	InstitutionType    string `json:"institution_type,omitempty"`
-	DepartmentName     string `json:"department_name,omitempty"`
-	HrDepartmentName   string `json:"hr_department_name,omitempty"`
-	Division           string `json:"division,omitempty"`
-	Section            string `json:"section,omitempty"`
-	Unit               string `json:"unit,omitempty"`
-	DistrictName       string `json:"district_name,omitempty"`
-	EmploymentTerms    string `json:"employment_terms,omitempty"`
-	SalaryGrade        string `json:"salary_grade,omitempty"`
-	SupervisorName     string `json:"supervisor_name,omitempty"`
-	IhrisLastSyncAt    string `json:"ihris_last_sync_at,omitempty"`
+	StaffID            uint                   `json:"staff_id"`
+	IhrisPID           string                 `json:"ihris_pid"`
+	Name               string                 `json:"name"`
+	Firstname          string                 `json:"firstname"`
+	Surname            string                 `json:"surname"`
+	Othername          string                 `json:"othername,omitempty"`
+	Nin                string                 `json:"nin,omitempty"`
+	Gender             string                 `json:"gender,omitempty"`
+	Email              string                 `json:"email,omitempty"`
+	Mobile             string                 `json:"mobile,omitempty"`
+	Telephone          string                 `json:"telephone,omitempty"`
+	Cadre              string                 `json:"cadre,omitempty"`
+	Region             string                 `json:"region,omitempty"`
+	JobTitle           string                 `json:"job_title,omitempty"`
+	FacilityName       string                 `json:"facility_name,omitempty"`
+	InstitutionType    string                 `json:"institution_type,omitempty"`
+	DepartmentName     string                 `json:"department_name,omitempty"`
+	HrDepartmentName   string                 `json:"hr_department_name,omitempty"`
+	Division           string                 `json:"division,omitempty"`
+	Section            string                 `json:"section,omitempty"`
+	Unit               string                 `json:"unit,omitempty"`
+	DistrictName       string                 `json:"district_name,omitempty"`
+	EmploymentTerms    string                 `json:"employment_terms,omitempty"`
+	SalaryGrade        string                 `json:"salary_grade,omitempty"`
+	SupervisorName     string                 `json:"supervisor_name,omitempty"`
+	Supervisors        []SupervisorAssignment `json:"supervisors,omitempty"`
+	IhrisLastSyncAt    string                 `json:"ihris_last_sync_at,omitempty"`
 }
 
 func (s *StaffAdminService) GetStaffProfile(staffID uint) (*StaffProfileDetail, error) {
@@ -513,10 +514,8 @@ func (s *StaffAdminService) GetStaffProfile(staffID uint) (*StaffProfileDetail, 
 	}
 
 	supervisionMap := map[uint]StaffSupervisionRow{}
-	if supervision, err := s.supervisors.ListStaffSupervision(); err == nil {
-		for _, sup := range supervision {
-			supervisionMap[sup.StaffID] = sup
-		}
+	if supervision, err := s.supervisors.SupervisionMapForStaffIDs([]uint{staffID}); err == nil {
+		supervisionMap = supervision
 	}
 
 	row := s.buildStaffListRow(st, supervisionMap)
@@ -539,6 +538,7 @@ func (s *StaffAdminService) GetStaffProfile(staffID uint) (*StaffProfileDetail, 
 		DepartmentName:   row.DepartmentName,
 		HrDepartmentName: row.HrDepartment,
 		SupervisorName:   row.SupervisorName,
+		Supervisors:      row.Supervisors,
 		IhrisLastSyncAt:  row.IhrisLastSyncAt,
 	}
 

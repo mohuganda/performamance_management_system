@@ -39,7 +39,8 @@ const PERFORMANCE_STEPS = [
   },
   {
     title: 'Set your Performance Plan (PPA)',
-    description: 'Confirm weights (total 100%) and targets, then submit for supervisor review.',
+    description:
+      'Confirm weights and targets, save as draft anytime, then submit for supervisor review when the total reaches 100%.',
     actor: 'Employee',
   },
   {
@@ -74,6 +75,20 @@ function formatWindowDate(iso?: string) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function ppaStatusChipClass(status: string) {
+  if (status === 'approved') return 'bg-moh-success/15 text-moh-success'
+  if (status === 'returned') return 'bg-moh-warning/15 text-moh-warning'
+  if (status === 'supervisor_review') return 'bg-amber-100 text-amber-900'
+  return 'bg-ui-subtle text-ui-text'
+}
+
+function reportStatusChipClass(status: string) {
+  if (status === 'approved') return 'bg-moh-success/15 text-moh-success'
+  if (status === 'returned') return 'bg-moh-warning/15 text-moh-warning'
+  if (!status || status === 'draft') return 'bg-ui-subtle text-ui-text'
+  return 'bg-amber-100 text-amber-900'
 }
 
 type KpiItem = {
@@ -235,12 +250,14 @@ function KpiPlanningRow({
   planTargets,
   onWeightChange,
   onTargetChange,
+  disabled = false,
 }: {
   kpi: KpiItem
   planWeights: Record<number, string>
   planTargets: Record<number, string>
   onWeightChange: (id: number, value: string) => void
   onTargetChange: (id: number, value: string) => void
+  disabled?: boolean
 }) {
   return (
     <div className="overflow-hidden rounded-sm border border-ui-border bg-white p-4 shadow-sm">
@@ -261,6 +278,7 @@ function KpiPlanningRow({
             type="number"
             label="Weight %"
             className="!min-w-0"
+            disabled={disabled}
             value={
               planWeights[kpi.id] ?? (kpi.in_current_ppa ? String(kpi.weight_percentage) : '')
             }
@@ -272,6 +290,7 @@ function KpiPlanningRow({
             type="number"
             label="Target"
             className="!min-w-0"
+            disabled={disabled}
             value={
               planTargets[kpi.id] ??
               (kpi.target_value != null
@@ -300,26 +319,29 @@ function KpiReportRow({
   kpi,
   reportDraft,
   onDraftChange,
+  disabled = false,
 }: {
   kpi: ReportKpi
   reportDraft: Record<number, { actual: string; narrative: string }>
   onDraftChange: (ppaKpiId: number, patch: { actual?: string; narrative?: string }) => void
+  disabled?: boolean
 }) {
   const draftActual = reportDraft[kpi.ppa_kpi_id]?.actual
   const apiActual = formatReportActual(kpi.actual_value)
-  const actualValue =
-    draftActual != null && draftActual !== '' ? draftActual : apiActual
+  const actualValue = draftActual !== undefined ? draftActual : apiActual
   const narrativeValue = reportDraft[kpi.ppa_kpi_id]?.narrative ?? kpi.narrative ?? ''
   const isCumulative = kpi.is_cumulative === true
   const priorReports = kpi.prior_reports ?? []
   const lastPrior =
     priorReports.length > 0 ? priorReports[priorReports.length - 1].actual_value : undefined
-  const actualNum = Number(actualValue || 0)
+  const actualNum = actualValue === '' ? 0 : Number(actualValue)
   const belowPrior =
     isCumulative && lastPrior != null && actualValue !== '' && actualNum < lastPrior
   const progress =
-    kpi.progress_percent ??
-    (kpi.target_value > 0 ? (actualNum / kpi.target_value) * 100 : 0)
+    actualValue === ''
+      ? 0
+      : (kpi.progress_percent ??
+        (kpi.target_value > 0 ? (actualNum / kpi.target_value) * 100 : 0))
   const progressClamped = Math.min(Math.max(progress, 0), 100)
   const unitSuffix = kpi.computation_category === 'Ratio' ? '%' : ''
 
@@ -372,6 +394,7 @@ function KpiReportRow({
             type="number"
             label={isCumulative ? 'Year-to-date actual (cumulative)' : 'Actual achieved'}
             className="!min-w-0"
+            disabled={disabled}
             value={actualValue}
             onChange={(e) => onDraftChange(kpi.ppa_kpi_id, { actual: e.target.value })}
             containerProps={{ className: 'min-w-0 w-full' }}
@@ -402,6 +425,7 @@ function KpiReportRow({
           {...mt}
           label="Narrative / evidence"
           rows={3}
+          disabled={disabled}
           value={narrativeValue}
           onChange={(e) => onDraftChange(kpi.ppa_kpi_id, { narrative: e.target.value })}
           containerProps={{ className: 'min-w-0' }}
@@ -444,7 +468,10 @@ export function PerformancePage() {
   const reportFormQuery = useQuery({
     queryKey: ['performance', 'report-form', reportType],
     queryFn: () => performanceService.reportForm(reportType),
-    enabled: Boolean(staffId) && activeTab === 'reporting',
+    enabled:
+      Boolean(staffId) &&
+      activeTab === 'reporting' &&
+      String(summaryQuery.data?.ppa?.status ?? '') === 'approved',
     retry: false,
   })
 
@@ -467,6 +494,37 @@ export function PerformancePage() {
     }
     setReportDraft(next)
   }, [activeTab, reportFormQuery.data, reportType])
+
+  // Prefill draft weights/targets from the saved plan whenever KPI groups load.
+  useEffect(() => {
+    if (!groupedQuery.data) return
+    setPlanWeights((prev) => {
+      const next = { ...prev }
+      for (const group of asArray<SubjectGroup>(groupedQuery.data)) {
+        for (const kpi of asArray<KpiItem>(group.kpis)) {
+          if (next[kpi.id] !== undefined) continue
+          if (kpi.in_current_ppa && kpi.weight_percentage != null) {
+            next[kpi.id] = String(kpi.weight_percentage)
+          }
+        }
+      }
+      return next
+    })
+    setPlanTargets((prev) => {
+      const next = { ...prev }
+      for (const group of asArray<SubjectGroup>(groupedQuery.data)) {
+        for (const kpi of asArray<KpiItem>(group.kpis)) {
+          if (next[kpi.id] !== undefined) continue
+          if (kpi.target_value != null) {
+            next[kpi.id] = String(kpi.target_value)
+          } else if (kpi.default_target != null) {
+            next[kpi.id] = String(kpi.default_target)
+          }
+        }
+      }
+      return next
+    })
+  }, [groupedQuery.data])
 
   const pendingAppraisalsQuery = useQuery({
     queryKey: ['performance', 'pending-appraisals'],
@@ -493,35 +551,43 @@ export function PerformancePage() {
     activeTab === 'supervisor' ? reviewAppraisalBundle : null,
   )
 
+  const buildPlanPayload = () => {
+    const allKpis = asArray<SubjectGroup>(groupedQuery.data).flatMap((g) => g.kpis ?? [])
+    const kpis = allKpis.filter((k) => Number(planWeights[k.id] ?? k.weight_percentage ?? 0) > 0)
+    return {
+      kpis: kpis.map((k) => ({
+        kpi_id: k.id,
+        weight_percentage: Number(planWeights[k.id] ?? k.weight_percentage ?? 0),
+        target_value: Number(planTargets[k.id] ?? k.target_value ?? k.default_target ?? 100),
+      })),
+    }
+  }
+
   const savePlanMutation = useMutation({
-    mutationFn: () => {
-      const allKpis = asArray<SubjectGroup>(groupedQuery.data).flatMap((g) => g.kpis ?? [])
-      const kpis = allKpis.filter((k) => Number(planWeights[k.id] ?? k.weight_percentage ?? 0) > 0)
-      return performanceService.savePlan({
-        kpis: kpis.map((k) => ({
-          kpi_id: k.id,
-          weight_percentage: Number(planWeights[k.id] ?? k.weight_percentage ?? 0),
-          target_value: Number(
-            planTargets[k.id] ?? k.target_value ?? k.default_target ?? 100,
-          ),
-        })),
-      })
-    },
+    mutationFn: () => performanceService.savePlan(buildPlanPayload()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['performance'] })
-      const msg = 'Your performance plan has been saved. You can continue editing or submit when total weight is 100%.'
-      setPlanAlert({ type: 'success', title: 'Plan saved', message: msg })
-      toast.success(msg, 'PPA saved')
+      const msg =
+        'Draft saved. You can keep editing weights and targets, then submit when the total reaches 100%.'
+      setPlanAlert({
+        type: 'success',
+        title: 'Draft saved',
+        message: msg,
+      })
+      toast.success(msg, 'PPA draft saved')
     },
     onError: (error: unknown) => {
       const msg = extractErrorMessage(error)
-      setPlanAlert({ type: 'error', title: 'Could not save plan', message: msg })
-      notifyApiError(error, 'Could not save performance plan')
+      setPlanAlert({ type: 'error', title: 'Could not save draft', message: msg })
+      notifyApiError(error, 'Could not save performance plan draft')
     },
   })
 
   const submitPlanMutation = useMutation({
-    mutationFn: () => performanceService.submitPlan(),
+    mutationFn: async () => {
+      await performanceService.savePlan(buildPlanPayload())
+      return performanceService.submitPlan()
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['performance'] })
       const msg = 'Your PPA has been submitted for supervisor review.'
@@ -593,13 +659,15 @@ export function PerformancePage() {
 
   const groups = asArray<SubjectGroup>(groupedQuery.data)
   const ppaStatus = String(summaryQuery.data?.ppa?.status ?? 'draft')
-  const ppaSubmitted = ppaStatus !== 'draft'
+  const ppaSubmitted = ppaStatus !== 'draft' && ppaStatus !== 'returned'
+  const ppaApproved = ppaStatus === 'approved'
   const reportingConfig = summaryQuery.data?.reporting_config as
     | { test_override?: boolean; enforce_windows?: boolean }
     | undefined
   const quarterWindows = asArray<QuarterMeta>(summaryQuery.data?.quarters)
   const ppaWindow = summaryQuery.data?.ppa_window as QuarterMeta | undefined
   const ppaWindowOpen = ppaWindow?.is_open !== false
+  const canEditPlan = ppaWindowOpen && (ppaStatus === 'draft' || ppaStatus === 'returned')
   const activeReportWindow = quarterWindows.find((q) => q.id === reportType)
   const reportWindowOpen = activeReportWindow?.is_open !== false
 
@@ -644,16 +712,49 @@ export function PerformancePage() {
     submitted_at?: string
   }>(pendingAppraisalsQuery.data)
   const pendingActionCount = pendingAppraisals.filter((p) => p.can_act).length
+  const reportStatus = String(reportFormQuery.data?.report_status ?? '')
+  const reportEditableStatus = reportStatus === '' || reportStatus === 'draft' || reportStatus === 'returned'
   const reportAlreadySubmitted =
-    Boolean(appraisalBundle?.report_status) &&
-    appraisalBundle?.report_status !== 'draft' &&
-    appraisalBundle?.report_status !== '' &&
-    appraisalBundle?.report_status !== 'returned'
+    Boolean(reportStatus) &&
+    reportStatus !== 'draft' &&
+    reportStatus !== 'returned'
+  const reportApproved = reportStatus === 'approved'
+  const canEditReportFigures = reportEditableStatus && reportWindowOpen && ppaApproved
+
+  const handleSaveDraft = () => {
+    if (!canEditPlan) {
+      const msg =
+        ppaWindowOpen
+          ? `This plan cannot be edited while status is “${ppaStatus.replace(/_/g, ' ')}”.`
+          : 'The PPA planning window is closed. You cannot save a draft right now.'
+      setPlanAlert({ type: 'warning', title: 'Cannot edit plan', message: msg })
+      toast.warning(msg, 'PPA')
+      return
+    }
+    if (totalWeight > 100.1) {
+      const msg = `Total KPI weight is ${totalWeight.toFixed(1)}%. Reduce weights to 100% or less before saving.`
+      setPlanAlert({ type: 'warning', title: 'Weight too high', message: msg })
+      toast.warning(msg, 'Check weights')
+      return
+    }
+    const selectedCount = buildPlanPayload().kpis.length
+    if (selectedCount === 0) {
+      const msg = 'Enter a weight greater than 0 on at least one KPI to save a draft.'
+      setPlanAlert({ type: 'warning', title: 'Nothing to save', message: msg })
+      toast.warning(msg, 'PPA draft')
+      return
+    }
+    setPlanAlert(null)
+    savePlanMutation.mutate()
+  }
 
   const handleSubmitPlan = () => {
-    if (!ppaWindowOpen) {
-      const msg = 'The PPA planning window is closed. You cannot submit right now.'
-      setPlanAlert({ type: 'warning', title: 'Window closed', message: msg })
+    if (!canEditPlan) {
+      const msg =
+        ppaWindowOpen
+          ? `This plan cannot be submitted while status is “${ppaStatus.replace(/_/g, ' ')}”.`
+          : 'The PPA planning window is closed. You cannot submit right now.'
+      setPlanAlert({ type: 'warning', title: 'Cannot submit', message: msg })
       toast.warning(msg, 'PPA closed')
       return
     }
@@ -743,7 +844,15 @@ export function PerformancePage() {
               {summaryQuery.data ? (
                 <>
                   <div className="mb-8 grid gap-4 lg:grid-cols-3">
-                    <Card {...mt} className="rounded-sm border border-ui-border bg-white p-5 lg:col-span-2">
+                    <Card
+                      {...mt}
+                      className={cn(
+                        'rounded-sm border bg-white p-5 lg:col-span-2',
+                        ppaApproved
+                          ? 'border-moh-success/40 ring-1 ring-moh-success/20'
+                          : 'border-ui-border',
+                      )}
+                    >
                       <Typography {...mt} className="text-xs font-bold uppercase tracking-wide text-ui-muted">
                         Performance Plan Agreement
                       </Typography>
@@ -754,12 +863,35 @@ export function PerformancePage() {
                         <Chip
                           {...mt}
                           value={ppaStatus.replace(/_/g, ' ')}
-                          className="rounded-sm capitalize"
+                          className={cn('rounded-sm capitalize', ppaStatusChipClass(ppaStatus))}
                         />
                       </div>
                       <p className="mt-1 text-sm text-ui-muted">
                         {summaryQuery.data.ppa?.current_stage ?? '—'}
                       </p>
+                      {ppaApproved ? (
+                        <div className="mt-3 rounded-sm border border-moh-success/30 bg-moh-success/10 px-3 py-2.5">
+                          <p className="text-sm font-semibold text-moh-success">
+                            Your performance plan is approved
+                          </p>
+                          <p className="mt-0.5 text-sm text-moh-success/90">
+                            You can now file quarterly reports against this plan.
+                          </p>
+                        </div>
+                      ) : ppaStatus === 'supervisor_review' ? (
+                        <div className="mt-3 rounded-sm border border-amber-200 bg-amber-50 px-3 py-2.5">
+                          <p className="text-sm font-medium text-amber-950">
+                            Submitted for supervisor review — editing is locked until it is returned
+                            or approved.
+                          </p>
+                        </div>
+                      ) : ppaStatus === 'returned' ? (
+                        <div className="mt-3 rounded-sm border border-moh-warning/30 bg-moh-warning/10 px-3 py-2.5">
+                          <p className="text-sm font-medium text-moh-warning">
+                            Returned by your supervisor — revise the plan and submit again.
+                          </p>
+                        </div>
+                      ) : null}
                       <div className="mt-4">
                         <div className="mb-1 flex justify-between text-sm">
                           <span>Total KPI weight</span>
@@ -768,7 +900,7 @@ export function PerformancePage() {
                         <Progress
                           {...mt}
                           value={Math.min(summaryQuery.data.ppa?.total_weight ?? 0, 100)}
-                          color="gray"
+                          color={ppaApproved ? 'green' : 'gray'}
                           className="rounded-sm"
                         />
                       </div>
@@ -779,7 +911,16 @@ export function PerformancePage() {
                           className="mt-4 rounded-sm bg-moh-green normal-case"
                           onClick={() => setActiveTab('planning')}
                         >
-                          Continue planning →
+                          {ppaStatus === 'returned' ? 'Edit returned draft →' : 'Continue draft →'}
+                        </Button>
+                      ) : ppaApproved ? (
+                        <Button
+                          {...mt}
+                          size="sm"
+                          className="mt-4 rounded-sm bg-moh-success normal-case text-white"
+                          onClick={() => setActiveTab('reporting')}
+                        >
+                          File a report →
                         </Button>
                       ) : (
                         <Button
@@ -787,9 +928,9 @@ export function PerformancePage() {
                           size="sm"
                           variant="outlined"
                           className="mt-4 rounded-sm normal-case"
-                          onClick={() => setActiveTab('reporting')}
+                          onClick={() => setActiveTab('planning')}
                         >
-                          File a report →
+                          View plan →
                         </Button>
                       )}
                     </Card>
@@ -884,12 +1025,45 @@ export function PerformancePage() {
                 </Card>
               ) : null}
               <Typography {...mt} className="mb-2 text-sm font-bold uppercase text-ui-text">
-                Edit performance plan
+                {ppaStatus === 'draft' || ppaStatus === 'returned'
+                  ? 'Edit performance plan draft'
+                  : ppaApproved
+                    ? 'Approved performance plan'
+                    : 'Performance plan (read-only)'}
               </Typography>
               <Typography {...mt} className="mb-4 text-sm text-ui-muted">
-                Mandatory KPIs are pre-assigned to your role. Adjust weights and targets until the total
-                equals 100%, then save and submit for supervisor review.
+                {canEditPlan
+                  ? 'Set weights and targets for your assigned KPIs. Save as draft anytime — submit only when the total equals 100%.'
+                  : ppaApproved
+                    ? 'This plan is approved and locked. File reports from the Reporting tab.'
+                    : ppaStatus === 'supervisor_review'
+                      ? 'This plan is with your supervisor. It stays locked until it is approved or returned to you.'
+                      : 'This plan is locked. Contact your supervisor or HR if you need changes.'}
               </Typography>
+              {ppaApproved ? (
+                <Card {...mt} className="mb-4 rounded-sm border border-moh-success/30 bg-moh-success/10 p-4">
+                  <Typography {...mt} className="text-sm font-semibold text-moh-success">
+                    Performance plan approved
+                  </Typography>
+                  <Typography {...mt} className="mt-1 text-sm text-moh-success/90">
+                    Weights and targets can no longer be changed for this financial year.
+                  </Typography>
+                </Card>
+              ) : null}
+              {ppaStatus === 'supervisor_review' ? (
+                <Card {...mt} className="mb-4 rounded-sm border border-amber-200 bg-amber-50 p-4">
+                  <Typography {...mt} className="text-sm text-amber-950">
+                    Submitted for review. You cannot edit this plan unless your supervisor returns it.
+                  </Typography>
+                </Card>
+              ) : null}
+              {ppaStatus === 'returned' ? (
+                <Card {...mt} className="mb-4 rounded-sm border border-moh-warning/30 bg-moh-warning/10 p-4">
+                  <Typography {...mt} className="text-sm text-moh-warning">
+                    Returned by your supervisor. Update the figures below, then submit again.
+                  </Typography>
+                </Card>
+              ) : null}
               {planAlert ? (
                 <FormStatusAlert
                   type={planAlert.type}
@@ -908,6 +1082,14 @@ export function PerformancePage() {
                 onRetry={() => groupedQuery.refetch()}
               >
                 <div className="space-y-4">
+                  {groups.length === 0 ? (
+                    <Card {...mt} className="rounded-sm border border-moh-warning/40 bg-moh-warning/10 p-4">
+                      <Typography {...mt} className="text-sm text-ui-text">
+                        No KPIs are assigned to your job or department yet. Ask HR to assign KPIs before
+                        you can build a draft plan.
+                      </Typography>
+                    </Card>
+                  ) : null}
                   {groups.map((group) => (
                     <div key={group.subject_area_id}>
                       <h3
@@ -925,6 +1107,7 @@ export function PerformancePage() {
                             kpi={kpi}
                             planWeights={planWeights}
                             planTargets={planTargets}
+                            disabled={!canEditPlan || savePlanMutation.isPending || submitPlanMutation.isPending}
                             onWeightChange={(id, value) =>
                               setPlanWeights((p) => ({ ...p, [id]: value }))
                             }
@@ -950,30 +1133,37 @@ export function PerformancePage() {
                       {totalWeight.toFixed(1)}%
                     </strong>
                     {totalWeight < 99.9 || totalWeight > 100.1
-                      ? ' — must equal 100% to submit'
+                      ? ' — drafts can be under 100%; submit requires exactly 100%'
                       : ' — ready to submit'}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                  <Button
-                    {...mt}
-                    className="rounded-sm bg-moh-green normal-case"
-                    disabled={savePlanMutation.isPending || !ppaWindowOpen}
-                    onClick={() => {
-                      setPlanAlert(null)
-                      savePlanMutation.mutate()
-                    }}
-                  >
-                    Save plan
-                  </Button>
-                  <Button
-                    {...mt}
-                    variant="outlined"
-                    className="rounded-sm normal-case"
-                    disabled={submitPlanMutation.isPending || !ppaWindowOpen}
-                    onClick={handleSubmitPlan}
-                  >
-                    Submit for supervisor review
-                  </Button>
+                    <Button
+                      {...mt}
+                      variant="outlined"
+                      className="rounded-sm normal-case"
+                      disabled={
+                        !canEditPlan || savePlanMutation.isPending || submitPlanMutation.isPending
+                      }
+                      onClick={handleSaveDraft}
+                    >
+                      {savePlanMutation.isPending ? 'Saving…' : 'Save as draft'}
+                    </Button>
+                    <Button
+                      {...mt}
+                      className="rounded-sm bg-moh-green normal-case"
+                      disabled={
+                        !canEditPlan ||
+                        savePlanMutation.isPending ||
+                        submitPlanMutation.isPending
+                      }
+                      onClick={handleSubmitPlan}
+                    >
+                      {submitPlanMutation.isPending
+                        ? 'Submitting…'
+                        : ppaStatus === 'returned'
+                          ? 'Resubmit for supervisor review'
+                          : 'Submit for supervisor review'}
+                    </Button>
                   </div>
                 </Card>
               </QueryState>
@@ -1007,7 +1197,7 @@ export function PerformancePage() {
                 </Card>
               ) : null}
 
-              {!reportWindowOpen && ppaSubmitted ? (
+              {!reportWindowOpen && ppaApproved ? (
                 <Card {...mt} className="mb-4 rounded-sm border border-moh-warning/40 bg-moh-warning/10 p-4">
                   <Typography {...mt} className="text-sm text-ui-text">
                     {activeReportWindow?.reporting_window
@@ -1031,18 +1221,35 @@ export function PerformancePage() {
                 </Card>
               ) : null}
 
-              {!ppaSubmitted && !reportFormQuery.isLoading ? (
+              {!ppaApproved && !reportFormQuery.isLoading ? (
                 <Card {...mt} className="mb-4 rounded-sm border border-moh-warning/40 bg-moh-warning/10 p-4">
                   <Typography {...mt} className="text-sm text-ui-text">
-                    Submit your performance plan before filing reports. Go to the{' '}
-                    <button
-                      type="button"
-                      className="font-semibold text-moh-green underline"
-                      onClick={() => setActiveTab('planning')}
-                    >
-                      Planning tab
-                    </button>{' '}
-                    to complete and submit your PPA.
+                    {ppaStatus === 'supervisor_review' ? (
+                      <>
+                        Your performance plan is awaiting supervisor approval. Reporting unlocks after
+                        the plan is approved. While it is in review, the plan is locked on the{' '}
+                        <button
+                          type="button"
+                          className="font-semibold text-moh-green underline"
+                          onClick={() => setActiveTab('planning')}
+                        >
+                          Planning tab
+                        </button>
+                        .
+                      </>
+                    ) : (
+                      <>
+                        Your performance plan must be approved before filing reports. Go to the{' '}
+                        <button
+                          type="button"
+                          className="font-semibold text-moh-green underline"
+                          onClick={() => setActiveTab('planning')}
+                        >
+                          Planning tab
+                        </button>{' '}
+                        to complete and submit your PPA for review.
+                      </>
+                    )}
                   </Typography>
                 </Card>
               ) : null}
@@ -1111,6 +1318,7 @@ export function PerformancePage() {
                             key={kpi.ppa_kpi_id}
                             kpi={kpi}
                             reportDraft={reportDraft}
+                            disabled={!canEditReportFigures}
                             onDraftChange={(ppaKpiId, patch) =>
                               setReportDraft((p) => ({
                                 ...p,
@@ -1164,19 +1372,45 @@ export function PerformancePage() {
                 ) : null}
 
                 <div className="mt-6 rounded-sm border border-ui-border bg-ui-subtle/30 p-4">
+                  {reportApproved ? (
+                    <Typography {...mt} className="mb-3 text-sm font-medium text-moh-success">
+                      This report is approved and locked.
+                    </Typography>
+                  ) : reportStatus === 'returned' ? (
+                    <Typography {...mt} className="mb-3 text-sm text-moh-warning">
+                      Returned by your supervisor. Update actuals and narrative, then submit again.
+                    </Typography>
+                  ) : reportAlreadySubmitted ? (
+                    <Typography {...mt} className="mb-3 text-sm text-ui-muted">
+                      This report was submitted ({reportStatus.replace(/_/g, ' ')}). Figures are locked
+                      unless your supervisor returns it for revision.
+                    </Typography>
+                  ) : null}
+                  {reportStatus ? (
+                    <div className="mb-3">
+                      <Chip
+                        {...mt}
+                        size="sm"
+                        value={reportStatus.replace(/_/g, ' ') || 'draft'}
+                        className={cn('rounded-sm capitalize', reportStatusChipClass(reportStatus))}
+                      />
+                    </div>
+                  ) : null}
                   <Button
                     {...mt}
                     className="rounded-sm bg-moh-green normal-case"
                     disabled={
                       submitReportMutation.isPending ||
                       reportGroups.length === 0 ||
-                      !ppaSubmitted ||
-                      !reportWindowOpen ||
-                      reportAlreadySubmitted
+                      !canEditReportFigures
                     }
                     onClick={() => submitReportMutation.mutate()}
                   >
-                    Submit {reportType.toUpperCase()} report
+                    {submitReportMutation.isPending
+                      ? 'Submitting…'
+                      : reportStatus === 'returned'
+                        ? `Resubmit ${reportType.toUpperCase()} report`
+                        : `Submit ${reportType.toUpperCase()} report`}
                   </Button>
                 {submitReportMutation.isSuccess ? (
                   <Typography {...mt} className="mt-2 text-sm text-moh-green">

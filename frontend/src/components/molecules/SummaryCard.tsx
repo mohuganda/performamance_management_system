@@ -1,4 +1,3 @@
-import { Card } from '@/components/atoms/Card'
 import { cn } from '@/utils/cn'
 
 interface SummaryCardProps {
@@ -10,17 +9,17 @@ interface SummaryCardProps {
   accent?: 'default' | 'green' | 'amber' | 'red'
 }
 
-const ACCENT_BORDER = {
-  default: 'border-l-ui-border',
-  green: 'border-l-moh-green',
-  amber: 'border-l-amber-500',
-  red: 'border-l-red-600',
+const ACCENT_BAR = {
+  default: 'bg-ui-text',
+  green: 'bg-moh-green',
+  amber: 'bg-amber-500',
+  red: 'bg-red-600',
 } as const
 
 export function SummaryCard({ title, value, hint, onClick, active, accent = 'default' }: SummaryCardProps) {
   const clickable = Boolean(onClick)
   return (
-    <Card
+    <div
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
       onClick={onClick}
@@ -35,16 +34,19 @@ export function SummaryCard({ title, value, hint, onClick, active, accent = 'def
           : undefined
       }
       className={cn(
-        'min-w-[140px] flex-1 border-l-4 p-4 transition',
-        ACCENT_BORDER[accent],
-        clickable && 'cursor-pointer hover:shadow-md hover:ring-2 hover:ring-moh-green/25',
-        active && 'ring-2 ring-moh-green shadow-md',
+        'dashboard-stat-card relative min-w-[140px] flex-1 overflow-hidden rounded-sm bg-ui-surface p-4 pl-5 transition',
+        clickable && 'cursor-pointer hover:bg-ui-subtle/80',
+        active && 'bg-moh-green/10',
       )}
     >
+      <span
+        aria-hidden
+        className={cn('pointer-events-none absolute inset-y-0 left-0 w-1', ACCENT_BAR[accent])}
+      />
       <p className="text-xs font-semibold uppercase tracking-wide text-ui-muted">{title}</p>
       <p className="mt-2 text-2xl font-bold text-ui-text">{value}</p>
       {hint ? <p className="mt-1 text-xs text-ui-muted">{hint}</p> : null}
       {clickable ? <p className="mt-2 text-[10px] font-medium text-moh-green">View details →</p> : null}
-    </Card>
+    </div>
   )
 }

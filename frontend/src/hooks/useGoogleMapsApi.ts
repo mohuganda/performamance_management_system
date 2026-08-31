@@ -1,6 +1,3 @@
-/// <reference path="../types/google-maps.d.ts" />
-
-import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '@/api/client'
 
@@ -15,9 +12,6 @@ type PublicConfig = {
   }
   overrides?: Record<string, unknown>
 }
-
-let mapsLoader: Promise<void> | null = null
-let mapsLoaderKey = ''
 
 function configString(config: PublicConfig | undefined, key: keyof GoogleMapsConfig): string {
   const fromSettings = config?.settings?.google_maps?.[key]
@@ -34,24 +28,7 @@ export function parseCountryCodes(raw: string): string[] {
     .filter((code) => /^[a-z]{2}$/.test(code))
 }
 
-function loadGoogleMaps(apiKey: string): Promise<void> {
-  if (window.google?.maps?.places?.AutocompleteService) return Promise.resolve()
-  if (mapsLoader && mapsLoaderKey === apiKey) return mapsLoader
-
-  mapsLoaderKey = apiKey
-  mapsLoader = new Promise((resolve, reject) => {
-    const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places`
-    script.async = true
-    script.defer = true
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error('Failed to load Google Maps'))
-    document.head.appendChild(script)
-  })
-
-  return mapsLoader
-}
-
+/** Public Maps settings from `/config` (api key + country filter). */
 export function useGoogleMapsApi() {
   const configQuery = useQuery({
     queryKey: ['public-config', 'maps'],
@@ -63,42 +40,15 @@ export function useGoogleMapsApi() {
   })
 
   const apiKey = configString(configQuery.data, 'api_key')
-  const countryCode = configString(configQuery.data, 'country_code')
+  const countryCode = configString(configQuery.data, 'country_code') || 'ug'
   const countryCodes = parseCountryCodes(countryCode)
-  const [ready, setReady] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!apiKey) {
-      setReady(false)
-      setError(null)
-      return
-    }
-    let cancelled = false
-    loadGoogleMaps(apiKey)
-      .then(() => {
-        if (!cancelled) {
-          setReady(true)
-          setError(null)
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setReady(false)
-          setError(err instanceof Error ? err.message : 'Could not load Google Maps')
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [apiKey])
 
   return {
     apiKey,
     countryCode,
     countryCodes,
-    ready: Boolean(apiKey) && ready,
-    loading: configQuery.isLoading || (Boolean(apiKey) && !ready && !error),
-    error: !apiKey ? 'Google Maps API key is not configured in Settings.' : error,
+    ready: Boolean(apiKey) && !configQuery.isLoading,
+    loading: configQuery.isLoading,
+    error: !configQuery.isLoading && !apiKey ? 'Google Maps API key is not configured in Settings.' : null,
   }
 }

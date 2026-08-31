@@ -138,6 +138,8 @@ html.floating-labels div.relative.w-full:has(> input.peer:not([type='checkbox'])
 html.floating-labels div.relative.w-full:has(> textarea.peer) {
   margin-top: 0.65rem;
   overflow: visible;
+  /* Keep MT inputs below open searchable dropdowns */
+  z-index: 0;
 }
 
 /* --- Shared outlined float field (SearchableSelect / MultiSelect) --- */
@@ -147,7 +149,13 @@ html.floating-labels .oa-float-field {
   width: 100%;
   margin-top: 0.65rem;
   overflow: visible;
-  isolation: isolate;
+  /* Do not use isolation:isolate — it traps dropdown z-index under later fields */
+  z-index: 1;
+}
+
+/* Raised while open so absolute menus paint above following inputs/textareas */
+html.floating-labels .oa-float-field.is-open {
+  z-index: 80;
 }
 
 html.floating-labels .oa-float-control {

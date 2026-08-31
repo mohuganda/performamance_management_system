@@ -5,6 +5,7 @@ import { TablePagination } from '@/components/molecules/TablePagination'
 import { useClientPagination } from '@/hooks/useClientPagination'
 import { isScoreColumn, statusTone } from '@/utils/trafficSignal'
 import { Database } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 
 interface DataTableProps {
@@ -18,6 +19,15 @@ interface DataTableProps {
   highlighted?: boolean
   /** When set, paginate rows client-side with this page size */
   perPage?: number
+}
+
+function actionHref(label: string, explicitUrl?: string | number): string | null {
+  if (typeof explicitUrl === 'string' && explicitUrl.startsWith('/')) return explicitUrl
+  const key = label.trim().toLowerCase()
+  if (key === 'review' || key === 'start') return '/performance'
+  if (key === 'apply' || key === 'view') return '/leave'
+  if (key.includes('approve')) return '/approvals'
+  return null
 }
 
 export function DataTable({
@@ -97,17 +107,36 @@ export function DataTable({
                       {rowOffset + index + 1}
                     </td>
                   ) : null}
-                  {columns.map((column) => (
-                    <td key={column} className="px-4 py-3 align-top">
-                      {column === 'Status' && typeof row[column] === 'string' ? (
-                        <Badge label={String(row[column])} tone={statusTone(String(row[column]))} />
-                      ) : isScoreColumn(column) ? (
-                        <TrafficScore value={row[column] ?? '—'} />
-                      ) : (
-                        row[column]
-                      )}
-                    </td>
-                  ))}
+                  {columns.map((column) => {
+                    const value = row[column]
+                    const isActionCol = column === 'Action' || column === 'Actions'
+                    if (isActionCol && typeof value === 'string' && value.trim()) {
+                      const href = actionHref(value, row.action_url ?? row.ActionURL)
+                      if (href) {
+                        return (
+                          <td key={column} className="px-4 py-3 align-top">
+                            <Link
+                              to={href}
+                              className="inline-flex items-center rounded-sm bg-moh-green px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-moh-green/90"
+                            >
+                              {value}
+                            </Link>
+                          </td>
+                        )
+                      }
+                    }
+                    return (
+                      <td key={column} className="px-4 py-3 align-top">
+                        {column === 'Status' && typeof value === 'string' ? (
+                          <Badge label={String(value)} tone={statusTone(String(value))} />
+                        ) : isScoreColumn(column) ? (
+                          <TrafficScore value={value ?? '—'} />
+                        ) : (
+                          value
+                        )}
+                      </td>
+                    )
+                  })}
                 </tr>
               ))
             )}

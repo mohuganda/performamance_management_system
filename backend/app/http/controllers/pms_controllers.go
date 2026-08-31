@@ -130,8 +130,14 @@ func (c *DashboardController) HealthWorker(ctx http.Context) http.Response {
 
 func (c *DashboardController) Supervisor(ctx http.Context) http.Response {
 	quarter := ctx.Request().Query("quarter", "Q1 (July - September 2026)")
-	team := ctx.Request().Query("team", "Ward A")
-	return ctx.Response().Success().Json(c.dashboardService.SupervisorDashboard(team, quarter))
+	team := ctx.Request().Query("team", "My team")
+	staffID := uint(ctx.Request().QueryInt("staff_id", 0))
+	if staffID == 0 {
+		if id, ok := authctx.StaffID(ctx); ok {
+			staffID = id
+		}
+	}
+	return ctx.Response().Success().Json(c.dashboardService.SupervisorDashboard(staffID, team, quarter))
 }
 
 func (c *DashboardController) DepartmentHead(ctx http.Context) http.Response {

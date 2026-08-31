@@ -25,6 +25,7 @@ import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
 import { SettingsTabNav } from '@/components/molecules/SettingsTabNav'
 import { ThemeAppearancePicker } from '@/components/molecules/ThemeAppearancePicker'
+import { NavPalettePicker } from '@/components/molecules/NavPalettePicker'
 import {
   canAccessSettingsTab,
   canManagePreferencesAdmin,
@@ -127,6 +128,8 @@ export function SettingsPage() {
   const { hasPermission } = useAuthStore()
   const floatingLabels = useUiPreferencesStore((s) => s.floatingLabels)
   const setFloatingLabels = useUiPreferencesStore((s) => s.setFloatingLabels)
+  const headerChrome = useUiPreferencesStore((s) => s.headerChrome)
+  const setHeaderChrome = useUiPreferencesStore((s) => s.setHeaderChrome)
   const [searchParams, setSearchParams] = useSearchParams()
   const canPrefsAdmin = canManagePreferencesAdmin(hasPermission)
   const canLists = canAccessSettingsTab(hasPermission, 'lists')
@@ -145,6 +148,7 @@ export function SettingsPage() {
     require_email: true,
     require_mobile: false,
     use_demo_data: false,
+    overwrite_enabled: false,
   })
   const [hrmAttendForm, setHrmAttendForm] = useState({
     api_url: 'http://localhost/attend',
@@ -190,6 +194,7 @@ export function SettingsPage() {
       require_email: ihris.require_email ?? true,
       require_mobile: ihris.require_mobile ?? false,
       use_demo_data: ihris.use_demo_data ?? false,
+      overwrite_enabled: ihris.overwrite_enabled ?? false,
     })
     const hrm = settingsQuery.data.data_sources.hrm_attend
     setHrmAttendForm({
@@ -379,13 +384,13 @@ export function SettingsPage() {
     <div className="pb-10">
       <PageHeader
         title="Settings"
-        subtitle="Preferences, reference lists, data sources, email, and notifications"
+        subtitle="Preferences, reference lists, data sources, email, notifications, and system policies"
       />
 
       <SettingsTabNav tabs={settingsTabs} value={activeTab} onChange={selectTab} />
 
       {activeTab === 'preferences' ? (
-        <div className="grid max-w-xl gap-6">
+        <div className="grid gap-6 lg:grid-cols-2">
           <SettingsSection title="User preferences" description="Controls your active reporting period across dashboards and performance pages.">
             <Field>
               <Select
@@ -406,16 +411,70 @@ export function SettingsPage() {
           <SettingsSection
             title="Appearance"
             description="Choose light, dark, or match your device. Your choice is saved on this browser."
+            className="lg:col-span-2"
           >
             <ThemeAppearancePicker />
-            <div className="mt-4">
-              <ToggleRow
-                label="Floating field labels"
-                hint="Sit labels on the input border (Material-style). On by default — turn off to place labels above fields."
-                checked={floatingLabels}
-                onChange={setFloatingLabels}
-              />
-            </div>
+            {canPrefsAdmin ? (
+              <>
+                <div className="mt-6">
+                  <p className="mb-1 text-sm font-semibold text-ui-text">Top navigation colors</p>
+                  <p className="mb-3 text-xs text-ui-muted">
+                    Pick a preset or build a custom bar. Each option includes background, text, and
+                    active accent colors. Organisation-wide presentation for administrators.
+                  </p>
+                  <NavPalettePicker />
+                </div>
+                <div className="mt-6">
+                  <p className="mb-1 text-sm font-semibold text-ui-text">Brand header</p>
+                  <p className="mb-3 text-xs text-ui-muted">
+                    The top row with logo and account menu. Defaults to matching the navigation colors.
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {(
+                      [
+                        {
+                          value: 'inherit' as const,
+                          label: 'Inherit nav colors',
+                          description: 'Same bar as navigation (default)',
+                        },
+                        {
+                          value: 'light' as const,
+                          label: 'Light',
+                          description: 'White/light surface, independent of nav',
+                        },
+                      ] as const
+                    ).map((option) => {
+                      const selected = headerChrome === option.value
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setHeaderChrome(option.value)}
+                          aria-pressed={selected}
+                          className={cn(
+                            'rounded-sm border px-3 py-2.5 text-left transition',
+                            selected
+                              ? 'border-uganda-yellow bg-uganda-yellow/15 text-ui-text ring-1 ring-uganda-yellow/40'
+                              : 'border-ui-border bg-ui-surface text-ui-muted hover:border-ui-text/20 hover:bg-ui-subtle hover:text-ui-text',
+                          )}
+                        >
+                          <span className="block text-sm font-semibold text-ui-text">{option.label}</span>
+                          <span className="mt-0.5 block text-xs text-ui-muted">{option.description}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <ToggleRow
+                    label="Floating field labels"
+                    hint="Sit labels on the input border (Material-style). On by default — turn off to place labels above fields."
+                    checked={floatingLabels}
+                    onChange={setFloatingLabels}
+                  />
+                </div>
+              </>
+            ) : null}
           </SettingsSection>
 
           {canPrefsAdmin ? (
@@ -507,6 +566,22 @@ export function SettingsPage() {
                     checked={ihrisForm.use_demo_data}
                     onChange={(checked) => setIhrisForm((f) => ({ ...f, use_demo_data: checked }))}
                   />
+                  <ToggleRow
+                    label="Allow iHRIS to overwrite staff fields"
+                    hint={
+                      ihrisForm.overwrite_enabled
+                        ? 'Sync will update email, mobile, and department from iHRIS when values differ.'
+                        : 'Protected fields are not replaced by sync (recommended default).'
+                    }
+                    checked={ihrisForm.overwrite_enabled}
+                    onChange={(checked) => setIhrisForm((f) => ({ ...f, overwrite_enabled: checked }))}
+                    highlight={!ihrisForm.overwrite_enabled}
+                  />
+                  <div className="rounded-sm border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
+                    When overwrite is disabled, HR edits in Staff Management are preserved. HR email
+                    and mobile overrides in staff profiles always take precedence. Per-staff lock
+                    toggles were removed — use this global setting instead.
+                  </div>
                 </div>
                 <Button
                   {...mt}
@@ -688,8 +763,8 @@ export function SettingsPage() {
                   <code className="text-[11px]">ug,ke,tz</code>). Leave blank to search globally.
                 </p>
                 <p className="text-xs text-gray-500">
-                  Enable the <strong>Maps JavaScript API</strong> and <strong>Places API</strong> for this key.
-                  The key is exposed to signed-in users for destination lookup on travel forms.
+                  Enable <strong>Places API (New)</strong> for this key (legacy Places Autocomplete is not used).
+                  Restrict the key by HTTP referrer to your PMS site. The key is exposed to signed-in users for destination lookup.
                 </p>
                 <Button
                   {...mt}
@@ -758,7 +833,7 @@ export function SettingsPage() {
         <SettingsSection
           title="Email configuration"
           description="SMTP or Microsoft Exchange for system notifications and reminders."
-          className="max-w-3xl"
+          className="w-full"
         >
           <div className="space-y-6">
             <Field>
@@ -950,7 +1025,7 @@ export function SettingsPage() {
           variant="form"
           onRetry={() => settingsQuery.refetch()}
         >
-          <div className="max-w-3xl space-y-5">
+          <div className="w-full space-y-5">
             <p className="text-sm text-gray-600">
               Reminder types configured for leave, performance plans, and approvals. Use the test action
               below to trigger a send cycle without waiting for the scheduler.
@@ -1018,7 +1093,7 @@ export function SettingsPage() {
           variant="form"
           onRetry={() => performanceSettingsQuery.refetch()}
         >
-          <div className="grid max-w-3xl gap-6">
+          <div className="grid w-full gap-6 lg:grid-cols-2">
             <SettingsSection
               title="Reporting windows"
               description="MoH practice: each quarterly report opens in the first weeks of the following quarter (e.g. Q1 report in Q2). Use test override to open all periods while testing."
@@ -1128,7 +1203,7 @@ export function SettingsPage() {
           <SettingsSection
             title="KPI Management"
             description="Configure the national KPI catalog and assign indicators to jobs, departments, and individual staff. Administrators have full access; HR officers receive these permissions by default and can be adjusted in Access Control."
-            className="max-w-3xl"
+            className="w-full"
           >
             <div className="mb-6 space-y-2">
               {(kpiPermissionsQuery.data?.permissions ?? []).map((p) => (

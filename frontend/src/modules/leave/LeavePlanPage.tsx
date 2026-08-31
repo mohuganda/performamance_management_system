@@ -110,7 +110,7 @@ export function LeavePlanPage() {
         subtitle="Plan intended annual leave for the year. This does not apply for leave — submit a leave request when ready."
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-4 flex flex-col items-start gap-3">
         <div className="w-40">
           <Select
             {...mt}

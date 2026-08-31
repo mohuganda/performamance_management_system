@@ -18,6 +18,8 @@ type UserAccountMenuProps = {
   displayName: string
   roleLabel: string
   profilePhoto: string | null
+  /** When true, avatar uses a white ring for contrast on colored header. */
+  onColoredChrome?: boolean
 }
 
 function ThemeIcon({ preference }: { preference: ThemePreference }) {
@@ -27,7 +29,12 @@ function ThemeIcon({ preference }: { preference: ThemePreference }) {
   return <Sun className="h-4 w-4 text-ui-muted" />
 }
 
-export function UserAccountMenu({ displayName, roleLabel, profilePhoto }: UserAccountMenuProps) {
+export function UserAccountMenu({
+  displayName,
+  roleLabel,
+  profilePhoto,
+  onColoredChrome = false,
+}: UserAccountMenuProps) {
   const preference = useThemeStore((s) => s.preference)
   const { data: unread = 0 } = useQuery({
     queryKey: ['notifications', 'unread-count'],
@@ -47,7 +54,12 @@ export function UserAccountMenu({ displayName, roleLabel, profilePhoto }: UserAc
             className="flex items-center gap-2 rounded-sm p-1 text-left transition-colors hover:bg-ui-subtle"
             aria-label="Account menu"
           >
-            <UserAvatar name={displayName} photoUrl={profilePhoto} size="md" />
+            <UserAvatar
+              name={displayName}
+              photoUrl={profilePhoto}
+              size="md"
+              onColoredChrome={onColoredChrome}
+            />
             <div className="hidden min-w-0 md:block">
               <p className="truncate text-sm font-semibold text-ui-text">{displayName}</p>
               <p className="truncate text-xs capitalize text-ui-muted">{roleLabel}</p>
