@@ -15,20 +15,23 @@ const sizeClasses = {
   lg: 'h-24 w-24 text-2xl',
 }
 
-/** Saturated backgrounds that keep white initials readable on light or dark headers. */
+/**
+ * Non-green palette so initials stay distinct from MoH teal/green chrome.
+ * Saturated enough for white initials on light or dark headers.
+ */
 const AVATAR_PALETTE = [
-  { bg: '#0d7377', ring: 'rgba(255,255,255,0.92)' }, // teal
-  { bg: '#1b4d89', ring: 'rgba(255,255,255,0.92)' }, // navy
-  { bg: '#c45c26', ring: 'rgba(255,255,255,0.92)' }, // terracotta
-  { bg: '#6b2d5c', ring: 'rgba(255,255,255,0.92)' }, // plum
-  { bg: '#2d6a4f', ring: 'rgba(255,255,255,0.92)' }, // forest
-  { bg: '#9a3412', ring: 'rgba(255,255,255,0.92)' }, // rust
-  { bg: '#4338ca', ring: 'rgba(255,255,255,0.92)' }, // indigo
-  { bg: '#0f766e', ring: 'rgba(255,255,255,0.92)' }, // deep teal
-  { bg: '#b45309', ring: 'rgba(255,255,255,0.92)' }, // amber
-  { bg: '#9f1239', ring: 'rgba(255,255,255,0.92)' }, // rose
-  { bg: '#1d4ed8', ring: 'rgba(255,255,255,0.92)' }, // blue
-  { bg: '#166534', ring: 'rgba(255,255,255,0.92)' }, // green
+  { bg: '#9f1239' }, // rose
+  { bg: '#1b4d89' }, // navy
+  { bg: '#c45c26' }, // terracotta
+  { bg: '#6b2d5c' }, // plum
+  { bg: '#9a3412' }, // rust
+  { bg: '#4338ca' }, // indigo
+  { bg: '#b45309' }, // amber
+  { bg: '#1d4ed8' }, // blue
+  { bg: '#86198f' }, // fuchsia
+  { bg: '#b91c1c' }, // crimson
+  { bg: '#0369a1' }, // sky
+  { bg: '#7c2d12' }, // brown
 ] as const
 
 function initialsFromName(name: string): string {
@@ -73,7 +76,7 @@ export function UserAvatar({
   return (
     <div
       className={cn(
-        'flex items-center justify-center rounded-full font-semibold tracking-wide text-white',
+        'flex shrink-0 items-center justify-center rounded-full font-semibold tracking-wide text-white',
         chromeRing,
         sizeClass,
         className,

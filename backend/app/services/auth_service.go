@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -309,7 +310,7 @@ func (s *AuthService) UpdateProfile(userID uint, profilePhoto, signatureImage *s
 	if profilePhoto != nil {
 		if *profilePhoto == "" {
 			user.ProfilePhoto = nil
-		} else if err := validateDataURLImage(*profilePhoto, 600_000); err != nil {
+		} else if err := validateDataURLImage(*profilePhoto, 1_500_000); err != nil {
 			return models.User{}, err
 		} else {
 			user.ProfilePhoto = profilePhoto
@@ -341,11 +342,30 @@ func validateDataURLImage(dataURL string, maxBytes int) error {
 		return fmt.Errorf("image must be a valid data URL")
 	}
 	parts := strings.SplitN(dataURL, ",", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
 		return fmt.Errorf("invalid image data")
 	}
-	if len(parts[1]) > maxBytes {
-		return fmt.Errorf("image is too large")
+	payload := parts[1]
+	// Strip whitespace that some browsers insert into large data URLs.
+	payload = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == ' ' || r == '\t' {
+			return -1
+		}
+		return r
+	}, payload)
+
+	decoded, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		decoded, err = base64.RawStdEncoding.DecodeString(payload)
+		if err != nil {
+			return fmt.Errorf("invalid image encoding")
+		}
+	}
+	if len(decoded) == 0 {
+		return fmt.Errorf("image is empty")
+	}
+	if len(decoded) > maxBytes {
+		return fmt.Errorf("image is too large (max %d KB)", maxBytes/1024)
 	}
 	return nil
 }

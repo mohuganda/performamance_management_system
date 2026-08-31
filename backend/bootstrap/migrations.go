@@ -39,5 +39,6 @@ func Migrations() []schema.Migration {
 		&migrations.M20260732000001KpiAssignmentOrgTargets{},
 		&migrations.M20260733000001StaffLeaveManagerFlag{},
 		&migrations.M20260817000001LeavePlansAndOic{},
+		&migrations.M20260901000001ProfileAssetsLongtext{},
 	}
 }
