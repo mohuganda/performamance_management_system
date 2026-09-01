@@ -3,33 +3,16 @@ import {
   applyDocumentTheme,
   useThemeStore,
 } from '@/stores/themeStore'
-import {
-  applyFloatingLabels,
-  applyHeaderChrome,
-  applyNavTheme,
-  useUiPreferencesStore,
-} from '@/stores/uiPreferencesStore'
-import { canManagePreferencesAdmin } from '@/constants/settingsPermissions'
-import { useAuthStore } from '@/stores/appStore'
-
-const STAFF_DEFAULT_NAV_PRESET = 'teal' as const
-const STAFF_DEFAULT_FLOATING_LABELS = true
-const STAFF_DEFAULT_HEADER_CHROME = 'inherit' as const
+import { applyOrgUiChrome } from '@/stores/uiPreferencesStore'
+import { useOrgUiChrome } from '@/hooks/useOrgUiChrome'
 
 /**
- * Applies persisted theme + UI preferences to <html>.
- * Nav colors, brand header, and floating labels are admin-managed —
- * other users always get the organisation defaults.
+ * Applies persisted theme preference and organisation-wide UI chrome to <html>.
+ * Nav colors, brand header, and floating labels come from admin settings on the server.
  */
 export function ThemeSync() {
   const preference = useThemeStore((s) => s.preference)
-  const floatingLabels = useUiPreferencesStore((s) => s.floatingLabels)
-  const navPresetId = useUiPreferencesStore((s) => s.navPresetId)
-  const customNav = useUiPreferencesStore((s) => s.customNav)
-  const headerChrome = useUiPreferencesStore((s) => s.headerChrome)
-  const hasPermission = useAuthStore((s) => s.hasPermission)
-  const isAuthenticated = useAuthStore((s) => Boolean(s.token))
-  const canManageChrome = !isAuthenticated || canManagePreferencesAdmin(hasPermission)
+  const { chrome } = useOrgUiChrome()
 
   useEffect(() => {
     applyDocumentTheme(preference)
@@ -43,20 +26,8 @@ export function ThemeSync() {
   }, [preference])
 
   useEffect(() => {
-    applyFloatingLabels(canManageChrome ? floatingLabels : STAFF_DEFAULT_FLOATING_LABELS)
-  }, [floatingLabels, canManageChrome])
-
-  useEffect(() => {
-    if (canManageChrome) {
-      applyNavTheme(navPresetId, customNav)
-      return
-    }
-    applyNavTheme(STAFF_DEFAULT_NAV_PRESET, customNav)
-  }, [navPresetId, customNav, canManageChrome])
-
-  useEffect(() => {
-    applyHeaderChrome(canManageChrome ? headerChrome : STAFF_DEFAULT_HEADER_CHROME)
-  }, [headerChrome, canManageChrome])
+    applyOrgUiChrome(chrome)
+  }, [chrome])
 
   return null
 }

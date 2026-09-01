@@ -32,7 +32,15 @@ import {
   hasAnyAdminSettingsPermission,
 } from '@/constants/settingsPermissions'
 import { useAuthStore } from '@/stores/appStore'
-import { useUiPreferencesStore } from '@/stores/uiPreferencesStore'
+import {
+  applyOrgUiChrome,
+  DEFAULT_CUSTOM_NAV,
+  NAV_PRESET_OPTIONS,
+  orgUiChromeFromAdminSettings,
+  orgUiChromeToPayload,
+  type NavPresetId,
+  type OrgUiChrome,
+} from '@/stores/uiPreferencesStore'
 import { mt } from '@/utils/mt'
 import { notifyApiError, toast } from '@/features/toast'
 import { cn } from '@/utils/cn'
@@ -126,10 +134,6 @@ export function SettingsPage() {
   const { quarter, setQuarter } = useAuthStore()
   const queryClient = useQueryClient()
   const { hasPermission } = useAuthStore()
-  const floatingLabels = useUiPreferencesStore((s) => s.floatingLabels)
-  const setFloatingLabels = useUiPreferencesStore((s) => s.setFloatingLabels)
-  const headerChrome = useUiPreferencesStore((s) => s.headerChrome)
-  const setHeaderChrome = useUiPreferencesStore((s) => s.setHeaderChrome)
   const [searchParams, setSearchParams] = useSearchParams()
   const canPrefsAdmin = canManagePreferencesAdmin(hasPermission)
   const canLists = canAccessSettingsTab(hasPermission, 'lists')
@@ -143,6 +147,12 @@ export function SettingsPage() {
 
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'preferences')
   const [pageSizeSetting, setPageSizeSetting] = useState('20')
+  const [chromeForm, setChromeForm] = useState<OrgUiChrome>({
+    navPresetId: 'teal',
+    customNav: DEFAULT_CUSTOM_NAV,
+    headerChrome: 'inherit',
+    floatingLabels: true,
+  })
   const [ihrisForm, setIhrisForm] = useState({
     api_url: '',
     require_email: true,
@@ -212,8 +222,31 @@ export function SettingsPage() {
       exchange: { ...emailForm.exchange, ...settingsQuery.data.email.exchange },
     })
     setPageSizeSetting(String(settingsQuery.data.ui?.admin_page_size ?? 20))
+    setChromeForm(orgUiChromeFromAdminSettings(settingsQuery.data.ui))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsQuery.data])
+
+  const updateChromeForm = (next: OrgUiChrome) => {
+    setChromeForm(next)
+    applyOrgUiChrome(next)
+  }
+
+  const setNavPresetId = (navPresetId: NavPresetId) => {
+    let customNav = chromeForm.customNav
+    if (navPresetId !== 'custom') {
+      const preset = NAV_PRESET_OPTIONS.find((p) => p.id === navPresetId)
+      if (preset) customNav = { ...preset.colors }
+    }
+    updateChromeForm({ ...chromeForm, navPresetId, customNav })
+  }
+
+  const setCustomNav = (partial: Partial<OrgUiChrome['customNav']>) => {
+    updateChromeForm({
+      ...chromeForm,
+      navPresetId: 'custom',
+      customNav: { ...chromeForm.customNav, ...partial },
+    })
+  }
 
   const saveDataSources = useMutation({
     mutationFn: () =>
@@ -241,13 +274,17 @@ export function SettingsPage() {
 
   const saveUi = useMutation({
     mutationFn: () =>
-      adminSettingsService.update('ui', { admin_page_size: Number(pageSizeSetting) || 20 }),
+      adminSettingsService.update('ui', {
+        admin_page_size: Number(pageSizeSetting) || 20,
+        ...orgUiChromeToPayload(chromeForm),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'page-size'] })
-      toast.success('UI preferences saved.')
+      queryClient.invalidateQueries({ queryKey: ['public-config', 'ui-chrome'] })
+      toast.success('Organisation UI settings saved.')
     },
-    onError: (error: unknown) => notifyApiError(error, 'Could not save UI preferences'),
+    onError: (error: unknown) => notifyApiError(error, 'Could not save UI settings'),
   })
 
   const syncMutation = useMutation({
@@ -420,9 +457,14 @@ export function SettingsPage() {
                   <p className="mb-1 text-sm font-semibold text-ui-text">Top navigation colors</p>
                   <p className="mb-3 text-xs text-ui-muted">
                     Pick a preset or build a custom bar. Each option includes background, text, and
-                    active accent colors. Organisation-wide presentation for administrators.
+                    active accent colors. Saved for all users in the organisation.
                   </p>
-                  <NavPalettePicker />
+                  <NavPalettePicker
+                    navPresetId={chromeForm.navPresetId}
+                    customNav={chromeForm.customNav}
+                    onPresetChange={setNavPresetId}
+                    onCustomNavChange={setCustomNav}
+                  />
                 </div>
                 <div className="mt-6">
                   <p className="mb-1 text-sm font-semibold text-ui-text">Brand header</p>
@@ -444,12 +486,14 @@ export function SettingsPage() {
                         },
                       ] as const
                     ).map((option) => {
-                      const selected = headerChrome === option.value
+                      const selected = chromeForm.headerChrome === option.value
                       return (
                         <button
                           key={option.value}
                           type="button"
-                          onClick={() => setHeaderChrome(option.value)}
+                          onClick={() =>
+                            updateChromeForm({ ...chromeForm, headerChrome: option.value })
+                          }
                           aria-pressed={selected}
                           className={cn(
                             'rounded-sm border px-3 py-2.5 text-left transition',
@@ -469,10 +513,19 @@ export function SettingsPage() {
                   <ToggleRow
                     label="Floating field labels"
                     hint="Sit labels on the input border (Material-style). On by default — turn off to place labels above fields."
-                    checked={floatingLabels}
-                    onChange={setFloatingLabels}
+                    checked={chromeForm.floatingLabels}
+                    onChange={(floatingLabels) => updateChromeForm({ ...chromeForm, floatingLabels })}
                   />
                 </div>
+                <Button
+                  {...mt}
+                  size="sm"
+                  className="mt-6 rounded-sm bg-moh-green normal-case"
+                  onClick={() => saveUi.mutate()}
+                  loading={saveUi.isPending}
+                >
+                  Save organisation appearance
+                </Button>
               </>
             ) : null}
           </SettingsSection>

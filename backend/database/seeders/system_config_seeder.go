@@ -52,7 +52,11 @@ func (s *SystemConfigSeeder) Run() error {
 		"notifications.supervisor_approval.days_before":   {group: "notifications", value: "3,1", public: true},
 		"notifications.in_app.email_copy":                 {group: "notifications", value: true, public: true},
 		"app.public_url":                                  {group: "app", value: "http://127.0.0.1:5173", public: true},
-		"ui.admin_page_size": {group: "ui", value: 20, public: true},
+		"ui.admin_page_size":   {group: "ui", value: 20, public: true},
+		"ui.nav_preset_id":     {group: "ui", value: "teal", public: true},
+		"ui.nav_custom":        {group: "ui", value: map[string]string{"bg": "#0b4f4a", "fg": "#ffffff", "active": "#fcdc04"}, public: true},
+		"ui.header_chrome":     {group: "ui", value: "inherit", public: true},
+		"ui.floating_labels":   {group: "ui", value: true, public: true},
 	}
 
 	for key, item := range defaults {

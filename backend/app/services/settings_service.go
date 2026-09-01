@@ -108,6 +108,7 @@ func (s *SettingsService) PublicSettings() map[string]any {
 			"api_key":      s.GetString("google_maps.api_key", ""),
 			"country_code": s.GetString("google_maps.country_code", "ug"),
 		},
+		"ui": s.publicUiConfig(),
 	}
 }
 
@@ -163,10 +164,49 @@ func (s *SettingsService) emailConfig() map[string]any {
 	}
 }
 
-func (s *SettingsService) uiConfig() map[string]any {
-	return map[string]any{
-		"admin_page_size": s.GetInt("ui.admin_page_size", 20),
+func (s *SettingsService) defaultNavCustom() map[string]string {
+	return map[string]string{
+		"bg":     "#0b4f4a",
+		"fg":     "#ffffff",
+		"active": "#fcdc04",
 	}
+}
+
+func (s *SettingsService) navCustomConfig() map[string]string {
+	raw := s.GetString("ui.nav_custom", "")
+	if raw == "" {
+		return s.defaultNavCustom()
+	}
+	var parsed map[string]string
+	if json.Unmarshal([]byte(raw), &parsed) == nil && len(parsed) > 0 {
+		defaults := s.defaultNavCustom()
+		if parsed["bg"] == "" {
+			parsed["bg"] = defaults["bg"]
+		}
+		if parsed["fg"] == "" {
+			parsed["fg"] = defaults["fg"]
+		}
+		if parsed["active"] == "" {
+			parsed["active"] = defaults["active"]
+		}
+		return parsed
+	}
+	return s.defaultNavCustom()
+}
+
+func (s *SettingsService) publicUiConfig() map[string]any {
+	return map[string]any{
+		"nav_preset_id":   s.GetString("ui.nav_preset_id", "teal"),
+		"nav_custom":      s.navCustomConfig(),
+		"header_chrome":   s.GetString("ui.header_chrome", "inherit"),
+		"floating_labels": s.GetBool("ui.floating_labels", true),
+	}
+}
+
+func (s *SettingsService) uiConfig() map[string]any {
+	out := s.publicUiConfig()
+	out["admin_page_size"] = s.GetInt("ui.admin_page_size", 20)
+	return out
 }
 
 func (s *SettingsService) notificationsConfig() map[string]any {

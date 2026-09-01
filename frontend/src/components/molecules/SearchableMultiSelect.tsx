@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, X } from 'lucide-react'
 import { cn } from '@/utils/cn'
-import { useUiPreferencesStore } from '@/stores/uiPreferencesStore'
 import type { SearchableSelectOption } from './SearchableSelect'
 
 type SearchableMultiSelectProps = {
@@ -25,11 +24,10 @@ export function SearchableMultiSelect({
   disabled = false,
   className,
 }: SearchableMultiSelectProps) {
-  const floatingLabelsPref = useUiPreferencesStore((s) => s.floatingLabels)
   const floatingLabels =
     typeof document !== 'undefined'
       ? document.documentElement.classList.contains('floating-labels')
-      : floatingLabelsPref
+      : true
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)

@@ -77,6 +77,10 @@ export type AdminSettings = {
   >
   ui?: {
     admin_page_size: number
+    nav_preset_id?: string
+    nav_custom?: { bg: string; fg: string; active: string }
+    header_chrome?: 'inherit' | 'light'
+    floating_labels?: boolean
   }
 }
 

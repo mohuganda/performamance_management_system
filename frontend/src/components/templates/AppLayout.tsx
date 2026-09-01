@@ -11,7 +11,7 @@ import { ChevronDown, LogOut } from 'lucide-react'
 import { BrandLogo } from '@/components/atoms/BrandLogo'
 import { UserAccountMenu } from '@/components/molecules/UserAccountMenu'
 import { useAuthStore } from '@/stores/appStore'
-import { useUiPreferencesStore } from '@/stores/uiPreferencesStore'
+import { useOrgUiChrome } from '@/hooks/useOrgUiChrome'
 import { redirectToLogin } from '@/utils/authRedirect'
 import {
   collectNavPaths,
@@ -21,7 +21,6 @@ import {
   type NavItem,
   visibleNavGroups,
 } from '@/app/navigation/navItems'
-import { canManagePreferencesAdmin } from '@/constants/settingsPermissions'
 import { mt } from '@/utils/mt'
 import { cn } from '@/utils/cn'
 
@@ -122,15 +121,14 @@ function NavGroupMenuItem({
 }
 
 export function AppLayout() {
-  const { displayName, permissions, logout, quarter, roles, profilePhoto, hasPermission } = useAuthStore()
-  const headerChrome = useUiPreferencesStore((s) => s.headerChrome)
+  const { displayName, permissions, logout, quarter, roles, profilePhoto } = useAuthStore()
+  const { chrome } = useOrgUiChrome()
   const location = useLocation()
 
   const groups = visibleNavGroups(permissions)
   const navPaths = collectNavPaths(groups)
   const roleLabel = roles[0]?.replace(/_/g, ' ') ?? 'User'
-  const canManageChrome = canManagePreferencesAdmin(hasPermission)
-  const headerInherits = canManageChrome ? headerChrome !== 'light' : true
+  const headerInherits = chrome.headerChrome !== 'light'
 
   return (
     <div className="flex min-h-screen flex-col bg-ui-bg">

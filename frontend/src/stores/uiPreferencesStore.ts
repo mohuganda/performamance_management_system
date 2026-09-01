@@ -1,6 +1,3 @@
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-
 export type NavThemeColors = {
   bg: string
   fg: string
@@ -83,7 +80,7 @@ export const NAV_PRESET_OPTIONS: NavPresetOption[] = [
   },
 ]
 
-const DEFAULT_CUSTOM: NavThemeColors = {
+export const DEFAULT_CUSTOM_NAV: NavThemeColors = {
   bg: '#0b4f4a',
   fg: '#ffffff',
   active: '#fcdc04',
@@ -91,16 +88,11 @@ const DEFAULT_CUSTOM: NavThemeColors = {
 
 export type HeaderChrome = 'inherit' | 'light'
 
-type UiPreferencesState = {
-  floatingLabels: boolean
+export type OrgUiChrome = {
   navPresetId: NavPresetId
   customNav: NavThemeColors
-  /** Brand/account header row above the sticky nav links. */
   headerChrome: HeaderChrome
-  setFloatingLabels: (enabled: boolean) => void
-  setNavPresetId: (id: NavPresetId) => void
-  setCustomNav: (partial: Partial<NavThemeColors>) => void
-  setHeaderChrome: (mode: HeaderChrome) => void
+  floatingLabels: boolean
 }
 
 function parseHex(hex: string): { r: number; g: number; b: number } | null {
@@ -116,7 +108,6 @@ function parseHex(hex: string): { r: number; g: number; b: number } | null {
 function isLightHex(hex: string): boolean {
   const rgb = parseHex(hex)
   if (!rgb) return false
-  // Relative luminance (sRGB)
   const lum = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255
   return lum > 0.62
 }
@@ -134,9 +125,9 @@ export function resolveNavColors(
 ): NavThemeColors {
   if (presetId === 'custom') {
     return {
-      bg: normalizeHex(customNav.bg, DEFAULT_CUSTOM.bg),
-      fg: normalizeHex(customNav.fg, DEFAULT_CUSTOM.fg),
-      active: normalizeHex(customNav.active, DEFAULT_CUSTOM.active),
+      bg: normalizeHex(customNav.bg, DEFAULT_CUSTOM_NAV.bg),
+      fg: normalizeHex(customNav.fg, DEFAULT_CUSTOM_NAV.fg),
+      active: normalizeHex(customNav.active, DEFAULT_CUSTOM_NAV.active),
     }
   }
   const preset = NAV_PRESET_OPTIONS.find((p) => p.id === presetId)
@@ -185,55 +176,54 @@ export function applyHeaderChrome(mode: HeaderChrome) {
   document.documentElement.dataset.headerChrome = mode
 }
 
-export const useUiPreferencesStore = create<UiPreferencesState>()(
-  persist(
-    (set, get) => ({
-      floatingLabels: true,
-      navPresetId: 'teal',
-      customNav: DEFAULT_CUSTOM,
-      headerChrome: 'inherit',
-      setFloatingLabels: (floatingLabels) => {
-        set({ floatingLabels })
-        applyFloatingLabels(floatingLabels)
-      },
-      setNavPresetId: (navPresetId) => {
-        let customNav = get().customNav
-        if (navPresetId !== 'custom') {
-          const preset = NAV_PRESET_OPTIONS.find((p) => p.id === navPresetId)
-          if (preset) customNav = { ...preset.colors }
-        }
-        set({ navPresetId, customNav })
-        applyNavTheme(navPresetId, customNav)
-      },
-      setCustomNav: (partial) => {
-        const customNav = { ...get().customNav, ...partial }
-        set({ navPresetId: 'custom', customNav })
-        applyNavTheme('custom', customNav)
-      },
-      setHeaderChrome: (headerChrome) => {
-        set({ headerChrome })
-        applyHeaderChrome(headerChrome)
-      },
-    }),
-    {
-      name: 'moh-pms-ui-preferences-v5',
-      migrate: (persisted) => {
-        const state = (persisted ?? {}) as Record<string, unknown>
-        if (typeof state.navPalette === 'string' && !state.navPresetId) {
-          const legacy = state.navPalette as string
-          state.navPresetId = ['neutral', 'teal', 'crimson'].includes(legacy) ? legacy : 'teal'
-        }
-        if (!state.customNav) state.customNav = DEFAULT_CUSTOM
-        if (!state.headerChrome) state.headerChrome = 'inherit'
-        delete state.navPalette
-        return state as UiPreferencesState
-      },
-      version: 5,
-      onRehydrateStorage: () => (state) => {
-        applyFloatingLabels(state?.floatingLabels ?? true)
-        applyNavTheme(state?.navPresetId ?? 'teal', state?.customNav ?? DEFAULT_CUSTOM)
-        applyHeaderChrome(state?.headerChrome ?? 'inherit')
-      },
+export function applyOrgUiChrome(chrome: OrgUiChrome) {
+  applyFloatingLabels(chrome.floatingLabels)
+  applyNavTheme(chrome.navPresetId, chrome.customNav)
+  applyHeaderChrome(chrome.headerChrome)
+}
+
+export function orgUiChromeToPayload(chrome: OrgUiChrome) {
+  return {
+    nav_preset_id: chrome.navPresetId,
+    nav_custom: chrome.customNav,
+    header_chrome: chrome.headerChrome,
+    floating_labels: chrome.floatingLabels,
+  }
+}
+
+export function orgUiChromeFromAdminSettings(
+  ui: Partial<{
+    nav_preset_id?: string
+    nav_custom?: Partial<NavThemeColors>
+    header_chrome?: string
+    floating_labels?: boolean
+  }> | undefined,
+): OrgUiChrome {
+  return parseOrgUiChromeFromPartial(ui)
+}
+
+function parseOrgUiChromeFromPartial(
+  ui:
+    | Partial<{
+        nav_preset_id?: string
+        nav_custom?: Partial<NavThemeColors>
+        header_chrome?: string
+        floating_labels?: boolean
+      }>
+    | undefined,
+): OrgUiChrome {
+  return {
+    navPresetId: (['neutral', 'teal', 'crimson', 'forest', 'navy', 'charcoal', 'sand', 'uganda', 'slate', 'custom'] as const).includes(
+      ui?.nav_preset_id as NavPresetId,
+    )
+      ? (ui?.nav_preset_id as NavPresetId)
+      : 'teal',
+    customNav: {
+      bg: ui?.nav_custom?.bg ?? DEFAULT_CUSTOM_NAV.bg,
+      fg: ui?.nav_custom?.fg ?? DEFAULT_CUSTOM_NAV.fg,
+      active: ui?.nav_custom?.active ?? DEFAULT_CUSTOM_NAV.active,
     },
-  ),
-)
+    headerChrome: ui?.header_chrome === 'light' ? 'light' : 'inherit',
+    floatingLabels: ui?.floating_labels ?? true,
+  }
+}

@@ -1,12 +1,16 @@
 import {
   NAV_PRESET_OPTIONS,
-  useUiPreferencesStore,
   type NavPresetId,
+  type NavThemeColors,
 } from '@/stores/uiPreferencesStore'
 import { cn } from '@/utils/cn'
 
 type NavPalettePickerProps = {
   className?: string
+  navPresetId: NavPresetId
+  customNav: NavThemeColors
+  onPresetChange: (id: NavPresetId) => void
+  onCustomNavChange: (partial: Partial<NavThemeColors>) => void
 }
 
 function ColorField({
@@ -44,12 +48,13 @@ function ColorField({
   )
 }
 
-export function NavPalettePicker({ className }: NavPalettePickerProps) {
-  const navPresetId = useUiPreferencesStore((s) => s.navPresetId)
-  const customNav = useUiPreferencesStore((s) => s.customNav)
-  const setNavPresetId = useUiPreferencesStore((s) => s.setNavPresetId)
-  const setCustomNav = useUiPreferencesStore((s) => s.setCustomNav)
-
+export function NavPalettePicker({
+  className,
+  navPresetId,
+  customNav,
+  onPresetChange,
+  onCustomNavChange,
+}: NavPalettePickerProps) {
   return (
     <div className={cn('space-y-4', className)}>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -59,7 +64,7 @@ export function NavPalettePicker({ className }: NavPalettePickerProps) {
             <button
               key={option.id}
               type="button"
-              onClick={() => setNavPresetId(option.id)}
+              onClick={() => onPresetChange(option.id)}
               aria-pressed={selected}
               className={cn(
                 'rounded-sm border px-3 py-2.5 text-left transition',
@@ -89,7 +94,7 @@ export function NavPalettePicker({ className }: NavPalettePickerProps) {
 
         <button
           type="button"
-          onClick={() => setNavPresetId('custom' as NavPresetId)}
+          onClick={() => onPresetChange('custom')}
           aria-pressed={navPresetId === 'custom'}
           className={cn(
             'rounded-sm border px-3 py-2.5 text-left transition',
@@ -125,17 +130,17 @@ export function NavPalettePicker({ className }: NavPalettePickerProps) {
             <ColorField
               label="Bar background"
               value={customNav.bg}
-              onChange={(bg) => setCustomNav({ bg })}
+              onChange={(bg) => onCustomNavChange({ bg })}
             />
             <ColorField
               label="Text / icons"
               value={customNav.fg}
-              onChange={(fg) => setCustomNav({ fg })}
+              onChange={(fg) => onCustomNavChange({ fg })}
             />
             <ColorField
               label="Active accent"
               value={customNav.active}
-              onChange={(active) => setCustomNav({ active })}
+              onChange={(active) => onCustomNavChange({ active })}
             />
           </div>
           <div

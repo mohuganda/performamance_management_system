@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, X } from 'lucide-react'
 import { cn } from '@/utils/cn'
-import { useUiPreferencesStore } from '@/stores/uiPreferencesStore'
 
 export type SearchableSelectOption = {
   value: string
@@ -35,11 +34,10 @@ export function SearchableSelect({
   allowClear = true,
   labelPosition,
 }: SearchableSelectProps) {
-  const floatingLabelsPref = useUiPreferencesStore((s) => s.floatingLabels)
   const floatingLabels =
     typeof document !== 'undefined'
       ? document.documentElement.classList.contains('floating-labels')
-      : floatingLabelsPref
+      : true
   const resolvedLabelPosition = labelPosition ?? (floatingLabels ? 'floating' : 'top')
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
