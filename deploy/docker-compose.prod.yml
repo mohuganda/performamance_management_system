@@ -67,6 +67,7 @@ services:
       DB_PASSWORD: ${MYSQL_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      FILE_STORAGE_ROOT: ${FILE_STORAGE_ROOT:-/var/lib/moh-pms/media}
       IHRIS_USE_DEMO_DATA: ${IHRIS_USE_DEMO_DATA}
       LOAD_DEMO_DATA: ${LOAD_DEMO_DATA}
       ANALYTICS_DB_ENABLED: ${ANALYTICS_DB_ENABLED:-true}
@@ -79,6 +80,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${DATA_DIR}/storage:/app/storage
+      - ${DATA_DIR}/media:/var/lib/moh-pms/media
     expose:
       - "3030"
     healthcheck:

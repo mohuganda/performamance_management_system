@@ -18,10 +18,10 @@ func (r *M20260713000001UserProfileAssets) Up() error {
 
 	return facades.Schema().Table("users", func(table schema.Blueprint) {
 		if !facades.Schema().HasColumn("users", "profile_photo") {
-			table.LongText("profile_photo").Nullable()
+			table.String("profile_photo", 512).Nullable()
 		}
 		if !facades.Schema().HasColumn("users", "signature_image") {
-			table.LongText("signature_image").Nullable()
+			table.String("signature_image", 512).Nullable()
 		}
 		if !facades.Schema().HasColumn("users", "signature_updated_at") {
 			table.DateTimeTz("signature_updated_at").Nullable()

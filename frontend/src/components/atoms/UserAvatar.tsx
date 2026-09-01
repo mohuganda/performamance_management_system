@@ -1,4 +1,5 @@
 import { cn } from '@/utils/cn'
+import { useAuthenticatedMediaUrl } from '@/hooks/useAuthenticatedMediaUrl'
 
 interface UserAvatarProps {
   name: string
@@ -59,14 +60,15 @@ export function UserAvatar({
 }: UserAvatarProps) {
   const sizeClass = sizeClasses[size]
   const palette = colorFromName(name)
+  const resolvedPhoto = useAuthenticatedMediaUrl(photoUrl)
   const chromeRing = onColoredChrome
     ? 'border-2 border-white ring-2 ring-white/90 shadow-sm'
     : 'border-2 border-white/80 ring-2 ring-black/10 shadow-sm'
 
-  if (photoUrl) {
+  if (resolvedPhoto) {
     return (
       <img
-        src={photoUrl}
+        src={resolvedPhoto}
         alt={name}
         className={cn('rounded-full object-cover', chromeRing, sizeClass, className)}
       />

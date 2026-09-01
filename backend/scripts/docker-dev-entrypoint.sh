@@ -5,6 +5,8 @@ set -eu
 cd /app
 
 mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/logs tmp
+MEDIA_ROOT="${FILE_STORAGE_ROOT:-/var/lib/moh-pms/media}"
+mkdir -p "$MEDIA_ROOT" "$MEDIA_ROOT/profiles" "$MEDIA_ROOT/signatures" "$MEDIA_ROOT/attachments" "$MEDIA_ROOT/uploads"
 
 env_quote() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$/"/'
@@ -32,6 +34,7 @@ REDIS_PORT=$(env_quote "${REDIS_PORT:-6379}")
 ADMIN_EMAIL=$(env_quote "${ADMIN_EMAIL:-admin@moh.go.ug}")
 ADMIN_PASSWORD=$(env_quote "${ADMIN_PASSWORD:-Demo@Moh2026!}")
 ADMIN_NAME=$(env_quote "${ADMIN_NAME:-PMS Administrator}")
+FILE_STORAGE_ROOT=$(env_quote "${FILE_STORAGE_ROOT:-/var/lib/moh-pms/media}")
 EOF
 
 echo "[dev] Waiting for MySQL..."

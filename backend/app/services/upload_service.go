@@ -24,6 +24,7 @@ var allowedAttachmentMIME = map[string]string{
 
 type UploadedFile struct {
 	URL      string `json:"url"`
+	Path     string `json:"path"`
 	Name     string `json:"name"`
 	MimeType string `json:"mime_type"`
 	Size     int    `json:"size"`
@@ -35,7 +36,23 @@ func NewUploadService() *UploadService {
 	return &UploadService{}
 }
 
+func (s *UploadService) mediaDisk() string {
+	return "media"
+}
+
 func (s *UploadService) StoreDataURL(dataURL, originalName string) (UploadedFile, error) {
+	return s.StoreDataURLIn(dataURL, originalName, "attachments")
+}
+
+func (s *UploadService) StoreProfilePhoto(dataURL string, userID uint) (UploadedFile, error) {
+	return s.StoreDataURLIn(dataURL, fmt.Sprintf("user-%d-photo.jpg", userID), "profiles")
+}
+
+func (s *UploadService) StoreSignature(dataURL string, userID uint) (UploadedFile, error) {
+	return s.StoreDataURLIn(dataURL, fmt.Sprintf("user-%d-signature.png", userID), "signatures")
+}
+
+func (s *UploadService) StoreDataURLIn(dataURL, originalName, folder string) (UploadedFile, error) {
 	if strings.TrimSpace(dataURL) == "" {
 		return UploadedFile{}, fmt.Errorf("file payload is required")
 	}
@@ -57,7 +74,10 @@ func (s *UploadService) StoreDataURL(dataURL, originalName string) (UploadedFile
 	}
 	raw, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil {
-		return UploadedFile{}, fmt.Errorf("invalid file encoding")
+		raw, err = base64.RawStdEncoding.DecodeString(payload)
+		if err != nil {
+			return UploadedFile{}, fmt.Errorf("invalid file encoding")
+		}
 	}
 	if len(raw) > maxAttachmentBytes {
 		return UploadedFile{}, fmt.Errorf("file is too large (max %d MB)", maxAttachmentBytes/(1024*1024))
@@ -70,14 +90,16 @@ func (s *UploadService) StoreDataURL(dataURL, originalName string) (UploadedFile
 		name += ext
 	}
 
+	folder = sanitizeFolder(folder)
 	filename := fmt.Sprintf("%s-%d%s", uuid.NewString(), time.Now().Unix(), ext)
-	relativePath := "uploads/" + filename
-	if err := facades.Storage().Disk("public").Put(relativePath, string(raw)); err != nil {
+	relativePath := folder + "/" + filename
+	if err := facades.Storage().Disk(s.mediaDisk()).Put(relativePath, string(raw)); err != nil {
 		return UploadedFile{}, err
 	}
 
 	return UploadedFile{
-		URL:      "/api/v1/files?path=" + relativePath,
+		URL:      filePublicURL(relativePath),
+		Path:     relativePath,
 		Name:     name,
 		MimeType: mime,
 		Size:     len(raw),
@@ -85,23 +107,77 @@ func (s *UploadService) StoreDataURL(dataURL, originalName string) (UploadedFile
 }
 
 func (s *UploadService) ReadPublic(relativePath string) ([]byte, string, error) {
-	clean := strings.TrimPrefix(strings.TrimSpace(relativePath), "/")
-	clean = strings.TrimPrefix(clean, "api/v1/files/")
-	if clean == "" || strings.Contains(clean, "..") {
-		return nil, "", fmt.Errorf("invalid file path")
-	}
-	if !strings.HasPrefix(clean, "uploads/") {
-		return nil, "", fmt.Errorf("invalid file path")
-	}
-	if !facades.Storage().Disk("public").Exists(clean) {
-		return nil, "", fmt.Errorf("file not found")
-	}
-	content, err := facades.Storage().Disk("public").Get(clean)
+	clean, err := normalizeMediaPath(relativePath)
 	if err != nil {
 		return nil, "", err
 	}
-	mime := mimeFromExt(filepath.Ext(clean))
-	return []byte(content), mime, nil
+	disk := facades.Storage().Disk(s.mediaDisk())
+	if !disk.Exists(clean) {
+		// Backward compatibility for files written before the media disk existed.
+		if facades.Storage().Disk("public").Exists(clean) {
+			content, err := facades.Storage().Disk("public").Get(clean)
+			if err != nil {
+				return nil, "", err
+			}
+			return []byte(content), mimeFromExt(filepath.Ext(clean)), nil
+		}
+		return nil, "", fmt.Errorf("file not found")
+	}
+	content, err := disk.Get(clean)
+	if err != nil {
+		return nil, "", err
+	}
+	return []byte(content), mimeFromExt(filepath.Ext(clean)), nil
+}
+
+func (s *UploadService) DeleteByURLOrPath(urlOrPath string) {
+	clean, err := normalizeMediaPath(urlOrPath)
+	if err != nil || clean == "" {
+		return
+	}
+	_ = facades.Storage().Disk(s.mediaDisk()).Delete(clean)
+	_ = facades.Storage().Disk("public").Delete(clean)
+}
+
+func filePublicURL(relativePath string) string {
+	return "/api/v1/files?path=" + relativePath
+}
+
+func normalizeMediaPath(relativePath string) (string, error) {
+	clean := strings.TrimSpace(relativePath)
+	if strings.HasPrefix(clean, "data:") {
+		return "", fmt.Errorf("invalid file path")
+	}
+	if idx := strings.Index(clean, "path="); idx >= 0 {
+		clean = clean[idx+5:]
+		if amp := strings.Index(clean, "&"); amp >= 0 {
+			clean = clean[:amp]
+		}
+	}
+	clean = strings.TrimPrefix(clean, "/")
+	clean = strings.TrimPrefix(clean, "api/v1/files/")
+	clean = strings.TrimPrefix(clean, "files/")
+	if clean == "" || strings.Contains(clean, "..") {
+		return "", fmt.Errorf("invalid file path")
+	}
+	allowed := strings.HasPrefix(clean, "uploads/") ||
+		strings.HasPrefix(clean, "attachments/") ||
+		strings.HasPrefix(clean, "profiles/") ||
+		strings.HasPrefix(clean, "signatures/")
+	if !allowed {
+		return "", fmt.Errorf("invalid file path")
+	}
+	return clean, nil
+}
+
+func sanitizeFolder(folder string) string {
+	folder = strings.Trim(folder, "/")
+	folder = strings.ReplaceAll(folder, "..", "")
+	folder = strings.ReplaceAll(folder, "\\", "")
+	if folder == "" {
+		return "attachments"
+	}
+	return folder
 }
 
 func parseDataURL(dataURL string) (mime string, payload string, err error) {
@@ -113,7 +189,12 @@ func parseDataURL(dataURL string) (mime string, payload string, err error) {
 		return "", "", fmt.Errorf("invalid file data")
 	}
 	header := headerAndData[0]
-	payload = headerAndData[1]
+	payload = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == ' ' || r == '\t' {
+			return -1
+		}
+		return r
+	}, headerAndData[1])
 	if !strings.HasSuffix(header, ";base64") {
 		return "", "", fmt.Errorf("only base64-encoded files are supported")
 	}

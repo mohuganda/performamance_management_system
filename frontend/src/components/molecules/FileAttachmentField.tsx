@@ -2,11 +2,11 @@ import { useRef, useState } from 'react'
 import { Button, Typography } from '@material-tailwind/react'
 import { FileText, ImageIcon, Paperclip, X } from 'lucide-react'
 import { uploadService } from '@/api/services/mobile'
+import { useAuthenticatedMediaUrl } from '@/hooks/useAuthenticatedMediaUrl'
 import { notifyApiError } from '@/features/toast'
 import {
   isImageAttachment,
   readFileAsDataUrl,
-  resolveFileUrl,
   type AttachmentMeta,
 } from '@/utils/attachments'
 import { mt } from '@/utils/mt'
@@ -120,7 +120,7 @@ export function FileAttachmentField({
 }
 
 function AttachmentPreviewCard({ item, onRemove }: { item: AttachmentMeta; onRemove: () => void }) {
-  const url = resolveFileUrl(item.url)
+  const previewUrl = useAuthenticatedMediaUrl(item.url)
   const isImage = isImageAttachment(item)
   const isPdf = (item.mime_type ?? '').includes('pdf') || item.url.toLowerCase().endsWith('.pdf')
 
@@ -135,8 +135,8 @@ function AttachmentPreviewCard({ item, onRemove }: { item: AttachmentMeta; onRem
         <X className="h-4 w-4 text-ui-muted" />
       </button>
       <div className="flex min-h-[120px] items-center justify-center bg-ui-subtle/40">
-        {isImage ? (
-          <img src={url} alt={item.name} className="max-h-40 w-full object-contain" />
+        {isImage && previewUrl ? (
+          <img src={previewUrl} alt={item.name} className="max-h-40 w-full object-contain" />
         ) : isPdf ? (
           <div className="flex flex-col items-center gap-2 px-4 py-6 text-ui-muted">
             <FileText className="h-10 w-10" />
@@ -151,14 +151,18 @@ function AttachmentPreviewCard({ item, onRemove }: { item: AttachmentMeta; onRem
       </div>
       <div className="border-t border-ui-border px-3 py-2">
         <p className="truncate text-sm font-medium text-ui-text">{item.name}</p>
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs font-medium text-moh-green hover:underline"
-        >
-          Open preview
-        </a>
+        {previewUrl ? (
+          <a
+            href={previewUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-medium text-moh-green hover:underline"
+          >
+            Open preview
+          </a>
+        ) : (
+          <span className="text-xs text-ui-muted">Preview unavailable</span>
+        )}
       </div>
     </div>
   )

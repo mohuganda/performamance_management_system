@@ -307,26 +307,56 @@ func (s *AuthService) UpdateProfile(userID uint, profilePhoto, signatureImage *s
 		return models.User{}, fmt.Errorf("user not found")
 	}
 
+	uploads := NewUploadService()
+
 	if profilePhoto != nil {
 		if *profilePhoto == "" {
+			uploads.DeleteByURLOrPath(derefStr(user.ProfilePhoto))
 			user.ProfilePhoto = nil
-		} else if err := validateDataURLImage(*profilePhoto, 1_500_000); err != nil {
-			return models.User{}, err
+		} else if strings.HasPrefix(*profilePhoto, "data:image/") {
+			if err := validateDataURLImage(*profilePhoto, 1_500_000); err != nil {
+				return models.User{}, err
+			}
+			stored, err := uploads.StoreProfilePhoto(*profilePhoto, userID)
+			if err != nil {
+				return models.User{}, err
+			}
+			uploads.DeleteByURLOrPath(derefStr(user.ProfilePhoto))
+			url := stored.URL
+			user.ProfilePhoto = &url
+		} else if isStoredMediaURL(*profilePhoto) {
+			url := strings.TrimSpace(*profilePhoto)
+			user.ProfilePhoto = &url
 		} else {
-			user.ProfilePhoto = profilePhoto
+			return models.User{}, fmt.Errorf("unsupported profile photo payload")
 		}
 	}
 
 	if signatureImage != nil {
 		if *signatureImage == "" {
+			uploads.DeleteByURLOrPath(derefStr(user.SignatureImage))
 			user.SignatureImage = nil
 			user.SignatureUpdatedAt = nil
-		} else if err := validateDataURLImage(*signatureImage, 300_000); err != nil {
-			return models.User{}, err
-		} else {
+		} else if strings.HasPrefix(*signatureImage, "data:image/") {
+			if err := validateDataURLImage(*signatureImage, 300_000); err != nil {
+				return models.User{}, err
+			}
+			stored, err := uploads.StoreSignature(*signatureImage, userID)
+			if err != nil {
+				return models.User{}, err
+			}
+			uploads.DeleteByURLOrPath(derefStr(user.SignatureImage))
 			now := time.Now()
-			user.SignatureImage = signatureImage
+			url := stored.URL
+			user.SignatureImage = &url
 			user.SignatureUpdatedAt = &now
+		} else if isStoredMediaURL(*signatureImage) {
+			url := strings.TrimSpace(*signatureImage)
+			user.SignatureImage = &url
+			now := time.Now()
+			user.SignatureUpdatedAt = &now
+		} else {
+			return models.User{}, fmt.Errorf("unsupported signature payload")
 		}
 	}
 
@@ -335,6 +365,15 @@ func (s *AuthService) UpdateProfile(userID uint, profilePhoto, signatureImage *s
 	}
 	user.Password = ""
 	return user, nil
+}
+
+func isStoredMediaURL(value string) bool {
+	value = strings.TrimSpace(value)
+	return strings.HasPrefix(value, "/api/v1/files?") ||
+		strings.HasPrefix(value, "profiles/") ||
+		strings.HasPrefix(value, "signatures/") ||
+		strings.HasPrefix(value, "attachments/") ||
+		strings.HasPrefix(value, "uploads/")
 }
 
 func validateDataURLImage(dataURL string, maxBytes int) error {

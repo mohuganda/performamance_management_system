@@ -5,6 +5,8 @@ set -eu
 cd /app
 
 mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/logs
+MEDIA_ROOT="${FILE_STORAGE_ROOT:-/var/lib/moh-pms/media}"
+mkdir -p "$MEDIA_ROOT" "$MEDIA_ROOT/profiles" "$MEDIA_ROOT/signatures" "$MEDIA_ROOT/attachments" "$MEDIA_ROOT/uploads"
 
 # Quote values for .env (double-quoted .env format; escapes " and \)
 env_quote() {
@@ -34,6 +36,7 @@ REDIS_PORT=$(env_quote "${REDIS_PORT:-6379}")
 ADMIN_EMAIL=$(env_quote "${ADMIN_EMAIL}")
 ADMIN_PASSWORD=$(env_quote "${ADMIN_PASSWORD}")
 ADMIN_NAME=$(env_quote "${ADMIN_NAME:-PMS Administrator}")
+FILE_STORAGE_ROOT=$(env_quote "${FILE_STORAGE_ROOT:-/var/lib/moh-pms/media}")
 EOF
 }
 

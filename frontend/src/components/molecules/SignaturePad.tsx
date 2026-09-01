@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, Typography } from '@material-tailwind/react'
 import { Eraser, ImagePlus, PenLine, Save } from 'lucide-react'
+import { useAuthenticatedMediaUrl } from '@/hooks/useAuthenticatedMediaUrl'
 import { mt } from '@/utils/mt'
 import { cn } from '@/utils/cn'
 
@@ -26,6 +27,7 @@ export function SignaturePad({
   const drawingRef = useRef(false)
   const [dirty, setDirty] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const resolvedValue = useAuthenticatedMediaUrl(value)
 
   const getCtx = useCallback(() => {
     const canvas = canvasRef.current
@@ -71,10 +73,10 @@ export function SignaturePad({
 
   useEffect(() => {
     clearCanvas()
-    if (value) {
-      loadImageToCanvas(value)
+    if (resolvedValue) {
+      loadImageToCanvas(resolvedValue)
     }
-  }, [clearCanvas, loadImageToCanvas, value])
+  }, [clearCanvas, loadImageToCanvas, resolvedValue])
 
   const pointerPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
