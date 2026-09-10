@@ -33,10 +33,17 @@ ADMIN_PASSWORD="Demo@Moh2026!"
 ADMIN_NAME="PMS Administrator"
 MYSQL_ROOT_PASSWORD=""
 MYSQL_PASSWORD=""
-APP_KEY=""
-JWT_SECRET=""
+DB_CONNECTION=""
+CLI_DB_CONNECTION=""
+DB_PASSWORD=""
+DB_DATABASE="moh_pms"
+DB_USERNAME="pms"
+DB_HOST=""
+DB_PORT=""
+EXPOSE_POSTGRES="false"
 EXPOSE_MYSQL="false"
 EXPOSE_REDIS="false"
+POSTGRES_HOST_PORT="5433"
 MYSQL_HOST_PORT="3307"
 REDIS_HOST_PORT="6379"
 INSTALL_HOST_NGINX="false"
@@ -70,13 +77,19 @@ Deploy / manage:
   --down-volumes         Stop and remove containers (host data under DATA_DIR is kept)
   --restart              Restart running containers
   --status               Show container status
-  --logs [service]       Tail logs (gateway|backend|frontend|mysql|redis)
+  --logs [service]       Tail logs (gateway|backend|frontend|postgres|mysql|redis)
 
 Network:
   --host IP              Public IP or hostname (auto-detected if omitted)
   --http-port PORT       Browser port (default: 80). Docker gateway or host nginx.
   --gateway-port PORT    Internal Docker gateway port when using --install-host-nginx (default: 8080)
   --server-name NAME     nginx server_name (default: _)
+
+Database:
+  --db postgres|mysql    Primary OLTP engine (default: postgres). Skips interactive prompt.
+  --db-password PASS     Application database user password
+  --mysql-root-password PASS
+                         MySQL root password (mysql mode only)
 
 Data & demo:
   --demo-data            Load demo accounts and sample data (default)
@@ -87,14 +100,13 @@ Data & demo:
 Credentials (auto-generated when omitted):
   --admin-email EMAIL    Seeded admin email (default: admin@moh.go.ug)
   --admin-password PASS  Seeded admin password (min 10 chars)
-  --db-password PASS     MySQL application user password
-  --mysql-root-password PASS
   --app-key KEY          Goravel APP_KEY
   --jwt-secret SECRET    JWT signing secret
 
 Infrastructure:
   --rebuild              Force Docker image rebuild
-  --data-dir PATH        Host path for MySQL, Redis, and API storage (default: /var/lib/moh-pms)
+  --data-dir PATH        Host path for DB, Redis, and API storage (default: /var/lib/moh-pms)
+  --expose-postgres      Publish Postgres on host port (default 5433)
   --expose-mysql         Publish MySQL on host port (default 3307)
   --expose-redis         Publish Redis on host port (default 6379)
   --install-host-nginx   Install site config into system nginx (requires sudo)
@@ -102,7 +114,8 @@ Infrastructure:
 
 Examples:
   ./setup.sh
-  ./setup.sh --host 192.168.1.50 --http-port 80 --demo-data
+  ./setup.sh --db postgres
+  ./setup.sh --db mysql --host 192.168.1.50 --http-port 80 --demo-data
   ./setup.sh --no-demo-data --admin-password 'SecurePass123!' --install-host-nginx
   ./setup.sh --down
 
@@ -149,13 +162,56 @@ compose() {
   if [[ -f "${OVERRIDE_FILE}" ]]; then
     files+=(-f "${OVERRIDE_FILE}")
   fi
-  docker compose --env-file "${ENV_FILE}" "${files[@]}" --profile app "$@"
+  docker compose --env-file "${ENV_FILE}" "${files[@]}" --profile app --profile "${DB_CONNECTION}" "$@"
+}
+
+resolve_db_connection() {
+  if [[ -n "${CLI_DB_CONNECTION}" ]]; then
+    DB_CONNECTION="${CLI_DB_CONNECTION}"
+  fi
+  case "${DB_CONNECTION}" in
+    postgres|postgresql|pgsql) DB_CONNECTION="postgres" ;;
+    mysql) DB_CONNECTION="mysql" ;;
+    "")
+      if [[ -t 0 ]]; then
+        echo "Primary database?"
+        echo "  1) PostgreSQL (default)"
+        echo "  2) MySQL"
+        read -r -p "Choice [1/2]: " choice || true
+        case "${choice}" in
+          2|mysql|MYSQL) DB_CONNECTION="mysql" ;;
+          *) DB_CONNECTION="postgres" ;;
+        esac
+      else
+        DB_CONNECTION="postgres"
+      fi
+      ;;
+    *)
+      err "Invalid DB_CONNECTION '${DB_CONNECTION}'. Use postgres or mysql."
+      exit 1
+      ;;
+  esac
+  if [[ "${DB_CONNECTION}" == "postgres" ]]; then
+    DB_HOST="postgres"
+    DB_PORT="5432"
+  else
+    DB_HOST="mysql"
+    DB_PORT="3306"
+  fi
 }
 
 write_override() {
   rm -f "${OVERRIDE_FILE}"
   local needs_file=false
   local content="services:"
+
+  if [[ "${EXPOSE_POSTGRES}" == "true" ]]; then
+    needs_file=true
+    content="${content}
+  postgres:
+    ports:
+      - \"${POSTGRES_HOST_PORT}:5432\""
+  fi
 
   if [[ "${EXPOSE_MYSQL}" == "true" ]]; then
     needs_file=true
@@ -203,18 +259,26 @@ dotenv_quote() {
 }
 
 ensure_data_dirs() {
-  mkdir -p "${DATA_DIR}/mysql" "${DATA_DIR}/redis" "${DATA_DIR}/storage/app/public"
-  chmod 750 "${DATA_DIR}" "${DATA_DIR}/mysql" "${DATA_DIR}/redis" "${DATA_DIR}/storage" 2>/dev/null || true
+  mkdir -p "${DATA_DIR}/postgres" "${DATA_DIR}/mysql" "${DATA_DIR}/redis" "${DATA_DIR}/storage/app/public" "${DATA_DIR}/media"
+  chmod 750 "${DATA_DIR}" "${DATA_DIR}/postgres" "${DATA_DIR}/mysql" "${DATA_DIR}/redis" "${DATA_DIR}/storage" 2>/dev/null || true
   log "Persistent data directories:"
-  log "  MySQL:   ${DATA_DIR}/mysql"
-  log "  Redis:   ${DATA_DIR}/redis"
-  log "  Storage: ${DATA_DIR}/storage (logs and file uploads)"
+  log "  Postgres: ${DATA_DIR}/postgres"
+  log "  MySQL:    ${DATA_DIR}/mysql"
+  log "  Redis:    ${DATA_DIR}/redis"
+  log "  Storage:  ${DATA_DIR}/storage (logs and file uploads)"
+  log "  Media:    ${DATA_DIR}/media"
 }
 
 write_env_file() {
   mkdir -p "${DEPLOY_DIR}"
   local url
   url="$(app_url)"
+  if [[ -z "${DB_PASSWORD}" ]]; then
+    DB_PASSWORD="${MYSQL_PASSWORD}"
+  fi
+  if [[ -z "${MYSQL_PASSWORD}" ]]; then
+    MYSQL_PASSWORD="${DB_PASSWORD}"
+  fi
   cat > "${ENV_FILE}" <<EOF
 # Generated by setup.sh on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 PUBLIC_HOST=$(dotenv_quote "${PUBLIC_HOST}")
@@ -231,18 +295,28 @@ JWT_SECRET=$(dotenv_quote "${JWT_SECRET}")
 ADMIN_EMAIL=$(dotenv_quote "${ADMIN_EMAIL}")
 ADMIN_PASSWORD=$(dotenv_quote "${ADMIN_PASSWORD}")
 ADMIN_NAME=$(dotenv_quote "${ADMIN_NAME}")
+DB_CONNECTION=${DB_CONNECTION}
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_DATABASE=$(dotenv_quote "${DB_DATABASE}")
+DB_USERNAME=$(dotenv_quote "${DB_USERNAME}")
+DB_PASSWORD=$(dotenv_quote "${DB_PASSWORD}")
+DB_SCHEMA=public
 MYSQL_ROOT_PASSWORD=$(dotenv_quote "${MYSQL_ROOT_PASSWORD}")
-MYSQL_DATABASE=moh_pms
-MYSQL_USER=pms
+MYSQL_DATABASE=$(dotenv_quote "${DB_DATABASE}")
+MYSQL_USER=$(dotenv_quote "${DB_USERNAME}")
 MYSQL_PASSWORD=$(dotenv_quote "${MYSQL_PASSWORD}")
+EXPOSE_POSTGRES=${EXPOSE_POSTGRES}
 EXPOSE_MYSQL=${EXPOSE_MYSQL}
 EXPOSE_REDIS=${EXPOSE_REDIS}
+POSTGRES_HOST_PORT=${POSTGRES_HOST_PORT}
 MYSQL_HOST_PORT=${MYSQL_HOST_PORT}
 REDIS_HOST_PORT=${REDIS_HOST_PORT}
 VITE_API_BASE_URL=$(dotenv_quote "${VITE_API_BASE_URL}")
 INSTALL_HOST_NGINX=${INSTALL_HOST_NGINX}
 SERVER_NAME=$(dotenv_quote "${SERVER_NAME}")
 DATA_DIR=$(dotenv_quote "${DATA_DIR}")
+FILE_STORAGE_ROOT=$(dotenv_quote "${DATA_DIR}/media")
 ANALYTICS_DB_ENABLED=${ANALYTICS_DB_ENABLED:-true}
 ANALYTICS_DB_HOST=$(dotenv_quote "${ANALYTICS_DB_HOST:-host.docker.internal}")
 ANALYTICS_DB_PORT=${ANALYTICS_DB_PORT:-9030}
@@ -251,7 +325,7 @@ ANALYTICS_DB_USERNAME=$(dotenv_quote "${ANALYTICS_DB_USERNAME:-root}")
 ANALYTICS_DB_PASSWORD=$(dotenv_quote "${ANALYTICS_DB_PASSWORD:-}")
 EOF
   chmod 600 "${ENV_FILE}"
-  log "Wrote ${ENV_FILE}"
+  log "Wrote ${ENV_FILE} (DB_CONNECTION=${DB_CONNECTION})"
 }
 
 install_host_nginx() {
@@ -319,6 +393,7 @@ print_summary() {
 
   Demo data:  ${LOAD_DEMO_DATA}
   iHRIS demo: ${IHRIS_USE_DEMO_DATA}
+  Database:   ${DB_CONNECTION}
   Data dir:   ${DATA_DIR}
 EOF
   if [[ "${LOAD_DEMO_DATA}" == "true" ]]; then
@@ -348,14 +423,19 @@ while [[ $# -gt 0 ]]; do
     --no-demo-data) LOAD_DEMO_DATA="false"; CLI_LOAD_DEMO_DATA="false"; shift ;;
     --ihris-demo) IHRIS_USE_DEMO_DATA="true"; CLI_IHRIS_USE_DEMO_DATA="true"; shift ;;
     --no-ihris-demo) IHRIS_USE_DEMO_DATA="false"; CLI_IHRIS_USE_DEMO_DATA="false"; shift ;;
+    --db)
+      CLI_DB_CONNECTION="$2"
+      shift 2
+      ;;
     --admin-email) ADMIN_EMAIL="$2"; shift 2 ;;
     --admin-password) ADMIN_PASSWORD="$2"; shift 2 ;;
-    --db-password) MYSQL_PASSWORD="$2"; shift 2 ;;
+    --db-password) DB_PASSWORD="$2"; MYSQL_PASSWORD="$2"; shift 2 ;;
     --mysql-root-password) MYSQL_ROOT_PASSWORD="$2"; shift 2 ;;
     --app-key) APP_KEY="$2"; shift 2 ;;
     --jwt-secret) JWT_SECRET="$2"; shift 2 ;;
+    --expose-postgres) EXPOSE_POSTGRES="true"; shift ;;
     --expose-mysql) EXPOSE_MYSQL="true"; shift ;;
-    --expose-reedis) EXPOSE_REDIS="true"; shift ;;
+    --expose-redis) EXPOSE_REDIS="true"; shift ;;
     --install-host-nginx) INSTALL_HOST_NGINX="true"; CLI_INSTALL_HOST_NGINX="true"; shift ;;
     --data-dir) DATA_DIR="$2"; CLI_DATA_DIR="$2"; shift 2 ;;
     --server-name) SERVER_NAME="$2"; shift 2 ;;
@@ -384,12 +464,22 @@ fi
 [[ -n "${CLI_IHRIS_USE_DEMO_DATA}" ]] && IHRIS_USE_DEMO_DATA="${CLI_IHRIS_USE_DEMO_DATA}"
 [[ -n "${CLI_INSTALL_HOST_NGINX}" ]] && INSTALL_HOST_NGINX="${CLI_INSTALL_HOST_NGINX}"
 [[ -n "${CLI_DATA_DIR}" ]] && DATA_DIR="${CLI_DATA_DIR}"
+[[ -n "${CLI_DB_CONNECTION}" ]] && DB_CONNECTION="${CLI_DB_CONNECTION}"
+
+resolve_db_connection
 
 require_docker
 
 if [[ "${ACTION}" == "deploy" ]]; then
   [[ -z "${MYSQL_ROOT_PASSWORD}" ]] && MYSQL_ROOT_PASSWORD="$(rand_secret)"
-  [[ -z "${MYSQL_PASSWORD}" ]] && MYSQL_PASSWORD="$(rand_secret)"
+  if [[ -z "${DB_PASSWORD}" ]]; then
+    if [[ -n "${MYSQL_PASSWORD}" ]]; then
+      DB_PASSWORD="${MYSQL_PASSWORD}"
+    else
+      DB_PASSWORD="$(rand_secret)"
+    fi
+  fi
+  MYSQL_PASSWORD="${DB_PASSWORD}"
   [[ -z "${APP_KEY}" ]] && APP_KEY="$(openssl rand -hex 16 2>/dev/null || rand_secret | head -c 32)"
   if [[ "${APP_KEY}" == base64:* ]] || [[ ${#APP_KEY} -ne 32 ]]; then
     APP_KEY="$(openssl rand -hex 16 2>/dev/null || rand_secret | head -c 32)"
@@ -446,6 +536,7 @@ write_env_file
 ensure_data_dirs
 write_override
 
+log "Using primary database: ${DB_CONNECTION}"
 log "Gateway will bind host port ${HTTP_PORT} (map to container :80)"
 
 log "Building and starting containers..."

@@ -4,6 +4,7 @@ import (
 	"github.com/goravel/framework/contracts/database/schema"
 
 	"goravel/app/facades"
+	"goravel/app/support/dbdialect"
 )
 
 type M20260719000001GeographyHierarchy struct{}
@@ -82,20 +83,33 @@ func (r *M20260719000001GeographyHierarchy) Up() error {
 		{"WESTERN", "Western", "UG-REGION-WESTERN", "UG-W"},
 	}
 	for _, reg := range regions {
+		activeLiteral := "1"
+		if dbdialect.IsPostgres() {
+			activeLiteral = "TRUE"
+		}
 		_, _ = facades.Orm().Query().Exec(
 			`INSERT INTO regions (code, name, external_system_id, iso_code, is_active, created_at, updated_at)
-			 SELECT ?, ?, ?, ?, 1, NOW(), NOW()
+			 SELECT ?, ?, ?, ?, `+activeLiteral+`, NOW(), NOW()
 			 WHERE NOT EXISTS (SELECT 1 FROM regions WHERE code = ?)`,
 			reg.code, reg.name, reg.extID, reg.iso, reg.code,
 		)
 	}
 
 	// Link seeded districts to regions by name (flexible string match).
-	_, _ = facades.Orm().Query().Exec(`
-		UPDATE districts d
-		JOIN regions r ON UPPER(TRIM(d.region)) = UPPER(TRIM(r.name))
-		SET d.region_id = r.id
-		WHERE d.region_id IS NULL OR d.region_id = 0`)
+	if dbdialect.IsPostgres() {
+		_, _ = facades.Orm().Query().Exec(`
+			UPDATE districts d
+			SET region_id = r.id
+			FROM regions r
+			WHERE UPPER(TRIM(d.region)) = UPPER(TRIM(r.name))
+			  AND (d.region_id IS NULL OR d.region_id = 0)`)
+	} else {
+		_, _ = facades.Orm().Query().Exec(`
+			UPDATE districts d
+			JOIN regions r ON UPPER(TRIM(d.region)) = UPPER(TRIM(r.name))
+			SET d.region_id = r.id
+			WHERE d.region_id IS NULL OR d.region_id = 0`)
+	}
 
 	return nil
 }

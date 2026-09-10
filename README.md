@@ -1,6 +1,6 @@
 # MoH Uganda Performance Management System (PMS)
 
-Integrated performance, leave, attendance, and workforce management platform for the **Ministry of Health Uganda**. The stack pairs **Goravel v1.18** (Go API) with a **React + TypeScript** SPA, **MySQL** (legacy iHRIS extract + normalized PMS schema), and **Redis** for caching and sessions.
+Integrated performance, leave, attendance, and workforce management platform for the **Ministry of Health Uganda**. The stack pairs **Goravel v1.18** (Go API) with a **React + TypeScript** SPA, **PostgreSQL** by default (MySQL still supported), and **Redis** for caching and sessions.
 
 **User documentation:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md)  
 **Deployment guide:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)  
@@ -17,7 +17,7 @@ Integrated performance, leave, attendance, and workforce management platform for
 | **Attendance** | Mobile-style clock-in/out with location verification |
 | **Approvals** | Unified inbox for leave, out-of-station, and performance reviews |
 | **Administration** | Staff directory with **searchable supervisor/department fields**, KPI catalog, leave policy, RBAC, system configuration |
-| **Analytics** | **Apache Doris** OLAP (enabled by default) for faster dashboard aggregates; MySQL fallback when offline |
+| **Analytics** | **Apache Doris** OLAP (enabled by default) for faster dashboard aggregates; primary OLTP fallback when offline |
 | **Appearance** | **Light / dark / system** theme, persisted per browser |
 | **Notifications** | In-app alerts for approvals and system events |
 
@@ -79,7 +79,8 @@ docker compose up --build
 | Frontend | http://localhost:5173 |
 | API      | http://localhost:3030/api/v1 |
 | Swagger  | http://localhost:3030/swagger/index.html |
-| MySQL    | localhost:3307 (`moh_pms` / `pms` / `pms_secret`) |
+| Postgres | localhost:5433 (`moh_pms` / `pms` / `pms_secret`) — default |
+| MySQL    | localhost:3307 (`moh_pms` / `pms` / `pms_secret`) — optional (`--db mysql`) |
 | Redis    | localhost:6379 |
 
 After containers are healthy, sign in with **`worker@moh.go.ug`** / **`Demo@Moh2026!`** (see [Demo accounts](#demo-accounts)).
@@ -185,22 +186,27 @@ Browser → nginx gateway (:80)
 
 - Go 1.22+
 - Node.js 20+
-- MySQL 8.x and Redis (or use Docker for data services only)
+- PostgreSQL 16 (default) or MySQL 8.x, and Redis (or use Docker for data services only)
 
 ### Data services only (Docker)
 
 ```bash
-docker compose up mysql redis -d
+# Postgres (default)
+docker compose --profile postgres up -d postgres redis
+
+# Or MySQL
+docker compose --profile mysql up -d mysql redis
 ```
 
-MySQL on **localhost:3307**, Redis on **localhost:6379**.
+Postgres on **localhost:5433**, MySQL on **localhost:3307**, Redis on **localhost:6379**.
 
 ### Backend (with demo seed)
 
 ```bash
 cd backend
 cp .env.example .env
-# Set DB_HOST=127.0.0.1, DB_PORT=3307, DB_DATABASE=moh_pms, DB_USERNAME=pms, DB_PASSWORD=pms_secret
+# Postgres: DB_CONNECTION=postgres DB_HOST=127.0.0.1 DB_PORT=5433 …
+# MySQL:    DB_CONNECTION=mysql DB_HOST=127.0.0.1 DB_PORT=3307 …
 # Set REDIS_HOST=127.0.0.1, ADMIN_PASSWORD=Demo@Moh2026! (min 10 chars)
 # Optional: IHRIS_USE_DEMO_DATA=true in config/pms or system settings
 

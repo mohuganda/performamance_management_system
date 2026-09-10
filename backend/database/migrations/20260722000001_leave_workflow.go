@@ -7,6 +7,7 @@ import (
 
 	"goravel/app/facades"
 	"goravel/app/models"
+	"goravel/app/support/dbdialect"
 )
 
 type M20260722000001LeaveWorkflow struct{}
@@ -88,19 +89,36 @@ func (r *M20260722000001LeaveWorkflow) rebuildStageUniqueIndex() error {
 		return nil
 	}
 	// Allow the same stage code under different workflow profiles.
-	drops := []string{
-		"ALTER TABLE leave_approval_stages DROP INDEX leave_approval_stages_code_unique",
-		"ALTER TABLE leave_approval_stages DROP INDEX code",
-		"ALTER TABLE leave_approval_stages DROP INDEX idx_leave_stage_profile_code",
-	}
-	for _, stmt := range drops {
-		_, _ = facades.Orm().Query().Exec(stmt)
-	}
-	_, err := facades.Orm().Query().Exec(
-		"ALTER TABLE leave_approval_stages ADD UNIQUE INDEX idx_leave_stage_profile_code (workflow_profile_code, code)",
-	)
-	if err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate key name") {
-		return err
+	if dbdialect.IsPostgres() {
+		drops := []string{
+			`ALTER TABLE leave_approval_stages DROP CONSTRAINT IF EXISTS leave_approval_stages_code_unique`,
+			`DROP INDEX IF EXISTS leave_approval_stages_code_unique`,
+			`DROP INDEX IF EXISTS leave_approval_stages_code_index`,
+			`DROP INDEX IF EXISTS idx_leave_stage_profile_code`,
+		}
+		for _, stmt := range drops {
+			_, _ = facades.Orm().Query().Exec(stmt)
+		}
+		if _, err := facades.Orm().Query().Exec(
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_leave_stage_profile_code ON leave_approval_stages (workflow_profile_code, code)`,
+		); err != nil {
+			return err
+		}
+	} else {
+		drops := []string{
+			"ALTER TABLE leave_approval_stages DROP INDEX leave_approval_stages_code_unique",
+			"ALTER TABLE leave_approval_stages DROP INDEX code",
+			"ALTER TABLE leave_approval_stages DROP INDEX idx_leave_stage_profile_code",
+		}
+		for _, stmt := range drops {
+			_, _ = facades.Orm().Query().Exec(stmt)
+		}
+		_, err := facades.Orm().Query().Exec(
+			"ALTER TABLE leave_approval_stages ADD UNIQUE INDEX idx_leave_stage_profile_code (workflow_profile_code, code)",
+		)
+		if err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate key name") {
+			return err
+		}
 	}
 	_, _ = facades.Orm().Query().Model(&models.LeaveApprovalStage{}).
 		Where("workflow_profile_code IS NULL OR workflow_profile_code = ''").

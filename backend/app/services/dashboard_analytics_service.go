@@ -333,7 +333,7 @@ func (s *DashboardAnalyticsService) AttendanceTrends(months int) map[string]any 
 
 	hrmRows := s.hrm.MonthlySummaries(months)
 	monthlyOos := s.monthlyOosFromClocks(months)
-	source := "mysql"
+	source := "oltp"
 
 	if s.doris.Available() {
 		if dorisRows, err := s.doris.AttendanceMonthlyTrends(months); err == nil && len(dorisRows) > 0 {

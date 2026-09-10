@@ -184,10 +184,11 @@ Auto-generated on first deploy if omitted. Stored in `deploy/.env`.
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--db postgres\|mysql` | prompt / `postgres` | Primary OLTP engine |
 | `--admin-email` | `admin@moh.go.ug` | Seeded administrator email |
 | `--admin-password` | `Demo@Moh2026!` | Seeded admin password (min 10 chars) |
-| `--db-password` | random | MySQL `pms` user password |
-| `--mysql-root-password` | random | MySQL root password |
+| `--db-password` | random | Application DB user password |
+| `--mysql-root-password` | random | MySQL root password (mysql mode) |
 | `--app-key` | random | Goravel `APP_KEY` |
 | `--jwt-secret` | random | JWT signing secret |
 
@@ -195,6 +196,7 @@ Auto-generated on first deploy if omitted. Stored in `deploy/.env`.
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--expose-postgres` | off | Publish Postgres on host port 5433 |
 | `--expose-mysql` | off | Publish MySQL on host port 3307 |
 | `--expose-redis` | off | Publish Redis on host port 6379 |
 | `--install-host-nginx` | off | Install system nginx site proxying to Docker |
@@ -311,7 +313,7 @@ Reference template: [deploy/env.deploy.example](../deploy/env.deploy.example)
 
 ### Apache Doris analytics (enabled by default)
 
-Dashboard and attendance aggregates can read from **Apache Doris**. The API enables analytics by default (`ANALYTICS_DB_ENABLED=true`). MySQL remains the write path; dashboards fall back to MySQL if Doris is down.
+Dashboard and attendance aggregates can read from **Apache Doris**. The API enables analytics by default (`ANALYTICS_DB_ENABLED=true`). The primary OLTP database remains the write path; dashboards fall back to OLTP if Doris is down.
 
 ```bash
 # On the same host as the API / after setup.sh
@@ -336,10 +338,30 @@ docker logs moh-pms-api --tail 100
 
 ### Database backups
 
+**PostgreSQL (default):**
+
+```bash
+docker exec moh-pms-postgres pg_dump -U pms moh_pms > backup-$(date +%F).sql
+# Password is in deploy/.env → DB_PASSWORD
+```
+
+**MySQL (when `DB_CONNECTION=mysql`):**
+
 ```bash
 docker exec moh-pms-mysql mysqldump -u pms -p moh_pms > backup-$(date +%F).sql
-# Password is in deploy/.env → MYSQL_PASSWORD
+# Password is in deploy/.env → DB_PASSWORD / MYSQL_PASSWORD
 ```
+
+### MySQL → PostgreSQL cutover
+
+For an existing MySQL deployment, use the offline one-shot tool (stops the app briefly; keeps the MySQL data directory for rollback):
+
+```bash
+./scripts/migrate-mysql-to-postgres.sh           # or --dry-run first
+# Verify login and data, then keep DATA_DIR/mysql until confirmed
+```
+
+See `docs/superpowers/specs/2026-09-10-postgres-primary-dual-db-design.md` for the approved design.
 
 ### Update application
 
@@ -422,7 +444,7 @@ Before go-live:
 | **502 Bad Gateway** on login/API | Backend still seeding or crashed | `docker logs moh-pms-api --tail 100`; wait 2–3 min on first boot; `./setup.sh --rebuild` |
 | `setup.sh` stuck on health check | First migrate + demo seed is slow | Wait up to 5 min; check backend logs; ensure `DATA_DIR` is writable |
 | `setup.sh` permission denied | Not executable | `chmod +x setup.sh` |
-| Database connection error | MySQL still starting | Wait 30s; `./setup.sh --logs mysql` |
+| Database connection error | Database still starting | Wait 30s; `./setup.sh --logs postgres` or `--logs mysql` |
 | Need fresh database | Old volume data | `./setup.sh --down-volumes` then redeploy |
 | Cannot open Doris / analytics “unreachable” | Doris not running or wrong host | `docker compose -f docker-compose.analytics.yml up -d`; see [ANALYTICS.md](./ANALYTICS.md) |
 
