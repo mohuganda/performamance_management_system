@@ -103,6 +103,11 @@ export const kpiAdminService = {
     const { data } = await apiClient.put(`/admin/kpi/kpis/${id}`, payload)
     return data
   },
+  deleteKpi: async (id: number) => {
+    const { data } = await apiClient.delete(`/admin/kpi/kpis/${id}`)
+    return data
+  },
+  /** @deprecated use deleteKpi — DELETE now hard-deletes when unassigned */
   deactivateKpi: async (id: number) => {
     const { data } = await apiClient.delete(`/admin/kpi/kpis/${id}`)
     return data

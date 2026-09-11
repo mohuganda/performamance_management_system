@@ -133,12 +133,12 @@ func (c *KpiAdminController) UpdateKpi(ctx http.Context) http.Response {
 	return ctx.Response().Success().Json(kpi)
 }
 
-func (c *KpiAdminController) DeactivateKpi(ctx http.Context) http.Response {
+func (c *KpiAdminController) DeleteKpi(ctx http.Context) http.Response {
 	id := uint(ctx.Request().RouteInt("id"))
-	if err := c.kpi.DeactivateKpi(id); err != nil {
+	if err := c.kpi.DeleteKpi(id); err != nil {
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 	}
-	return ctx.Response().Success().Json(http.Json{"message": "kpi deactivated"})
+	return ctx.Response().Success().Json(http.Json{"message": "kpi deleted"})
 }
 
 func (c *KpiAdminController) ListAssignments(ctx http.Context) http.Response {

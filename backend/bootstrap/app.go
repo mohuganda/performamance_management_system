@@ -16,6 +16,7 @@ func Commands() []contractsconsole.Command {
 		&commands.IhrisSyncCommand{},
 		&commands.HrmAttendSyncCommand{},
 		&commands.HrmAttendExportPushCommand{},
+		&commands.KpiSeedCatalogCommand{},
 	}
 }
 

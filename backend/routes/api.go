@@ -205,7 +205,7 @@ func Api() {
 				kpi.Middleware(middleware.Permission("kpi.catalog.view")).Get("/kpis/{id}", kpiAdminController.ShowKpi)
 				kpi.Middleware(middleware.Permission("kpi.catalog.manage")).Post("/kpis", kpiAdminController.CreateKpi)
 				kpi.Middleware(middleware.Permission("kpi.catalog.manage")).Put("/kpis/{id}", kpiAdminController.UpdateKpi)
-				kpi.Middleware(middleware.Permission("kpi.catalog.manage")).Delete("/kpis/{id}", kpiAdminController.DeactivateKpi)
+				kpi.Middleware(middleware.Permission("kpi.catalog.manage")).Delete("/kpis/{id}", kpiAdminController.DeleteKpi)
 				kpi.Middleware(middleware.Permission("kpi.assignments.view")).Get("/assignments", kpiAdminController.ListAssignments)
 				kpi.Middleware(middleware.Permission("kpi.assignments.manage")).Post("/assignments", kpiAdminController.CreateAssignment)
 				kpi.Middleware(middleware.Permission("kpi.assignments.manage")).Post("/assignments/bulk-remove", kpiAdminController.DeactivateAssignmentsBulk)

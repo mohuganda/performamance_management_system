@@ -349,16 +349,16 @@ export function KpiAdminPage() {
     },
   })
 
-  const deactivateKpiMutation = useMutation({
-    mutationFn: (id: number) => kpiAdminService.deactivateKpi(id),
+  const deleteKpiMutation = useMutation({
+    mutationFn: (id: number) => kpiAdminService.deleteKpi(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'kpi'] })
-      toast.success('KPI deactivated.')
+      toast.success('KPI deleted.')
       closeKpiModal()
     },
     onError: (error: unknown) => {
-      setKpiFormError(apiErrorMessage(error, 'Could not deactivate KPI'))
-      notifyApiError(error, 'Could not deactivate KPI')
+      setKpiFormError(apiErrorMessage(error, 'Could not delete KPI'))
+      notifyApiError(error, 'Could not delete KPI')
     },
   })
 
@@ -1027,18 +1027,33 @@ export function KpiAdminPage() {
                 {kpiModalMode === 'edit' ? 'Save changes' : 'Create KPI'}
               </Button>
               {kpiModalMode === 'edit' && editingKpi ? (
-                <Button
-                  {...mt}
-                  size="sm"
-                  color="red"
-                  variant="outlined"
-                  className="flex items-center gap-2"
-                  loading={deactivateKpiMutation.isPending}
-                  onClick={() => deactivateKpiMutation.mutate(editingKpi.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Deactivate
-                </Button>
+                editingKpi.assignment_count > 0 ? (
+                  <Typography {...mt} className="self-center text-sm text-gray-500">
+                    Assigned to {editingKpi.assignment_count} target(s) — remove assignments (or turn
+                    off Active) before delete.
+                  </Typography>
+                ) : (
+                  <Button
+                    {...mt}
+                    size="sm"
+                    color="red"
+                    variant="outlined"
+                    className="flex items-center gap-2"
+                    loading={deleteKpiMutation.isPending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Permanently delete KPI ${editingKpi.kpi_code}? This cannot be undone.`,
+                        )
+                      ) {
+                        deleteKpiMutation.mutate(editingKpi.id)
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                )
               ) : null}
               <Button {...mt} size="sm" variant="outlined" onClick={closeKpiModal}>
                 Cancel

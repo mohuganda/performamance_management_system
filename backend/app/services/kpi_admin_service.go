@@ -369,6 +369,40 @@ func (s *KpiAdminService) UpdateKpi(id uint, input KpiInput) (models.Kpi, error)
 	return kpi, nil
 }
 
+// DeleteKpi permanently removes a KPI when it is not actively assigned and not
+// referenced on any staff PPA. Use status=false via UpdateKpi to soft-hide in use.
+func (s *KpiAdminService) DeleteKpi(id uint) error {
+	if _, err := s.GetKpi(id); err != nil {
+		return err
+	}
+
+	var activeAssignments int64
+	activeAssignments, err := facades.Orm().Query().Model(&models.KpiAssignment{}).
+		Where("kpi_id", id).Where("is_active", true).Count()
+	if err != nil {
+		return err
+	}
+	if activeAssignments > 0 {
+		return fmt.Errorf("cannot delete kpi: it has %d active assignment(s); remove assignments first or deactivate it", activeAssignments)
+	}
+
+	var ppaUses int64
+	ppaUses, err = facades.Orm().Query().Model(&models.PpaKpi{}).Where("kpi_id", id).Count()
+	if err != nil {
+		return err
+	}
+	if ppaUses > 0 {
+		return fmt.Errorf("cannot delete kpi: it is used on %d performance plan(s)", ppaUses)
+	}
+
+	_, _ = facades.Orm().Query().Where("kpi_id", id).Delete(&models.KpiJobMapping{})
+	_, _ = facades.Orm().Query().Where("kpi_id", id).Where("is_active", false).Delete(&models.KpiAssignment{})
+
+	_, err = facades.Orm().Query().Where("id", id).Delete(&models.Kpi{})
+	return err
+}
+
+// DeactivateKpi soft-hides a KPI in the catalog without removing history.
 func (s *KpiAdminService) DeactivateKpi(id uint) error {
 	kpi, err := s.GetKpi(id)
 	if err != nil {

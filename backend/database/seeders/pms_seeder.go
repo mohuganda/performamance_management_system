@@ -39,20 +39,48 @@ func (s *PmsSeeder) Run() error {
 		}
 	}
 
-	if err := s.seedKpisFromLegacy(); err != nil {
+	if err := s.seedOrdinaryKpis(); err != nil {
 		return err
 	}
 	return s.seedScoreCardKpis()
 }
 
-func (s *PmsSeeder) seedKpisFromLegacy() error {
+// seedOrdinaryKpis fills the Ordinary catalog. Prefer the MySQL legacy `kpi` table when
+// present; otherwise use embedded ordinaryKpiDefaults so Postgres installs get the same catalog.
+func (s *PmsSeeder) seedOrdinaryKpis() error {
 	var ordinaryCategory models.KpiCategory
 	if err := facades.Orm().Query().Where("category_name", "Ordinary").First(&ordinaryCategory); err != nil || !modelFound(ordinaryCategory.ID) {
 		return err
 	}
 
+	if err := s.seedOrdinaryJobs(); err != nil {
+		return err
+	}
+
+	if seeded, err := s.seedOrdinaryKpisFromLegacy(ordinaryCategory.ID); err != nil {
+		return err
+	} else if seeded {
+		return nil
+	}
+
+	return s.seedOrdinaryKpisFromDefaults(ordinaryCategory.ID)
+}
+
+func (s *PmsSeeder) seedOrdinaryJobs() error {
+	for _, def := range ordinaryJobDefaults {
+		var job models.JobTitle
+		if err := facades.Orm().Query().Where("external_job_id", def.ExternalJobID).FirstOr(&job, func() error {
+			job = models.JobTitle{ExternalJobID: def.ExternalJobID, JobTitle: def.JobTitle}
+			return facades.Orm().Query().Create(&job)
+		}); err != nil {
+			return err
+		}
+	}
+
 	var legacyJobs []models.LegacyKpiJobCategory
-	_ = facades.Orm().Query().Get(&legacyJobs)
+	if err := facades.Orm().Query().Get(&legacyJobs); err != nil {
+		return nil
+	}
 	for _, legacyJob := range legacyJobs {
 		var job models.JobTitle
 		if err := facades.Orm().Query().Where("external_job_id", legacyJob.JobID).FirstOr(&job, func() error {
@@ -62,17 +90,20 @@ func (s *PmsSeeder) seedKpisFromLegacy() error {
 			return err
 		}
 	}
+	return nil
+}
 
+func (s *PmsSeeder) seedOrdinaryKpisFromLegacy(ordinaryCategoryID uint) (bool, error) {
 	var legacyKpis []models.LegacyKpi
-	if err := facades.Orm().Query().Where("status", 1).Get(&legacyKpis); err != nil {
-		return nil
+	if err := facades.Orm().Query().Where("status", 1).Get(&legacyKpis); err != nil || len(legacyKpis) == 0 {
+		return false, nil
 	}
 
 	for _, legacy := range legacyKpis {
 		var kpi models.Kpi
 		if err := facades.Orm().Query().Where("kpi_code", legacy.KpiID).FirstOr(&kpi, func() error {
 			kpi = models.Kpi{
-				CategoryID:          ordinaryCategory.ID,
+				CategoryID:          ordinaryCategoryID,
 				KpiCode:             legacy.KpiID,
 				ShortName:           legacy.ShortName,
 				IndicatorStatement:  legacy.IndicatorStatement,
@@ -90,28 +121,62 @@ func (s *PmsSeeder) seedKpisFromLegacy() error {
 			}
 			return facades.Orm().Query().Create(&kpi)
 		}); err != nil {
-			return err
+			return false, err
 		}
 
-		if legacy.JobID == "" {
-			continue
-		}
-
-		var job models.JobTitle
-		if err := facades.Orm().Query().Where("external_job_id", legacy.JobID).First(&job); err != nil || !modelFound(job.ID) {
-			continue
-		}
-
-		var mapping models.KpiJobMapping
-		if err := facades.Orm().Query().Where("kpi_id", kpi.ID).Where("job_id", job.ID).FirstOr(&mapping, func() error {
-			mapping = models.KpiJobMapping{KpiID: kpi.ID, JobID: job.ID}
-			return facades.Orm().Query().Create(&mapping)
-		}); err != nil {
-			return err
+		if err := s.ensureKpiJobMapping(kpi.ID, legacy.JobID); err != nil {
+			return false, err
 		}
 	}
 
+	return true, nil
+}
+
+func (s *PmsSeeder) seedOrdinaryKpisFromDefaults(ordinaryCategoryID uint) error {
+	for _, def := range ordinaryKpiDefaults {
+		var kpi models.Kpi
+		if err := facades.Orm().Query().Where("kpi_code", def.Code).FirstOr(&kpi, func() error {
+			kpi = models.Kpi{
+				CategoryID:          ordinaryCategoryID,
+				KpiCode:             def.Code,
+				ShortName:           strPtr(def.ShortName),
+				IndicatorStatement:  def.IndicatorStatement,
+				Description:         strPtr(def.Description),
+				Computation:         strPtr(def.Computation),
+				Numerator:           strPtr(def.Numerator),
+				Denominator:         strPtr(def.Denominator),
+				Frequency:           def.Frequency,
+				ComputationCategory: def.ComputationCategory,
+				SubjectArea:         legacySubjectArea(def.SubjectArea),
+				CurrentTarget:       def.CurrentTarget,
+				IsCumulative:        def.IsCumulative,
+				GaugeType:           def.GaugeType,
+				Status:              true,
+			}
+			return facades.Orm().Query().Create(&kpi)
+		}); err != nil {
+			return err
+		}
+		if err := s.ensureKpiJobMapping(kpi.ID, def.LegacyJobID); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func (s *PmsSeeder) ensureKpiJobMapping(kpiID uint, legacyJobID string) error {
+	if legacyJobID == "" {
+		return nil
+	}
+	var job models.JobTitle
+	if err := facades.Orm().Query().Where("external_job_id", legacyJobID).First(&job); err != nil || !modelFound(job.ID) {
+		return nil
+	}
+	var mapping models.KpiJobMapping
+	return facades.Orm().Query().Where("kpi_id", kpiID).Where("job_id", job.ID).FirstOr(&mapping, func() error {
+		mapping = models.KpiJobMapping{KpiID: kpiID, JobID: job.ID}
+		return facades.Orm().Query().Create(&mapping)
+	})
 }
 
 func (s *PmsSeeder) seedScoreCardKpis() error {
