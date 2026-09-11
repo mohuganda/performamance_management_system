@@ -122,15 +122,18 @@ if ! docker exec moh-pms-postgres pg_isready -U "${DB_USER}" -d "${DB_NAME}" >/d
   exit 1
 fi
 
-user_tables=$(docker exec moh-pms-postgres psql -U "${DB_USER}" -d "${DB_NAME}" -tAc \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" 2>/dev/null || echo "0")
-user_tables=$(echo "${pg_tables}" | tr -d '[:space:]')
+pg_tables_raw="$(docker exec moh-pms-postgres psql -U "${DB_USER}" -d "${DB_NAME}" -tAc \
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" 2>/dev/null || true)"
+pg_tables="$(printf '%s' "${pg_tables_raw:-0}" | tr -d '[:space:]')"
+pg_tables="${pg_tables:-0}"
 if [[ "${pg_tables}" != "0" && "${FORCE}" != "true" ]]; then
-  user_rows=$(docker exec moh-pms-postgres psql -U "${DB_USER}" -d "${DB_NAME}" -tAc \
-    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='users';" 2>/dev/null || echo "0")
-  user_rows=$(echo "${user_rows}" | tr -d '[:space:]')
+  user_rows_raw="$(docker exec moh-pms-postgres psql -U "${DB_USER}" -d "${DB_NAME}" -tAc \
+    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='users';" 2>/dev/null || true)"
+  user_rows="$(printf '%s' "${user_rows_raw:-0}" | tr -d '[:space:]')"
+  user_rows="${user_rows:-0}"
   if [[ "${user_rows}" == "1" ]]; then
-    users_n=$(table_count_postgres users | tr -d '[:space:]')
+    users_n="$(table_count_postgres users | tr -d '[:space:]')"
+    users_n="${users_n:-ERR}"
     if [[ "${users_n}" != "0" && "${users_n}" != "ERR" ]]; then
       err "Postgres already has data (users=${users_n}). Re-run with --force to continue."
       exit 1

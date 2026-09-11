@@ -27,8 +27,11 @@ Integrated performance, leave, attendance, and workforce management platform for
 performamance_management_system/
 ├── setup.sh          # Production deployment script (Docker + nginx)
 ├── scripts/
-│   └── load-demo-data.sh   # Migrate + seed demo data (local backend)
+│   ├── load-demo-data.sh              # Migrate + seed demo data (local backend)
+│   ├── migrate-mysql-to-postgres.sh   # Offline MySQL → Postgres cutover
+│   └── smoke-postgres-migrate.sh      # Throwaway migrate smoke test
 ├── backend/          # Goravel v1.18 API
+│   └── database/migrations/           # Schema migrations (auto-run on API start)
 ├── frontend/         # React + Vite + TypeScript SPA
 ├── deploy/           # Production compose, nginx configs, generated .env
 ├── database/sql/legacy/01_legacy_source_tables.sql
@@ -112,13 +115,15 @@ chmod +x setup.sh
 ./setup.sh --host "$(hostname -I | awk '{print $1}')"
 ```
 
-**Production** (no demo seed):
+**Production** (no demo seed — migrate schema only; create admin via seed or cutover data):
 
 ```bash
 ./setup.sh --no-demo-data --admin-password 'YourSecureAdminPass123!'
 ```
 
-Open **`http://<server-ip>/`** in your browser (append `:PORT` if not using port 80).
+Open **`http://<server-ip>/`** in your browser (append `:PORT` if not using port 80). Swagger: **`http://<server-ip>[:PORT]/swagger/index.html`**.
+
+After flipping **`DB_CONNECTION`**, see [Migrations & seeding](#migrations--seeding) — use the MySQL→Postgres cutover script or an explicit `db:seed`, not env alone.
 
 ### Quick examples
 
@@ -221,12 +226,46 @@ Or from the repo root: `./scripts/load-demo-data.sh`
 
 API listens on **http://127.0.0.1:3030**.
 
+### Migrations & seeding
+
+Schema changes live in `backend/database/migrations/` and are registered in `backend/bootstrap/migrations.go`.
+
+| Command | What it does |
+|---------|----------------|
+| `go run . artisan migrate` | Apply pending schema migrations only |
+| `go run . artisan db:seed` | RBAC/roles, admin user, configs, catalogs, demo accounts |
+| `./scripts/load-demo-data.sh` | Local helper: migrate + seed against your `.env` DB |
+
+**Docker / production boot** (`backend/scripts/docker-entrypoint.sh`):
+
+1. Always runs **`migrate`** against the DB from `DB_CONNECTION` (`postgres` default, or `mysql`).
+2. Runs **`db:seed`** only when `LOAD_DEMO_DATA=true` **and** the marker `${DATA_DIR}/storage/.initial_seed_complete` is absent.
+3. If `LOAD_DEMO_DATA=false` (typical production via `./setup.sh --no-demo-data`), you get **schema only** — no users/roles until you seed or import data.
+
+**Switching to Postgres does not copy MySQL data and does not re-seed by itself.** Changing `DB_CONNECTION=postgres` only points the API at Postgres.
+
+| Goal | What to run |
+|------|-------------|
+| Keep existing MySQL data | `./scripts/migrate-mysql-to-postgres.sh` (schema + **pgloader**; leaves `LOAD_DEMO_DATA=false`) |
+| Fresh Postgres + demo/admin seed | Remove `${DATA_DIR}/storage/.initial_seed_complete`, set `LOAD_DEMO_DATA=true`, recreate backend — or `docker exec moh-pms-api ./moh-pms-api artisan db:seed --force` |
+| Force re-seed after a wipe | `rm -f "${DATA_DIR:-/var/lib/moh-pms}/storage/.initial_seed_complete"` then restart with `LOAD_DEMO_DATA=true` |
+
+Check row counts after cutover/seed:
+
+```bash
+docker exec moh-pms-postgres psql -U pms -d moh_pms -c 'SELECT COUNT(*) FROM users;'
+```
+
+Full cutover notes: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 Regenerate Swagger after API changes:
 
 ```bash
 cd backend
 ~/go/bin/swag init --parseDependency --parseInternal
 ```
+
+Use **`/swagger/index.html`** (not bare `/swagger`) when the gateway is on a non-80 port (e.g. `:8081`), so redirects do not drop the port.
 
 ### Frontend
 
