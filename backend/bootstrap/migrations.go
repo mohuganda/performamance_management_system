@@ -47,5 +47,6 @@ func Migrations() []schema.Migration {
 		&migrations.M20260911000002DutyStationPin{},
 		&migrations.M20260911000003CachedPlaces{},
 		&migrations.M20260911000004SettingsBackupsPermission{},
+		&migrations.M20260911000005HrmExportAndSyncRuns{},
 	}
 }

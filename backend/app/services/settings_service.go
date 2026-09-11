@@ -142,6 +142,14 @@ func (s *SettingsService) dataSourcesConfig() map[string]any {
 			"host_configured":          !needsHost,
 			"last_sync_at":             s.GetString("hrm_attend.last_sync_at", ""),
 			"last_sync_status":         s.GetString("hrm_attend.last_sync_status", ""),
+			"export_push_enabled":      s.GetBool("hrm_attend.export_push_enabled", false),
+			"export_push_path":         s.GetString("hrm_attend.export_push_path", "/api/outoftstation_clockin"),
+			"basic_user":               s.GetString("hrm_attend.basic_user", ""),
+			"basic_password":           "", // never echo stored password
+			"jwt_token_set":            s.GetString("hrm_attend.jwt_token", "") != "",
+			"export_pull_token_set":    s.GetString("hrm_attend.export_pull_token", "") != "",
+			"export_last_push_at":      s.GetString("hrm_attend.export_last_push_at", ""),
+			"export_last_push_status":  s.GetString("hrm_attend.export_last_push_status", ""),
 		},
 		"google_maps": map[string]any{
 			"api_key":      s.GetString("google_maps.api_key", ""),
@@ -283,7 +291,7 @@ func (s *SettingsService) UpdateGroup(group string, payload map[string]any) erro
 	}
 	flat := flattenMap("", payload)
 	for key, value := range flat {
-		if strings.Contains(key, "password") && fmt.Sprint(value) == "" {
+		if (strings.Contains(key, "password") || strings.Contains(key, "token")) && fmt.Sprint(value) == "" {
 			continue
 		}
 		isPublic := strings.HasPrefix(key, "ihris.") ||

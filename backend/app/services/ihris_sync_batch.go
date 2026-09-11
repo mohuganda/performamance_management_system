@@ -47,7 +47,7 @@ func (s *IhrisSyncService) SyncStatus() (map[string]any, error) {
 	if run.TotalPages != nil {
 		totalPages = *run.TotalPages
 	}
-	hasMore := run.Status == "running" || (totalPages > 0 && run.CurrentPage < totalPages)
+	hasMore := run.Status == "running" || (run.Status != "cancelled" && run.Status != "completed" && totalPages > 0 && run.CurrentPage < totalPages)
 
 	return map[string]any{
 		"run_id":            run.ID,
@@ -98,6 +98,29 @@ func (s *IhrisSyncService) SyncFromAPI(opts SyncBatchOptions) (SyncBatchResult, 
 		if err := facades.Orm().Query().Where("id", opts.RunID).First(&run); err != nil || run.ID == 0 {
 			return SyncBatchResult{}, fmt.Errorf("sync run not found")
 		}
+		if run.Status == "cancelled" {
+			return SyncBatchResult{
+				RunID:    run.ID,
+				Status:   "cancelled",
+				HasMore:  false,
+				StartedAt: run.StartedAt,
+				FinishedAt: run.FinishedAt,
+			}, nil
+		}
+		if run.Status == "completed" {
+			return SyncBatchResult{
+				RunID:    run.ID,
+				Status:   "completed",
+				HasMore:  false,
+				StartedAt: run.StartedAt,
+				FinishedAt: run.FinishedAt,
+			}, nil
+		}
+		if run.Status != "running" {
+			run.Status = "running"
+			run.FinishedAt = nil
+			_ = facades.Orm().Query().Save(&run)
+		}
 	} else {
 		run = models.IhrisSyncRun{
 			Status:    "running",
@@ -120,6 +143,20 @@ func (s *IhrisSyncService) SyncFromAPI(opts SyncBatchOptions) (SyncBatchResult, 
 
 	batchResult := SyncResult{}
 	for i := 0; i < opts.PagesPerBatch; i++ {
+		var cancelCheck models.IhrisSyncRun
+		_ = facades.Orm().Query().Where("id", run.ID).First(&cancelCheck)
+		if cancelCheck.Status == "cancelled" {
+			run.Status = "cancelled"
+			run.FinishedAt = cancelCheck.FinishedAt
+			return SyncBatchResult{
+				RunID:    run.ID,
+				Status:   "cancelled",
+				HasMore:  false,
+				StartedAt: run.StartedAt,
+				FinishedAt: run.FinishedAt,
+			}, nil
+		}
+
 		resp, err := client.FetchPage(apiURL, page)
 		if err != nil {
 			msg := err.Error()

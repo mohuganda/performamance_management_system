@@ -41,6 +41,9 @@ func Api() {
 		router.Get("/auth/activation/{token}", authController.PreviewActivation)
 		router.Post("/auth/activation/complete", authController.CompleteActivation)
 
+		// HRM Attend pull API (shared token; not JWT)
+		router.Get("/integrations/hrm-attend/attendance-clocks", hrmAttendController.ListAttendanceClocks)
+
 		router.Middleware(authenticate).Group(func(auth route.Router) {
 			auth.Post("/auth/logout", authController.Logout)
 			auth.Get("/auth/me", authController.Me)
@@ -58,12 +61,21 @@ func Api() {
 			auth.Post("/notifications/{id}/read", notificationController.MarkRead)
 
 			auth.Middleware(middleware.Permission("ihris.sync")).Post("/ihris/sync", ihrisController.Sync)
+			auth.Middleware(middleware.Permission("ihris.sync")).Post("/ihris/sync/start", ihrisController.Start)
+			auth.Middleware(middleware.Permission("ihris.sync")).Post("/ihris/sync/resume", ihrisController.Resume)
+			auth.Middleware(middleware.Permission("ihris.sync")).Post("/ihris/sync/cancel", ihrisController.Cancel)
 			auth.Middleware(middleware.Permission("ihris.sync")).Get("/ihris/sync/status", ihrisController.Status)
 
 			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Get("/admin/analytics/status", analyticsController.Status)
 			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Post("/admin/analytics/doris/sync", analyticsController.Sync)
 
 			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Post("/hrm-attend/sync", hrmAttendController.Sync)
+			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Post("/hrm-attend/sync/start", hrmAttendController.Start)
+			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Post("/hrm-attend/sync/resume", hrmAttendController.Resume)
+			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Post("/hrm-attend/sync/cancel", hrmAttendController.Cancel)
+			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Get("/hrm-attend/sync/status", hrmAttendController.Status)
+			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Post("/hrm-attend/export/push", hrmAttendController.PushExport)
+			auth.Middleware(middleware.Permission("settings.data_sources.manage")).Get("/hrm-attend/export/status", hrmAttendController.ExportStatus)
 
 			settingsReadPerm := middleware.Permission(
 				"settings.manage",

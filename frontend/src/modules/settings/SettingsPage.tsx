@@ -167,6 +167,12 @@ export function SettingsPage() {
     api_url: 'http://localhost/attend',
     summary_path: '/attendance/attendance_summary',
     enabled: true,
+    export_push_enabled: false,
+    export_push_path: '/api/outoftstation_clockin',
+    basic_user: '',
+    basic_password: '',
+    jwt_token: '',
+    export_pull_token: '',
   })
   const [googleMapsForm, setGoogleMapsForm] = useState({ api_key: '', country_code: 'ug' })
   const [oosAttendanceForm, setOosAttendanceForm] = useState({
@@ -207,6 +213,19 @@ export function SettingsPage() {
     refetchInterval: (q) => (q.state.data?.status === 'running' ? 3000 : false),
   })
 
+  const hrmSyncStatusQuery = useQuery({
+    queryKey: ['hrm-attend', 'sync', 'status'],
+    queryFn: () => hrmAttendAdminService.status(),
+    enabled: canDataSources,
+    refetchInterval: (q) => (q.state.data?.status === 'running' ? 3000 : false),
+  })
+
+  const hrmExportStatusQuery = useQuery({
+    queryKey: ['hrm-attend', 'export', 'status'],
+    queryFn: () => hrmAttendAdminService.exportStatus(),
+    enabled: canDataSources,
+  })
+
   useEffect(() => {
     if (!settingsQuery.data) return
     const ihris = settingsQuery.data.data_sources.ihris
@@ -222,6 +241,12 @@ export function SettingsPage() {
       api_url: hrm?.api_url ?? 'http://localhost/attend',
       summary_path: hrm?.summary_path ?? '/attendance/attendance_summary',
       enabled: hrm?.enabled ?? true,
+      export_push_enabled: hrm?.export_push_enabled ?? false,
+      export_push_path: hrm?.export_push_path ?? '/api/outoftstation_clockin',
+      basic_user: hrm?.basic_user ?? '',
+      basic_password: '',
+      jwt_token: '',
+      export_pull_token: '',
     })
     setGoogleMapsForm({
       api_key: settingsQuery.data.data_sources.google_maps?.api_key ?? '',
@@ -273,19 +298,25 @@ export function SettingsPage() {
   }
 
   const saveDataSources = useMutation({
-    mutationFn: () =>
-      adminSettingsService.update('data_sources', {
+    mutationFn: () => {
+      const hrmPayload: Record<string, unknown> = { ...hrmAttendForm }
+      if (!hrmAttendForm.basic_password) delete hrmPayload.basic_password
+      if (!hrmAttendForm.jwt_token) delete hrmPayload.jwt_token
+      if (!hrmAttendForm.export_pull_token) delete hrmPayload.export_pull_token
+      return adminSettingsService.update('data_sources', {
         ihris: ihrisForm,
-        hrm_attend: hrmAttendForm,
+        hrm_attend: hrmPayload,
         google_maps: googleMapsForm,
         oos: { attendance: oosAttendanceForm },
         attendance: { duty_station: dutyStationAttendanceForm },
-      }),
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
       queryClient.invalidateQueries({ queryKey: ['public-config', 'maps'] })
       queryClient.invalidateQueries({ queryKey: ['public-config', 'oos-attendance'] })
       queryClient.invalidateQueries({ queryKey: ['public-config', 'duty-station-attendance'] })
+      queryClient.invalidateQueries({ queryKey: ['hrm-attend', 'export', 'status'] })
       toast.success('Data source settings saved.')
     },
     onError: (error: unknown) => notifyApiError(error, 'Could not save data sources'),
@@ -316,34 +347,71 @@ export function SettingsPage() {
   })
 
   const syncMutation = useMutation({
-    mutationFn: async () => {
-      let runId = syncStatusQuery.data?.run_id
-      let hasMore = true
-      while (hasMore) {
-        const result = await ihrisAdminService.syncBatch({
-          run_id: runId,
-          pages_per_batch: 1,
-        })
-        runId = result.run_id
-        hasMore = result.has_more ?? false
-        await queryClient.setQueryData(['ihris', 'sync', 'status'], result)
-        if (!hasMore) break
-      }
-    },
-    onSuccess: () => {
+    mutationFn: async () => ihrisAdminService.start({ run_id: syncStatusQuery.data?.run_id }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['ihris', 'sync', 'status'], result)
       queryClient.invalidateQueries({ queryKey: ['ihris', 'sync', 'status'] })
-      toast.success('iHRIS sync completed.')
+      toast.success('iHRIS background sync started.')
     },
-    onError: (error: unknown) => notifyApiError(error, 'iHRIS sync failed'),
+    onError: (error: unknown) => notifyApiError(error, 'iHRIS sync failed to start'),
+  })
+
+  const resumeIhrisMutation = useMutation({
+    mutationFn: async () => ihrisAdminService.resume({ run_id: syncStatusQuery.data?.run_id }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['ihris', 'sync', 'status'], result)
+      queryClient.invalidateQueries({ queryKey: ['ihris', 'sync', 'status'] })
+      toast.success('iHRIS sync resumed.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not resume iHRIS sync'),
+  })
+
+  const cancelIhrisMutation = useMutation({
+    mutationFn: async () => ihrisAdminService.cancel({ run_id: syncStatusQuery.data?.run_id }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['ihris', 'sync', 'status'], result)
+      queryClient.invalidateQueries({ queryKey: ['ihris', 'sync', 'status'] })
+      toast.success('iHRIS sync cancelled.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not cancel iHRIS sync'),
   })
 
   const hrmAttendSyncMutation = useMutation({
-    mutationFn: () => hrmAttendAdminService.syncSummaries(),
+    mutationFn: () => hrmAttendAdminService.start(),
     onSuccess: (result) => {
+      queryClient.setQueryData(['hrm-attend', 'sync', 'status'], result)
+      queryClient.invalidateQueries({ queryKey: ['hrm-attend', 'sync', 'status'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
-      toast.success(result.message ?? `Imported ${result.imported} attendance summaries.`)
+      toast.success('HRM Attend background sync started.')
     },
-    onError: (error: unknown) => notifyApiError(error, 'HRM Attend sync failed'),
+    onError: (error: unknown) => notifyApiError(error, 'HRM Attend sync failed to start'),
+  })
+
+  const resumeHrmMutation = useMutation({
+    mutationFn: () => hrmAttendAdminService.resume({ run_id: hrmSyncStatusQuery.data?.run_id }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['hrm-attend', 'sync', 'status'], result)
+      toast.success('HRM Attend sync resumed.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not resume HRM sync'),
+  })
+
+  const cancelHrmMutation = useMutation({
+    mutationFn: () => hrmAttendAdminService.cancel({ run_id: hrmSyncStatusQuery.data?.run_id }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['hrm-attend', 'sync', 'status'], result)
+      toast.success('HRM Attend sync cancelled.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not cancel HRM sync'),
+  })
+
+  const hrmExportPushMutation = useMutation({
+    mutationFn: () => hrmAttendAdminService.pushExport(100),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['hrm-attend', 'export', 'status'] })
+      toast.success(`Export push: ${result.pushed} pushed, ${result.failed} failed.`)
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Export push failed'),
   })
 
   const dorisSyncMutation = useMutation({
@@ -681,7 +749,7 @@ export function SettingsPage() {
 
             <SettingsSection
               title="HRM Attend integration"
-              description="Pull end-of-month duty-station attendance summaries from HRM Attend for staff already in PMS."
+              description="Pull monthly duty-station summaries and push OOS attendance clocks to HRM Attend. Sync runs on the server so leaving this page does not stop it."
               accent="blue"
             >
               <div className="space-y-6">
@@ -721,6 +789,20 @@ export function SettingsPage() {
                   </p>
                 ) : null}
                 <p className="text-xs text-gray-500">
+                  Status: <span className="font-semibold capitalize">{hrmSyncStatusQuery.data?.status ?? 'idle'}</span>
+                  {hrmSyncStatusQuery.data?.year_month
+                    ? ` · ${hrmSyncStatusQuery.data.year_month}`
+                    : ''}
+                  {typeof hrmSyncStatusQuery.data?.imported === 'number'
+                    ? ` · imported ${hrmSyncStatusQuery.data.imported}`
+                    : ''}
+                </p>
+                {hrmSyncStatusQuery.data?.last_error ? (
+                  <div className="rounded-sm bg-red-50 p-3 text-xs text-red-700">
+                    {hrmSyncStatusQuery.data.last_error}
+                  </div>
+                ) : null}
+                <p className="text-xs text-gray-500">
                   Fetches monthly summaries from{' '}
                   <code className="text-[11px]">
                     {hrmAttendForm.api_url.replace(/\/$/, '')}
@@ -728,6 +810,94 @@ export function SettingsPage() {
                   </code>{' '}
                   and imports only rows matching PMS staff (by iHRIS PID, card number, or NIN).
                 </p>
+                <div className="border-t border-gray-100 pt-4 space-y-4">
+                  <p className="text-sm font-semibold text-ui-text">OOS clock export to HRM</p>
+                  <ToggleRow
+                    label="Enable push of OOS attendance clocks"
+                    hint="Posts to /api/outoftstation_clockin with source=performance_system"
+                    checked={hrmAttendForm.export_push_enabled}
+                    onChange={(checked) =>
+                      setHrmAttendForm((f) => ({ ...f, export_push_enabled: checked }))
+                    }
+                  />
+                  <Field>
+                    <Input
+                      {...mt}
+                      label="Export push path"
+                      value={hrmAttendForm.export_push_path}
+                      onChange={(e) =>
+                        setHrmAttendForm((f) => ({ ...f, export_push_path: e.target.value }))
+                      }
+                    />
+                  </Field>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <Input
+                        {...mt}
+                        label="Attend API username (JWT login)"
+                        value={hrmAttendForm.basic_user}
+                        onChange={(e) =>
+                          setHrmAttendForm((f) => ({ ...f, basic_user: e.target.value }))
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <Input
+                        {...mt}
+                        type="password"
+                        label="Attend API password"
+                        value={hrmAttendForm.basic_password}
+                        onChange={(e) =>
+                          setHrmAttendForm((f) => ({ ...f, basic_password: e.target.value }))
+                        }
+                        placeholder="Leave blank to keep existing"
+                      />
+                    </Field>
+                  </div>
+                  <Field>
+                    <Input
+                      {...mt}
+                      type="password"
+                      label="Optional JWT override"
+                      value={hrmAttendForm.jwt_token}
+                      onChange={(e) =>
+                        setHrmAttendForm((f) => ({ ...f, jwt_token: e.target.value }))
+                      }
+                      placeholder={
+                        settingsQuery.data?.data_sources.hrm_attend?.jwt_token_set
+                          ? 'Token is set — leave blank to keep'
+                          : 'Or paste a Bearer token (skips login)'
+                      }
+                    />
+                  </Field>
+                  <p className="text-xs text-gray-500">
+                    Push uses <code className="text-[11px]">Authorization: Bearer</code> (Attend JWT).
+                    Username/password call <code className="text-[11px]">/api/login</code> unless a JWT
+                    override is stored.
+                  </p>
+                  <Field>
+                    <Input
+                      {...mt}
+                      type="password"
+                      label="Pull API token (for HRM → PMS)"
+                      value={hrmAttendForm.export_pull_token}
+                      onChange={(e) =>
+                        setHrmAttendForm((f) => ({ ...f, export_pull_token: e.target.value }))
+                      }
+                      placeholder={
+                        settingsQuery.data?.data_sources.hrm_attend?.export_pull_token_set
+                          ? 'Token is set — leave blank to keep'
+                          : 'Set a shared secret for pull'
+                      }
+                    />
+                  </Field>
+                  <p className="text-xs text-gray-500">
+                    Pending clocks: {hrmExportStatusQuery.data?.pending ?? '—'}
+                    {hrmExportStatusQuery.data?.last_push_at
+                      ? ` · last push ${hrmExportStatusQuery.data.last_push_at} (${hrmExportStatusQuery.data.last_push_status ?? ''})`
+                      : ''}
+                  </p>
+                </div>
                 <div className="flex flex-wrap gap-3">
                   <Button
                     {...mt}
@@ -744,10 +914,49 @@ export function SettingsPage() {
                     variant="outlined"
                     className="rounded-sm normal-case"
                     onClick={() => hrmAttendSyncMutation.mutate()}
-                    loading={hrmAttendSyncMutation.isPending}
-                    disabled={hrmSyncBlocked}
+                    loading={hrmAttendSyncMutation.isPending || hrmSyncStatusQuery.data?.status === 'running'}
+                    disabled={hrmSyncBlocked || hrmSyncStatusQuery.data?.status === 'running'}
                   >
-                    Sync last month&apos;s summaries
+                    {hrmSyncStatusQuery.data?.status === 'running'
+                      ? 'Sync in progress…'
+                      : "Sync last month's summaries"}
+                  </Button>
+                  {(hrmSyncStatusQuery.data?.status === 'failed' ||
+                    hrmSyncStatusQuery.data?.status === 'running') && (
+                    <Button
+                      {...mt}
+                      size="sm"
+                      variant="outlined"
+                      className="rounded-sm normal-case"
+                      onClick={() => resumeHrmMutation.mutate()}
+                      loading={resumeHrmMutation.isPending}
+                      disabled={hrmSyncBlocked}
+                    >
+                      Resume
+                    </Button>
+                  )}
+                  {hrmSyncStatusQuery.data?.status === 'running' ? (
+                    <Button
+                      {...mt}
+                      size="sm"
+                      variant="outlined"
+                      className="rounded-sm normal-case text-red-700"
+                      onClick={() => cancelHrmMutation.mutate()}
+                      loading={cancelHrmMutation.isPending}
+                    >
+                      Cancel
+                    </Button>
+                  ) : null}
+                  <Button
+                    {...mt}
+                    size="sm"
+                    variant="outlined"
+                    className="rounded-sm normal-case"
+                    onClick={() => hrmExportPushMutation.mutate()}
+                    loading={hrmExportPushMutation.isPending}
+                    disabled={hrmSyncBlocked || !hrmAttendForm.export_push_enabled}
+                  >
+                    Push OOS clocks now
                   </Button>
                 </div>
                 {hrmSyncBlocked && hrmAttendForm.enabled && hrmNeedsProductionHost ? (
@@ -1003,16 +1212,45 @@ export function SettingsPage() {
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <Button
-                  {...mt}
-                  size="sm"
-                  className="rounded-sm bg-uganda-black normal-case"
-                  onClick={() => syncMutation.mutate()}
-                  loading={syncMutation.isPending || sync?.status === 'running'}
-                  disabled={sync?.status === 'running'}
-                >
-                  {sync?.status === 'running' ? 'Sync in progress…' : 'Start iHRIS sync'}
-                </Button>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    {...mt}
+                    size="sm"
+                    className="rounded-sm bg-uganda-black normal-case"
+                    onClick={() => syncMutation.mutate()}
+                    loading={syncMutation.isPending || sync?.status === 'running'}
+                    disabled={sync?.status === 'running'}
+                  >
+                    {sync?.status === 'running' ? 'Sync in progress…' : 'Start iHRIS sync'}
+                  </Button>
+                  {(sync?.status === 'failed' || sync?.status === 'running' || sync?.has_more) && (
+                    <Button
+                      {...mt}
+                      size="sm"
+                      variant="outlined"
+                      className="rounded-sm normal-case"
+                      onClick={() => resumeIhrisMutation.mutate()}
+                      loading={resumeIhrisMutation.isPending}
+                    >
+                      Resume
+                    </Button>
+                  )}
+                  {sync?.status === 'running' ? (
+                    <Button
+                      {...mt}
+                      size="sm"
+                      variant="outlined"
+                      className="rounded-sm normal-case text-red-700"
+                      onClick={() => cancelIhrisMutation.mutate()}
+                      loading={cancelIhrisMutation.isPending}
+                    >
+                      Cancel
+                    </Button>
+                  ) : null}
+                </div>
+                <p className="mt-3 text-xs text-gray-500">
+                  Sync runs on the server (also scheduled daily at 03:00). You can leave this page.
+                </p>
               </SettingsSection>
             ) : null}
           </div>

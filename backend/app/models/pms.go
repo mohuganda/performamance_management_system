@@ -515,6 +515,38 @@ type AttendanceClock struct {
 	LocationLabel                 *string    `json:"location_label,omitempty"`
 }
 
+type HrmAttendExportLog struct {
+	orm.Model
+	AttendanceClockID uint      `json:"attendance_clock_id" gorm:"column:attendance_clock_id;index"`
+	Direction         string    `json:"direction" gorm:"column:direction"` // push | pull
+	Status            string    `json:"status" gorm:"column:status"`       // success | failed
+	HTTPStatus        *int      `json:"http_status,omitempty" gorm:"column:http_status"`
+	ResponseSnippet   *string   `json:"response_snippet,omitempty" gorm:"column:response_snippet"`
+	ExportedAt        time.Time `json:"exported_at" gorm:"column:exported_at"`
+}
+
+func (HrmAttendExportLog) TableName() string {
+	return "hrm_attend_export_log"
+}
+
+type HrmAttendSyncRun struct {
+	orm.Model
+	Status          string     `json:"status" gorm:"column:status;default:running"`
+	YearMonth       string     `json:"year_month" gorm:"column:year_month"`
+	Imported        uint       `json:"imported" gorm:"column:imported;default:0"`
+	SkippedUnknown  uint       `json:"skipped_unknown" gorm:"column:skipped_unknown;default:0"`
+	SkippedInvalid  uint       `json:"skipped_invalid" gorm:"column:skipped_invalid;default:0"`
+	TotalFetched    uint       `json:"total_fetched" gorm:"column:total_fetched;default:0"`
+	LastError       *string    `json:"last_error,omitempty" gorm:"column:last_error"`
+	SummaryJSON     *string    `json:"summary_json,omitempty" gorm:"column:summary_json"`
+	StartedAt       time.Time  `json:"started_at" gorm:"column:started_at"`
+	FinishedAt      *time.Time `json:"finished_at,omitempty" gorm:"column:finished_at"`
+}
+
+func (HrmAttendSyncRun) TableName() string {
+	return "hrm_attend_sync_runs"
+}
+
 type CachedPlace struct {
 	orm.Model
 	Name             string     `json:"name" gorm:"column:name"`

@@ -62,5 +62,6 @@ func Providers() []foundation.ServiceProvider {
 		&redis.ServiceProvider{},
 		&providers.RbacServiceProvider{},
 		&providers.BackupScheduleProvider{},
+		&providers.SyncScheduleProvider{},
 	}
 }

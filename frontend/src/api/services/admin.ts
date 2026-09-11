@@ -19,6 +19,7 @@ export type IhrisSyncStatus = {
   has_more?: boolean
   started_at?: string
   finished_at?: string
+  message?: string
 }
 
 export type IhrisSyncBatchResult = IhrisSyncStatus & {
@@ -52,6 +53,14 @@ export type AdminSettings = {
       host_configured?: boolean
       last_sync_at: string
       last_sync_status?: string
+      export_push_enabled?: boolean
+      export_push_path?: string
+      basic_user?: string
+      basic_password?: string
+      jwt_token_set?: boolean
+      export_pull_token_set?: boolean
+      export_last_push_at?: string
+      export_last_push_status?: string
     }
     google_maps?: {
       api_key: string
@@ -154,6 +163,19 @@ export const ihrisAdminService = {
     const { data } = await apiClient.get('/ihris/sync/status', { timeout: 30_000 })
     return data
   },
+  start: async (opts?: { run_id?: number }): Promise<IhrisSyncStatus> => {
+    const { data } = await apiClient.post('/ihris/sync/start', opts ?? {}, { timeout: 30_000 })
+    return data
+  },
+  resume: async (opts?: { run_id?: number }): Promise<IhrisSyncStatus> => {
+    const { data } = await apiClient.post('/ihris/sync/resume', opts ?? {}, { timeout: 30_000 })
+    return data
+  },
+  cancel: async (opts?: { run_id?: number }): Promise<IhrisSyncStatus> => {
+    const { data } = await apiClient.post('/ihris/sync/cancel', opts ?? {}, { timeout: 30_000 })
+    return data
+  },
+  /** @deprecated Prefer start(); kept for compatibility */
   syncBatch: async (opts?: { run_id?: number; start_page?: number; pages_per_batch?: number }) => {
     const { data } = await apiClient.post<IhrisSyncBatchResult>('/ihris/sync', opts ?? {}, {
       timeout: 180_000,
@@ -164,17 +186,61 @@ export const ihrisAdminService = {
 
 export type HrmAttendSyncResult = {
   status: string
-  year_month: string
-  imported: number
-  skipped_unknown: number
-  skipped_invalid: number
-  total_fetched: number
+  year_month?: string
+  imported?: number
+  skipped_unknown?: number
+  skipped_invalid?: number
+  total_fetched?: number
+  message?: string
+  run_id?: number
+  last_error?: string
+  started_at?: string
+  finished_at?: string
+}
+
+export type HrmAttendExportStatus = {
+  pending: number
+  export_push_enabled: boolean
+  last_push_at?: string
+  last_push_status?: string
+}
+
+export type HrmAttendExportPushResult = {
+  status: string
+  pushed: number
+  failed: number
+  skipped: number
+  pending: number
   message?: string
 }
 
 export const hrmAttendAdminService = {
+  status: async (): Promise<HrmAttendSyncResult> => {
+    const { data } = await apiClient.get('/hrm-attend/sync/status')
+    return data
+  },
+  start: async (opts?: { year_month?: string; run_id?: number }): Promise<HrmAttendSyncResult> => {
+    const { data } = await apiClient.post('/hrm-attend/sync/start', opts ?? {})
+    return data
+  },
+  resume: async (opts?: { run_id?: number }): Promise<HrmAttendSyncResult> => {
+    const { data } = await apiClient.post('/hrm-attend/sync/resume', opts ?? {})
+    return data
+  },
+  cancel: async (opts?: { run_id?: number }): Promise<HrmAttendSyncResult> => {
+    const { data } = await apiClient.post('/hrm-attend/sync/cancel', opts ?? {})
+    return data
+  },
   syncSummaries: async (opts?: { year_month?: string }): Promise<HrmAttendSyncResult> => {
     const { data } = await apiClient.post<HrmAttendSyncResult>('/hrm-attend/sync', opts ?? {})
+    return data
+  },
+  exportStatus: async (): Promise<HrmAttendExportStatus> => {
+    const { data } = await apiClient.get('/hrm-attend/export/status')
+    return data
+  },
+  pushExport: async (limit = 100): Promise<HrmAttendExportPushResult> => {
+    const { data } = await apiClient.post(`/hrm-attend/export/push?limit=${limit}`, {})
     return data
   },
 }

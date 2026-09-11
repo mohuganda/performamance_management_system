@@ -20,7 +20,7 @@ type HrmAttendService struct {
 func NewHrmAttendService() *HrmAttendService {
 	return &HrmAttendService{
 		settings: NewSettingsService(),
-		client:   &http.Client{Timeout: 4 * time.Second},
+		client:   &http.Client{Timeout: 120 * time.Second},
 	}
 }
 

@@ -13,6 +13,9 @@ import (
 func Commands() []contractsconsole.Command {
 	return []contractsconsole.Command{
 		&commands.BackupDatabaseCommand{},
+		&commands.IhrisSyncCommand{},
+		&commands.HrmAttendSyncCommand{},
+		&commands.HrmAttendExportPushCommand{},
 	}
 }
 

@@ -352,12 +352,22 @@ Retention: keep all dumps for the **current calendar month**; for each **past mo
 Daily schedule is registered at `02:15` (Goravel). Ensure it fires with either:
 
 ```bash
-# every minute (runs due DailyAt jobs)
+# every minute (runs due DailyAt / Cron jobs: backups, iHRIS, HRM sync/export)
 * * * * * docker exec moh-pms-api ./moh-pms-api artisan schedule:run
 
 # or once daily
 15 2 * * * docker exec moh-pms-api ./moh-pms-api artisan backup:database
 ```
+
+Same `schedule:run` cron also drives:
+
+| Job | When |
+|-----|------|
+| `ihris:sync` | Daily 03:00 |
+| `hrm-attend:sync` | 1st of month 00:15 (previous month summaries) |
+| `hrm-attend:export-push` | Daily 03:30 (OOS clocks → HRM) |
+
+See [docs/api/hrm-attend-export.md](../api/hrm-attend-export.md).
 
 Restore flow in the UI: **Test** (throwaway DB `moh_pms_restore_test`) → then **Restore** (type `RESTORE`). Cross-engine files (wrong primary) can be deleted but not restored.
 
