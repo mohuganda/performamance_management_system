@@ -38,7 +38,7 @@ export function PlaceAutocompleteField({
   const inputRef = useRef<HTMLInputElement | null>(null)
   const searchAbortRef = useRef<AbortController | null>(null)
 
-  const { ready, error, apiKey, countryCodes } = useGoogleMapsApi()
+  const { countryCodes, loading: configLoading } = useGoogleMapsApi()
   const debouncedQuery = useDebouncedValue(value.trim(), 280)
 
   const [open, setOpen] = useState(false)
@@ -56,10 +56,6 @@ export function PlaceAutocompleteField({
   const fetchPredictions = useCallback(
     async (query: string) => {
       searchAbortRef.current?.abort()
-      if (!ready || !apiKey) {
-        setLoading(false)
-        return
-      }
       if (query.length < 2) {
         setPredictions([])
         setFetchError(null)
@@ -74,7 +70,6 @@ export function PlaceAutocompleteField({
 
       try {
         const results = await fetchPlacePredictions({
-          apiKey,
           input: query,
           countryCodes,
           signal: controller.signal,
@@ -95,7 +90,7 @@ export function PlaceAutocompleteField({
         }
       }
     },
-    [ready, apiKey, countryCodes],
+    [countryCodes],
   )
 
   useEffect(() => {
@@ -117,11 +112,18 @@ export function PlaceAutocompleteField({
   }, [])
 
   const resolvePlace = async (prediction: PlacePrediction) => {
-    if (!apiKey || resolving) return
+    if (resolving) return
     setResolving(true)
     setFetchError(null)
     try {
-      const place = await fetchPlaceDetails({ apiKey, placeId: prediction.place_id })
+      const place = await fetchPlaceDetails({
+        placeId: prediction.place_id,
+        cachedPlaceId: prediction.cached_place_id,
+        latitude: prediction.latitude,
+        longitude: prediction.longitude,
+        name: prediction.name,
+        address: prediction.address,
+      })
       const name =
         place.name ||
         prediction.structured_formatting?.main_text?.trim() ||
@@ -224,17 +226,11 @@ export function PlaceAutocompleteField({
 
       <p className="mt-1.5 text-xs text-ui-muted">
         {countryCodes.length > 0
-          ? `Suggestions are limited to ${countryLabel}.`
-          : 'Search powered by Google Maps.'}
+          ? `Suggestions prefer cached places in ${countryLabel}; Google is used only on cache miss.`
+          : 'Suggestions use the PMS place cache first, then Google Maps if needed.'}
       </p>
 
-      {!apiKey ? (
-        <p className="mt-1 text-xs text-amber-700">
-          Add a Google Maps API key under Settings → Data sources to enable destination search.
-        </p>
-      ) : error ? (
-        <p className="mt-1 text-xs text-moh-error">{error}</p>
-      ) : !ready ? (
+      {configLoading ? (
         <p className="mt-1 text-xs text-ui-muted">Loading location search…</p>
       ) : null}
 

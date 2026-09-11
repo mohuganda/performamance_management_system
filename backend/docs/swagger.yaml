@@ -19,6 +19,8 @@ definitions:
         type: string
       longitude:
         type: number
+      out_of_station_request_id:
+        type: integer
     type: object
   controllers.leaveRequestBody:
     properties:
@@ -28,6 +30,8 @@ definitions:
         type: integer
       medical_report_url:
         type: string
+      oic_staff_id:
+        type: integer
       reason:
         type: string
       start_date:
@@ -71,6 +75,8 @@ definitions:
     properties:
       attachment_url:
         type: string
+      cached_place_id:
+        type: integer
       destination_address:
         type: string
       destination_latitude:
@@ -107,7 +113,7 @@ definitions:
     type: object
   models.LeaveApprovalStage:
     properties:
-      approverRole:
+      approver_role:
         type: string
       code:
         type: string
@@ -117,30 +123,29 @@ definitions:
         type: string
       id:
         type: integer
-      isActive:
+      is_active:
         type: boolean
-      isRequired:
+      is_required:
         type: boolean
-      jobTitleID:
+      job_title_id:
         type: integer
-      jobTitleMatch:
+      job_title_match:
         type: string
       name:
         type: string
       scope:
         type: string
       sequence:
-        format: int32
         type: integer
-      skipIfUnresolved:
+      skip_if_unresolved:
         type: boolean
-      stageType:
+      stage_type:
         type: string
-      supervisorSequence:
+      supervisor_sequence:
         type: integer
       updated_at:
         $ref: '#/definitions/github_com_goravel_framework_support_carbon.DateTime'
-      workflowProfileCode:
+      workflow_profile_code:
         type: string
     type: object
   models.LeaveEntitlement:
@@ -202,6 +207,8 @@ definitions:
       mime_type:
         type: string
       name:
+        type: string
+      path:
         type: string
       size:
         type: integer
@@ -636,6 +643,22 @@ paths:
       summary: Update leave type
       tags:
       - admin-leave
+  /api/v1/admin/lists/cached-places:
+    get:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Admin list cached places (view-only)
+      tags:
+      - admin-lists
+  /api/v1/admin/lists/cached-places/seed:
+    post:
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Seed cached places from facilities (immutable snapshots)
+      tags:
+      - admin-lists
   /api/v1/admin/lists/departments:
     get:
       produces:
@@ -1079,7 +1102,7 @@ paths:
       responses: {}
       security:
       - BearerAuth: []
-      summary: Update profile photo and/or signature
+      summary: Update profile photo, signature, and/or duty-station pin
       tags:
       - auth
   /api/v1/auth/refresh:
@@ -1296,20 +1319,42 @@ paths:
       summary: iHRIS sync run status
       tags:
       - integrations
-  /api/v1/mobile/approvals/inbox:
+  /api/v1/mobile/approvals/detail:
     get:
-      description: Pending leave, out-of-station, PPA, and appraisal items for the
-        signed-in approver. Requires a linked staff record.
+      description: module = leave | out_of_station | ppa | report (etc.); id = request/report
+        id
+      parameters:
+      - description: Module key
+        in: query
+        name: module
+        required: true
+        type: string
+      - description: Record id
+        in: query
+        name: id
+        required: true
+        type: integer
       produces:
       - application/json
       responses:
         "200":
-          description: items, stats (counts and average approval time)
+          description: OK
           schema:
             additionalProperties: true
             type: object
-        "403":
-          description: User not linked to staff
+      security:
+      - BearerAuth: []
+      summary: Approval detail with trail
+      tags:
+      - mobile-approvals
+  /api/v1/mobile/approvals/inbox:
+    get:
+      description: Pending and recent approval items across leave, OOS, and performance
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
           schema:
             additionalProperties: true
             type: object
@@ -1317,7 +1362,7 @@ paths:
       - BearerAuth: []
       summary: Unified approvals inbox
       tags:
-      - approvals
+      - mobile-approvals
   /api/v1/mobile/attendance/clock:
     post:
       consumes:
@@ -1430,6 +1475,21 @@ paths:
             additionalProperties: true
             type: object
       summary: Full dynamic leave configuration
+      tags:
+      - mobile-leave
+  /api/v1/mobile/leave/oic-candidates:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List staff candidates for Officer in Charge
       tags:
       - mobile-leave
   /api/v1/mobile/leave/requests:
@@ -1547,7 +1607,8 @@ paths:
       consumes:
       - application/json
       description: Mirrors attend/requests/newRequest with map-picked destination
-        coordinates for GPS verification
+        coordinates for GPS verification. Optional cached_place_id copies snapshot
+        destination fields.
       parameters:
       - description: Out of station request
         in: body
@@ -1566,6 +1627,103 @@ paths:
       security:
       - BearerAuth: []
       summary: Create out-of-station request
+      tags:
+      - mobile-out-of-station
+  /api/v1/mobile/out-of-station/requests/{id}:
+    get:
+      description: Owner or assigned approver
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get out-of-station request by id
+      tags:
+      - mobile-out-of-station
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Draft fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.oosRequestBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update draft out-of-station request
+      tags:
+      - mobile-out-of-station
+  /api/v1/mobile/out-of-station/requests/{id}/cancel:
+    post:
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cancel draft or pending out-of-station request
+      tags:
+      - mobile-out-of-station
+  /api/v1/mobile/out-of-station/requests/{id}/submit:
+    post:
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Submit draft out-of-station request
       tags:
       - mobile-out-of-station
   /api/v1/mobile/performance/kpis/grouped:
@@ -1699,6 +1857,50 @@ paths:
       summary: Unread in-app notification count
       tags:
       - notifications
+  /api/v1/places/{id}:
+    get:
+      parameters:
+      - description: Place ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get cached place by id
+      tags:
+      - places
+  /api/v1/places/search:
+    get:
+      parameters:
+      - description: Search text
+        in: query
+        name: q
+        required: true
+        type: string
+      - description: ISO country override (e.g. ug)
+        in: query
+        name: country
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: Search cached places (local-first, Google fallback)
+      tags:
+      - places
   /api/v1/uploads:
     post:
       consumes:

@@ -92,6 +92,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       FILE_STORAGE_ROOT: ${FILE_STORAGE_ROOT:-/var/lib/moh-pms/media}
+      DB_BACKUP_DIR: ${DB_BACKUP_DIR_CONTAINER:-/var/lib/moh-pms/db-backups}
+      DB_BACKUP_USE_DOCKER_EXEC: ${DB_BACKUP_USE_DOCKER_EXEC:-true}
       IHRIS_USE_DEMO_DATA: ${IHRIS_USE_DEMO_DATA}
       LOAD_DEMO_DATA: ${LOAD_DEMO_DATA}
       ANALYTICS_DB_ENABLED: ${ANALYTICS_DB_ENABLED:-true}
@@ -105,6 +107,8 @@ services:
     volumes:
       - ${DATA_DIR}/storage:/app/storage
       - ${DATA_DIR}/media:/var/lib/moh-pms/media
+      - ${DB_BACKUP_DIR:-/home/moh-pms/db-backups}:/var/lib/moh-pms/db-backups
+      - /var/run/docker.sock:/var/run/docker.sock
     expose:
       - "3030"
     healthcheck:

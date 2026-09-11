@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bell,
   Database,
+  DatabaseBackup,
   Layers,
   Mail,
   SlidersHorizontal,
@@ -45,6 +46,7 @@ import { mt } from '@/utils/mt'
 import { notifyApiError, toast } from '@/features/toast'
 import { cn } from '@/utils/cn'
 import { ListsAdminPanel } from '@/modules/settings/ListsAdminPanel'
+import { BackupsAdminPanel } from '@/modules/settings/BackupsAdminPanel'
 
 /** Wrapper so Material Tailwind outlined labels don't collide with neighbours. */
 function Field({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -142,6 +144,7 @@ export function SettingsPage() {
   const canNotifications = canAccessSettingsTab(hasPermission, 'notifications')
   const canPerformance = canAccessSettingsTab(hasPermission, 'performance')
   const canKpiSettings = canAccessSettingsTab(hasPermission, 'kpi')
+  const canBackups = canAccessSettingsTab(hasPermission, 'backups')
   const canLoadSettings = hasAnyAdminSettingsPermission(hasPermission)
   const canSyncIhris = hasPermission('ihris.sync')
 
@@ -395,11 +398,12 @@ export function SettingsPage() {
         { id: 'lists' as const, label: 'Lists', icon: Layers, visible: canLists },
         { id: 'kpi' as const, label: 'KPI', icon: Target, visible: canKpiSettings },
         { id: 'data-sources' as const, label: 'Data sources', icon: Database, visible: canDataSources },
+        { id: 'backups' as const, label: 'Backups', icon: DatabaseBackup, visible: canBackups },
         { id: 'email' as const, label: 'Email', icon: Mail, visible: canEmail },
         { id: 'notifications' as const, label: 'Notifications', icon: Bell, visible: canNotifications },
         { id: 'performance' as const, label: 'Performance', icon: BarChart3, visible: canPerformance },
       ].filter((tab) => tab.visible),
-    [canLists, canKpiSettings, canDataSources, canEmail, canNotifications, canPerformance],
+    [canLists, canKpiSettings, canDataSources, canBackups, canEmail, canNotifications, canPerformance],
   )
 
   const selectTab = (tab: string) => {
@@ -589,6 +593,8 @@ export function SettingsPage() {
       ) : null}
 
       {activeTab === 'lists' && canLists ? <ListsAdminPanel /> : null}
+
+      {activeTab === 'backups' && canBackups ? <BackupsAdminPanel /> : null}
 
       {activeTab === 'data-sources' && canDataSources ? (
         <QueryState

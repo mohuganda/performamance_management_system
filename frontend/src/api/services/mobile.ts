@@ -143,6 +143,10 @@ export const oosService = {
     const { data } = await apiClient.get('/mobile/out-of-station/requests')
     return data
   },
+  getRequest: async (id: number) => {
+    const { data } = await apiClient.get(`/mobile/out-of-station/requests/${id}`)
+    return data
+  },
   listPendingApprovals: async () => {
     const { data } = await apiClient.get('/mobile/out-of-station/pending-approvals')
     return data
@@ -159,9 +163,38 @@ export const oosService = {
     destination_latitude: number
     destination_longitude: number
     geofence_radius_meters?: number
+    cached_place_id?: number
     submit: boolean
   }) => {
     const { data } = await apiClient.post('/mobile/out-of-station/requests', payload)
+    return data
+  },
+  updateRequest: async (
+    id: number,
+    payload: {
+      reason_id: number
+      start_date: string
+      end_date: string
+      remarks?: string
+      expected_deliverables?: string
+      attachment_url?: string
+      destination_name?: string
+      destination_address?: string
+      destination_latitude: number
+      destination_longitude: number
+      geofence_radius_meters?: number
+      cached_place_id?: number
+    },
+  ) => {
+    const { data } = await apiClient.put(`/mobile/out-of-station/requests/${id}`, payload)
+    return data
+  },
+  submitRequest: async (id: number) => {
+    const { data } = await apiClient.post(`/mobile/out-of-station/requests/${id}/submit`)
+    return data
+  },
+  cancelRequest: async (id: number) => {
+    const { data } = await apiClient.post(`/mobile/out-of-station/requests/${id}/cancel`)
     return data
   },
   approve: async (id: number, payload: { approve: boolean; comments?: string }) => {

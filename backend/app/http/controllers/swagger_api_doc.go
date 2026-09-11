@@ -21,17 +21,6 @@ func swaggerHealth() {}
 // @Router       /api/v1/config [get]
 func swaggerPublicConfig() {}
 
-// swaggerApprovalsInbox godoc
-// @Summary      Unified approvals inbox
-// @Description  Pending leave, out-of-station, PPA, and appraisal items for the signed-in approver. Requires a linked staff record.
-// @Tags         approvals
-// @Produce      json
-// @Security     BearerAuth
-// @Success      200 {object} map[string]any "items, stats (counts and average approval time)"
-// @Failure      403 {object} map[string]any "User not linked to staff"
-// @Router       /api/v1/mobile/approvals/inbox [get]
-func swaggerApprovalsInbox() {}
-
 // swaggerDashboardHealthWorker godoc
 // @Summary      Staff dashboard
 // @Tags         dashboard

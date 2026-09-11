@@ -75,6 +75,8 @@ sudo apt update && sudo apt install -y nginx
   (React build)          (Goravel API)          moh-pms-redis
 ```
 
+Swagger UI is served at `/swagger/index.html`. Mobile places / OOS / approvals curl examples: [docs/api/mobile-oos-approvals.md](api/mobile-oos-approvals.md).
+
 ### File layout
 
 ```text
@@ -338,18 +340,35 @@ docker logs moh-pms-api --tail 100
 
 ### Database backups
 
-**PostgreSQL (default):**
+Managed from **Settings → Backups** (permission `settings.backups.manage`). The API dumps **only the primary engine** from `DB_CONNECTION` (`postgres` or `mysql`) into a host directory outside the app tree.
+
+| Env | Purpose |
+|-----|---------|
+| `DB_BACKUP_DIR` | Host path (default `/home/moh-pms/db-backups`), mounted into the API container |
+| `DB_BACKUP_USE_DOCKER_EXEC` | `true` (prod default): run `pg_dump`/`mysqldump` via `docker exec` into the DB container |
+
+Retention: keep all dumps for the **current calendar month**; for each **past month**, keep only the latest file. Filenames: `moh_pms_{postgres\|mysql}_YYYY-MM-DD.sql.gz`.
+
+Daily schedule is registered at `02:15` (Goravel). Ensure it fires with either:
 
 ```bash
-docker exec moh-pms-postgres pg_dump -U pms moh_pms > backup-$(date +%F).sql
-# Password is in deploy/.env → DB_PASSWORD
+# every minute (runs due DailyAt jobs)
+* * * * * docker exec moh-pms-api ./moh-pms-api artisan schedule:run
+
+# or once daily
+15 2 * * * docker exec moh-pms-api ./moh-pms-api artisan backup:database
 ```
 
-**MySQL (when `DB_CONNECTION=mysql`):**
+Restore flow in the UI: **Test** (throwaway DB `moh_pms_restore_test`) → then **Restore** (type `RESTORE`). Cross-engine files (wrong primary) can be deleted but not restored.
+
+Manual CLI dump (still valid):
 
 ```bash
-docker exec moh-pms-mysql mysqldump -u pms -p moh_pms > backup-$(date +%F).sql
-# Password is in deploy/.env → DB_PASSWORD / MYSQL_PASSWORD
+# Postgres primary
+docker exec moh-pms-postgres pg_dump -U pms moh_pms | gzip > /home/moh-pms/db-backups/moh_pms_postgres-$(date +%F).sql.gz
+
+# MySQL primary
+docker exec moh-pms-mysql mysqldump -u pms -p"$DB_PASSWORD" moh_pms | gzip > /home/moh-pms/db-backups/moh_pms_mysql-$(date +%F).sql.gz
 ```
 
 ### MySQL → PostgreSQL cutover

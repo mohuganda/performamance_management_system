@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM alpine:3.21
 
 WORKDIR /app
-RUN apk add --no-cache ca-certificates tzdata curl
+RUN apk add --no-cache ca-certificates tzdata curl gzip postgresql-client mysql-client docker-cli
 
 COPY --from=builder /app/moh-pms-api /app/moh-pms-api
 COPY --from=builder /app/config /app/config

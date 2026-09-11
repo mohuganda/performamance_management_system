@@ -372,6 +372,8 @@ Leave policy is **database-driven** — not hardcoded. HR admins manage types, e
 - OOS requests include GPS destination; configurable geofence (default 500 m)
 - Attendance clocks verify location against approved OOS destination
 - Verification statuses: `verified_oos`, `outside_geofence`, `at_duty_station`
+- Mobile API guide (places + OOS lifecycle + approvals): **[docs/api/mobile-oos-approvals.md](docs/api/mobile-oos-approvals.md)**
+- Interactive docs: **http://localhost:3030/swagger/index.html**
 
 ## Database design (normalized)
 
@@ -394,6 +396,7 @@ Primary green `#2E7D32`, accent gold `#F9A825`, background `#F8FAF5`. Typography
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | End users (staff, supervisors, HR, admins) |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Server deployment: `setup.sh`, Docker, nginx, firewall, TLS |
 | [docs/REACT_IMPLEMENTATION_GUIDE.md](docs/REACT_IMPLEMENTATION_GUIDE.md) | Frontend implementation notes |
+| [docs/api/mobile-oos-approvals.md](docs/api/mobile-oos-approvals.md) | Mobile places, OOS lifecycle, approvals API |
 | [leave.md](leave.md) | Leave policy reference |
 
 ## License

@@ -26,6 +26,8 @@ func Api() {
 	notificationController := controllers.NewNotificationController()
 	kpiAdminController := controllers.NewKpiAdminController()
 	listsAdminController := controllers.NewListsAdminController()
+	placesController := controllers.NewPlacesController()
+	backupAdminController := controllers.NewBackupAdminController()
 
 	authenticate := &middleware.Authenticate{}
 
@@ -146,6 +148,17 @@ func Api() {
 				lists.Get("/oos-reasons", listsAdminController.ListOosReasons)
 				lists.Put("/oos-reasons/{id}", listsAdminController.UpdateOosReason)
 				lists.Post("/oos-reasons", listsAdminController.CreateOosReason)
+				lists.Get("/cached-places", placesController.AdminList)
+				lists.Post("/cached-places/seed", placesController.AdminSeed)
+			})
+
+			auth.Prefix("admin/backups").Middleware(middleware.Permission("settings.manage", "settings.backups.manage")).Group(func(backups route.Router) {
+				backups.Get("/", backupAdminController.List)
+				backups.Get("/status", backupAdminController.Status)
+				backups.Post("/run", backupAdminController.Run)
+				backups.Delete("/{filename}", backupAdminController.Delete)
+				backups.Post("/{filename}/test-restore", backupAdminController.TestRestore)
+				backups.Post("/{filename}/restore", backupAdminController.Restore)
 			})
 
 			auth.Prefix("admin/rbac").Middleware(middleware.Permission("auth.roles.manage")).Group(func(rbac route.Router) {
@@ -194,6 +207,9 @@ func Api() {
 			auth.Post("/uploads", uploadController.UploadAttachment)
 			auth.Get("/files", uploadController.ServeUploadedFile)
 
+			auth.Get("/places/search", placesController.Search)
+			auth.Get("/places/{id}", placesController.Show)
+
 			auth.Prefix("mobile").Group(func(mobile route.Router) {
 				mobile.Get("/approvals/inbox", mobileController.ApprovalsInbox)
 				mobile.Get("/approvals/detail", mobileController.ApprovalDetail)
@@ -219,7 +235,11 @@ func Api() {
 
 				mobile.Middleware(middleware.Permission("oos.requests.view")).Get("/out-of-station/reasons", mobileController.ListOosReasons)
 				mobile.Middleware(middleware.Permission("oos.requests.view")).Get("/out-of-station/requests", mobileController.ListOosRequests)
+				mobile.Middleware(middleware.Permission("oos.requests.view")).Get("/out-of-station/requests/{id}", mobileController.GetOosRequest)
 				mobile.Middleware(middleware.Permission("oos.requests.create")).Post("/out-of-station/requests", mobileController.CreateOosRequest)
+				mobile.Middleware(middleware.Permission("oos.requests.create")).Put("/out-of-station/requests/{id}", mobileController.UpdateOosRequest)
+				mobile.Middleware(middleware.Permission("oos.requests.create")).Post("/out-of-station/requests/{id}/submit", mobileController.SubmitOosRequest)
+				mobile.Middleware(middleware.Permission("oos.requests.create")).Post("/out-of-station/requests/{id}/cancel", mobileController.CancelOosRequest)
 
 				mobile.Middleware(middleware.Permission("attendance.clock")).Post("/attendance/clock", mobileController.Clock)
 				mobile.Middleware(middleware.Permission("attendance.view")).Get("/attendance/clocks", mobileController.ListAttendance)

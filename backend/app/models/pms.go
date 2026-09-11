@@ -515,6 +515,25 @@ type AttendanceClock struct {
 	LocationLabel                 *string    `json:"location_label,omitempty"`
 }
 
+type CachedPlace struct {
+	orm.Model
+	Name             string     `json:"name" gorm:"column:name"`
+	Address          *string    `json:"address,omitempty" gorm:"column:address"`
+	Latitude         float64    `json:"latitude" gorm:"column:latitude"`
+	Longitude        float64    `json:"longitude" gorm:"column:longitude"`
+	CountryCode      string     `json:"country_code" gorm:"column:country_code"`
+	GooglePlaceID    *string    `json:"google_place_id,omitempty" gorm:"column:google_place_id;uniqueIndex"`
+	NormalizedName   string     `json:"normalized_name" gorm:"column:normalized_name"`
+	Source           string     `json:"source" gorm:"column:source"`
+	SourceRef        *string    `json:"source_ref,omitempty" gorm:"column:source_ref"`
+	HitCount         int        `json:"hit_count" gorm:"column:hit_count;default:0"`
+	LastHitAt        *time.Time `json:"last_hit_at,omitempty" gorm:"column:last_hit_at"`
+}
+
+func (CachedPlace) TableName() string {
+	return "cached_places"
+}
+
 type SystemConfig struct {
 	orm.Model
 	Key         string `gorm:"uniqueIndex"`

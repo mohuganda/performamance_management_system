@@ -1,3 +1,5 @@
+import apiClient from '../client'
+
 export type PlacePrediction = {
   place_id: string
   description: string
@@ -5,6 +7,11 @@ export type PlacePrediction = {
     main_text: string
     secondary_text?: string
   }
+  cached_place_id?: number
+  latitude?: number
+  longitude?: number
+  name?: string
+  address?: string
 }
 
 export type PlaceDetails = {
@@ -12,135 +19,89 @@ export type PlaceDetails = {
   address: string
   latitude: number
   longitude: number
+  cached_place_id?: number
 }
 
-type AutocompleteSuggestion = {
-  placePrediction?: {
-    placeId?: string
-    place?: string
-    text?: { text?: string }
-    structuredFormat?: {
-      mainText?: { text?: string }
-      secondaryText?: { text?: string }
-    }
-  }
+type CachedPlaceRow = {
+  id: number
+  name: string
+  address?: string | null
+  latitude: number
+  longitude: number
+  country_code?: string
+  google_place_id?: string | null
+  source?: string
 }
 
-type PlaceDetailsResponse = {
-  id?: string
-  displayName?: { text?: string }
-  formattedAddress?: string
-  location?: { latitude?: number; longitude?: number }
-}
-
-function placesErrorMessage(status: number, body: string): string {
-  if (status === 403 || status === 401) {
-    return 'Maps API key was rejected. Enable Places API (New) for this key in Google Cloud.'
-  }
-  if (status === 429) {
-    return 'Place search rate limit reached. Wait a moment and try again.'
-  }
-  try {
-    const parsed = JSON.parse(body) as { error?: { message?: string } }
-    if (parsed.error?.message) return parsed.error.message
-  } catch {
-    /* ignore */
-  }
-  return 'Could not load place suggestions.'
-}
-
-/** Places API (New) autocomplete — legacy AutocompleteService is disabled on many projects. */
+/** Local-first place search via PMS API (Google only on cache miss). */
 export async function fetchPlacePredictions(options: {
-  apiKey: string
   input: string
   countryCodes?: string[]
   signal?: AbortSignal
 }): Promise<PlacePrediction[]> {
-  const { apiKey, input, countryCodes = [], signal } = options
-  const body: Record<string, unknown> = {
-    input,
-    languageCode: 'en',
-  }
-  if (countryCodes.length > 0) {
-    body.includedRegionCodes = countryCodes.map((c) => c.toUpperCase())
-  }
-
-  const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
-    method: 'POST',
+  const { input, countryCodes = [], signal } = options
+  if (input.trim().length < 2) return []
+  const country = countryCodes[0] || undefined
+  const { data } = await apiClient.get<CachedPlaceRow[]>('/places/search', {
+    params: { q: input.trim(), country },
     signal,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': apiKey,
-    },
-    body: JSON.stringify(body),
   })
-
-  const text = await response.text()
-  if (!response.ok) {
-    throw new Error(placesErrorMessage(response.status, text))
-  }
-
-  const data = JSON.parse(text || '{}') as { suggestions?: AutocompleteSuggestion[] }
-  const suggestions = data.suggestions ?? []
-  const predictions: PlacePrediction[] = []
-
-  for (const item of suggestions) {
-    const prediction = item.placePrediction
-    if (!prediction) continue
-    const placeId =
-      prediction.placeId ||
-      (prediction.place?.startsWith('places/') ? prediction.place.slice('places/'.length) : prediction.place)
-    if (!placeId) continue
-    const main = prediction.structuredFormat?.mainText?.text?.trim()
-    const secondary = prediction.structuredFormat?.secondaryText?.text?.trim()
-    const description = prediction.text?.text?.trim() || [main, secondary].filter(Boolean).join(', ')
-    if (!description) continue
-    predictions.push({
-      place_id: placeId,
+  const rows = Array.isArray(data) ? data : []
+  return rows.map((row) => {
+    const address = row.address?.trim() || ''
+    const description = address && address !== row.name ? `${row.name}, ${address}` : row.name
+    return {
+      place_id: row.google_place_id || `cached:${row.id}`,
+      cached_place_id: row.id,
       description,
+      name: row.name,
+      address: address || row.name,
+      latitude: row.latitude,
+      longitude: row.longitude,
       structured_formatting: {
-        main_text: main || description.split(',')[0] || description,
-        ...(secondary ? { secondary_text: secondary } : {}),
+        main_text: row.name,
+        ...(address && address !== row.name ? { secondary_text: address } : {}),
       },
-    })
-  }
-
-  return predictions
+    }
+  })
 }
 
+/** Resolve selection — prefer coords already returned from search. */
 export async function fetchPlaceDetails(options: {
-  apiKey: string
   placeId: string
+  cachedPlaceId?: number
+  latitude?: number
+  longitude?: number
+  name?: string
+  address?: string
   signal?: AbortSignal
 }): Promise<PlaceDetails> {
-  const { apiKey, placeId, signal } = options
-  const id = placeId.startsWith('places/') ? placeId.slice('places/'.length) : placeId
-  const response = await fetch(
-    `https://places.googleapis.com/v1/places/${encodeURIComponent(id)}`,
-    {
-      method: 'GET',
-      signal,
-      headers: {
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location',
-      },
-    },
-  )
-
-  const text = await response.text()
-  if (!response.ok) {
-    throw new Error(placesErrorMessage(response.status, text))
+  const { cachedPlaceId, latitude, longitude, name, address, placeId, signal } = options
+  if (
+    typeof latitude === 'number' &&
+    typeof longitude === 'number' &&
+    (name || address)
+  ) {
+    return {
+      name: name || address || 'Selected place',
+      address: address || name || 'Selected place',
+      latitude,
+      longitude,
+      cached_place_id: cachedPlaceId,
+    }
   }
-
-  const data = JSON.parse(text || '{}') as PlaceDetailsResponse
-  const latitude = data.location?.latitude
-  const longitude = data.location?.longitude
-  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-    throw new Error('Selected place is missing map coordinates.')
+  const id =
+    cachedPlaceId ||
+    (placeId.startsWith('cached:') ? Number(placeId.slice('cached:'.length)) : 0)
+  if (!id) {
+    throw new Error('Place details unavailable')
   }
-
-  const name = data.displayName?.text?.trim() || data.formattedAddress?.trim() || 'Selected place'
-  const address = data.formattedAddress?.trim() || name
-
-  return { name, address, latitude, longitude }
+  const { data } = await apiClient.get<CachedPlaceRow>(`/places/${id}`, { signal })
+  return {
+    name: data.name,
+    address: data.address?.trim() || data.name,
+    latitude: data.latitude,
+    longitude: data.longitude,
+    cached_place_id: data.id,
+  }
 }

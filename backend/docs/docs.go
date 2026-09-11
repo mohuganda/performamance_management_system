@@ -674,6 +674,34 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/admin/lists/cached-places": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-lists"
+                ],
+                "summary": "Admin list cached places (view-only)",
+                "responses": {}
+            }
+        },
+        "/api/v1/admin/lists/cached-places/seed": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-lists"
+                ],
+                "summary": "Seed cached places from facilities (immutable snapshots)",
+                "responses": {}
+            }
+        },
         "/api/v1/admin/lists/departments": {
             "get": {
                 "security": [
@@ -1414,7 +1442,7 @@ const docTemplate = `{
                 "tags": [
                     "auth"
                 ],
-                "summary": "Update profile photo and/or signature",
+                "summary": "Update profile photo, signature, and/or duty-station pin",
                 "responses": {}
             }
         },
@@ -1770,6 +1798,48 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/mobile/approvals/detail": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "module = leave | out_of_station | ppa | report (etc.); id = request/report id",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-approvals"
+                ],
+                "summary": "Approval detail with trail",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Module key",
+                        "name": "module",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Record id",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/mobile/approvals/inbox": {
             "get": {
                 "security": [
@@ -1777,24 +1847,17 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Pending leave, out-of-station, PPA, and appraisal items for the signed-in approver. Requires a linked staff record.",
+                "description": "Pending and recent approval items across leave, OOS, and performance",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "approvals"
+                    "mobile-approvals"
                 ],
                 "summary": "Unified approvals inbox",
                 "responses": {
                     "200": {
-                        "description": "items, stats (counts and average approval time)",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "403": {
-                        "description": "User not linked to staff",
+                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -1971,6 +2034,31 @@ const docTemplate = `{
                     "mobile-leave"
                 ],
                 "summary": "Full dynamic leave configuration",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/leave/oic-candidates": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-leave"
+                ],
+                "summary": "List staff candidates for Officer in Charge",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -2162,7 +2250,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Mirrors attend/requests/newRequest with map-picked destination coordinates for GPS verification",
+                "description": "Mirrors attend/requests/newRequest with map-picked destination coordinates for GPS verification. Optional cached_place_id copies snapshot destination fields.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2187,6 +2275,160 @@ const docTemplate = `{
                 "responses": {
                     "201": {
                         "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/out-of-station/requests/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Owner or assigned approver",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-out-of-station"
+                ],
+                "summary": "Get out-of-station request by id",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-out-of-station"
+                ],
+                "summary": "Update draft out-of-station request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Draft fields",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.oosRequestBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/out-of-station/requests/{id}/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-out-of-station"
+                ],
+                "summary": "Cancel draft or pending out-of-station request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/out-of-station/requests/{id}/submit": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-out-of-station"
+                ],
+                "summary": "Submit draft out-of-station request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -2415,6 +2657,77 @@ const docTemplate = `{
                 "responses": {}
             }
         },
+        "/api/v1/places/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "places"
+                ],
+                "summary": "Search cached places (local-first, Google fallback)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search text",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ISO country override (e.g. ug)",
+                        "name": "country",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": true
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/places/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "places"
+                ],
+                "summary": "Get cached place by id",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Place ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/uploads": {
             "post": {
                 "security": [
@@ -2493,6 +2806,9 @@ const docTemplate = `{
                 },
                 "longitude": {
                     "type": "number"
+                },
+                "out_of_station_request_id": {
+                    "type": "integer"
                 }
             }
         },
@@ -2507,6 +2823,9 @@ const docTemplate = `{
                 },
                 "medical_report_url": {
                     "type": "string"
+                },
+                "oic_staff_id": {
+                    "type": "integer"
                 },
                 "reason": {
                     "type": "string"
@@ -2574,6 +2893,9 @@ const docTemplate = `{
                 "attachment_url": {
                     "type": "string"
                 },
+                "cached_place_id": {
+                    "type": "integer"
+                },
                 "destination_address": {
                     "type": "string"
                 },
@@ -2629,7 +2951,7 @@ const docTemplate = `{
         "models.LeaveApprovalStage": {
             "type": "object",
             "properties": {
-                "approverRole": {
+                "approver_role": {
                     "type": "string"
                 },
                 "code": {
@@ -2644,16 +2966,16 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
-                "isActive": {
+                "is_active": {
                     "type": "boolean"
                 },
-                "isRequired": {
+                "is_required": {
                     "type": "boolean"
                 },
-                "jobTitleID": {
+                "job_title_id": {
                     "type": "integer"
                 },
-                "jobTitleMatch": {
+                "job_title_match": {
                     "type": "string"
                 },
                 "name": {
@@ -2663,22 +2985,21 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "sequence": {
-                    "type": "integer",
-                    "format": "int32"
+                    "type": "integer"
                 },
-                "skipIfUnresolved": {
+                "skip_if_unresolved": {
                     "type": "boolean"
                 },
-                "stageType": {
+                "stage_type": {
                     "type": "string"
                 },
-                "supervisorSequence": {
+                "supervisor_sequence": {
                     "type": "integer"
                 },
                 "updated_at": {
                     "$ref": "#/definitions/github_com_goravel_framework_support_carbon.DateTime"
                 },
-                "workflowProfileCode": {
+                "workflow_profile_code": {
                     "type": "string"
                 }
             }
@@ -2772,6 +3093,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
+                    "type": "string"
+                },
+                "path": {
                     "type": "string"
                 },
                 "size": {

@@ -110,6 +110,19 @@ export type CatalogRefreshResult = {
   institution_types_total: number
 }
 
+export type CachedPlaceListRow = {
+  id: number
+  name: string
+  address?: string | null
+  latitude: number
+  longitude: number
+  country_code: string
+  source: string
+  source_ref?: string | null
+  hit_count: number
+  created_at?: string
+}
+
 export const listsAdminService = {
   summary: async (): Promise<ListsSummary> => {
     const { data } = await apiClient.get('/admin/lists/summary')
@@ -150,6 +163,20 @@ export const listsAdminService = {
   listOosReasons: async (params: ListParams = {}) => {
     const { data } = await apiClient.get('/admin/lists/oos-reasons', { params })
     return unwrapPaginated<OosReasonListRow>(data) as PaginatedResponse<OosReasonListRow>
+  },
+  listCachedPlaces: async (
+    params: ListParams & { country_code?: string; source?: string } = {},
+  ) => {
+    const { data } = await apiClient.get('/admin/lists/cached-places', { params })
+    return unwrapPaginated<CachedPlaceListRow>(data) as PaginatedResponse<CachedPlaceListRow>
+  },
+  seedCachedPlaces: async () => {
+    const { data } = await apiClient.post<{
+      message: string
+      inserted: number
+      skipped: number
+    }>('/admin/lists/cached-places/seed')
+    return data
   },
   regionOptions: async (): Promise<RegionOption[]> => {
     const { data } = await apiClient.get('/admin/lists/region-options')

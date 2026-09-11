@@ -45,5 +45,7 @@ func Migrations() []schema.Migration {
 		&migrations.M20260901000002ProfilePhotoPathColumn{},
 		&migrations.M20260911000001AttendanceOosAccuracy{},
 		&migrations.M20260911000002DutyStationPin{},
+		&migrations.M20260911000003CachedPlaces{},
+		&migrations.M20260911000004SettingsBackupsPermission{},
 	}
 }
