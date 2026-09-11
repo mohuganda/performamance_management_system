@@ -20,13 +20,29 @@ func NewAttendanceService() *AttendanceService {
 }
 
 type ClockInput struct {
-	StaffID        uint
-	ClockType      string
-	Latitude       float64
-	Longitude      float64
-	AccuracyMeters float64
-	LocationLabel  string
-	Source         string
+	StaffID                 uint
+	ClockType               string
+	Latitude                float64
+	Longitude               float64
+	AccuracyMeters          float64
+	LocationLabel           string
+	Source                  string
+	OutOfStationRequestID   *uint
+}
+
+// LocationAccuracyPercent returns 100 at the destination and 0 at/beyond the geofence edge.
+func LocationAccuracyPercent(distanceM, radiusM float64) float64 {
+	if radiusM <= 0 {
+		return 0
+	}
+	pct := (1 - distanceM/radiusM) * 100
+	if pct < 0 {
+		return 0
+	}
+	if pct > 100 {
+		return 100
+	}
+	return pct
 }
 
 func (s *AttendanceService) Clock(input ClockInput) (models.AttendanceClock, error) {
@@ -62,19 +78,49 @@ func (s *AttendanceService) Clock(input ClockInput) (models.AttendanceClock, err
 		LocationLabel:      strPtrIf(input.LocationLabel),
 	}
 
-	if oosReq, err := s.oos.ActiveApprovedForDate(input.StaffID, now); err == nil && oosReq != nil {
+	settings := NewSettingsService()
+	minPct := float64(settings.GetInt("oos.attendance.min_accuracy_percent", 70))
+	defaultRadius := settings.GetInt("oos.attendance.default_geofence_radius_meters", 500)
+
+	if input.OutOfStationRequestID != nil && *input.OutOfStationRequestID > 0 {
+		oosReq, err := s.oos.GetApprovedOwnedForDate(input.StaffID, *input.OutOfStationRequestID, now)
+		if err != nil || oosReq == nil {
+			return models.AttendanceClock{}, fmt.Errorf("select a valid approved out-of-station request covering today")
+		}
 		distance := haversineMeters(input.Latitude, input.Longitude, oosReq.DestinationLatitude, oosReq.DestinationLongitude)
+		radius := float64(oosReq.GeofenceRadiusMeters)
+		if radius <= 0 {
+			radius = float64(defaultRadius)
+		}
+		pct := LocationAccuracyPercent(distance, radius)
 		clock.OutOfStationRequestID = &oosReq.ID
 		clock.DistanceFromDestinationMeters = &distance
-
-		radius := float64(oosReq.GeofenceRadiusMeters)
-		if distance <= radius {
+		clock.LocationAccuracyPercent = &pct
+		if pct >= minPct {
 			clock.VerificationStatus = "verified_oos"
 		} else {
 			clock.VerificationStatus = "outside_geofence"
 		}
 	} else {
-		clock.VerificationStatus = "at_duty_station"
+		eff := NewDutyStationService().ResolveEffectiveDutyStation(input.StaffID)
+		minPct := float64(settings.GetInt("attendance.duty_station.min_accuracy_percent", 90))
+		if eff.Source == "none" || !HasCoords(eff.Latitude, eff.Longitude) {
+			clock.VerificationStatus = "unverified_no_station_geo"
+		} else {
+			distance := haversineMeters(input.Latitude, input.Longitude, eff.Latitude, eff.Longitude)
+			radius := float64(eff.RadiusMeters)
+			if radius <= 0 {
+				radius = float64(settings.GetInt("attendance.duty_station.default_geofence_radius_meters", 500))
+			}
+			pct := LocationAccuracyPercent(distance, radius)
+			clock.DistanceFromDestinationMeters = &distance
+			clock.LocationAccuracyPercent = &pct
+			if pct >= minPct {
+				clock.VerificationStatus = "at_duty_station"
+			} else {
+				clock.VerificationStatus = "outside_geofence"
+			}
+		}
 	}
 
 	if err := facades.Orm().Query().Create(&clock); err != nil {

@@ -142,3 +142,20 @@ func (s *OutOfStationService) ActiveApprovedForDate(staffID uint, date time.Time
 	}
 	return &req, nil
 }
+
+// GetApprovedOwnedForDate returns a specific approved OOS request owned by staff covering date.
+func (s *OutOfStationService) GetApprovedOwnedForDate(staffID, requestID uint, date time.Time) (*models.OutOfStationRequest, error) {
+	day := date.Format("2006-01-02")
+	var req models.OutOfStationRequest
+	err := facades.Orm().Query().
+		Where("id", requestID).
+		Where("staff_id", staffID).
+		Where("status", "approved").
+		Where("start_date <= ?", day).
+		Where("end_date >= ?", day).
+		First(&req)
+	if err != nil || req.ID == 0 {
+		return nil, fmt.Errorf("approved out-of-station request not found for today")
+	}
+	return &req, nil
+}

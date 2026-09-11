@@ -108,6 +108,14 @@ func (s *SettingsService) PublicSettings() map[string]any {
 			"api_key":      s.GetString("google_maps.api_key", ""),
 			"country_code": s.GetString("google_maps.country_code", "ug"),
 		},
+		"oos_attendance": map[string]any{
+			"min_accuracy_percent":             s.GetInt("oos.attendance.min_accuracy_percent", 70),
+			"default_geofence_radius_meters": s.GetInt("oos.attendance.default_geofence_radius_meters", 500),
+		},
+		"duty_station_attendance": map[string]any{
+			"min_accuracy_percent":             s.GetInt("attendance.duty_station.min_accuracy_percent", 90),
+			"default_geofence_radius_meters": s.GetInt("attendance.duty_station.default_geofence_radius_meters", 500),
+		},
 		"ui": s.publicUiConfig(),
 	}
 }
@@ -138,6 +146,18 @@ func (s *SettingsService) dataSourcesConfig() map[string]any {
 		"google_maps": map[string]any{
 			"api_key":      s.GetString("google_maps.api_key", ""),
 			"country_code": s.GetString("google_maps.country_code", "ug"),
+		},
+		"oos": map[string]any{
+			"attendance": map[string]any{
+				"min_accuracy_percent":             s.GetInt("oos.attendance.min_accuracy_percent", 70),
+				"default_geofence_radius_meters": s.GetInt("oos.attendance.default_geofence_radius_meters", 500),
+			},
+		},
+		"attendance": map[string]any{
+			"duty_station": map[string]any{
+				"min_accuracy_percent":             s.GetInt("attendance.duty_station.min_accuracy_percent", 90),
+				"default_geofence_radius_meters": s.GetInt("attendance.duty_station.default_geofence_radius_meters", 500),
+			},
 		},
 		"analytics": NewAnalyticsStore().Status(),
 	}
@@ -268,7 +288,9 @@ func (s *SettingsService) UpdateGroup(group string, payload map[string]any) erro
 		}
 		isPublic := strings.HasPrefix(key, "ihris.") ||
 			strings.HasPrefix(key, "notifications.") ||
-			strings.HasPrefix(key, "google_maps.")
+			strings.HasPrefix(key, "google_maps.") ||
+			strings.HasPrefix(key, "oos.attendance.") ||
+			strings.HasPrefix(key, "attendance.duty_station.")
 		if err := s.Set(key, group, value, isPublic); err != nil {
 			return err
 		}

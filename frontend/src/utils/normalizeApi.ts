@@ -251,3 +251,55 @@ export function normalizePermissionCodes(value: unknown): string[] {
   }
   return []
 }
+
+export function normalizeLeaveApprovalStages(value: unknown): Array<{
+  id: number
+  code: string
+  name: string
+  sequence: number
+  approver_role: string
+  description?: string
+  is_active: boolean
+  workflow_profile_code?: string
+  stage_type?: string
+  scope?: string
+  job_title_id?: number | null
+  job_title_match?: string | null
+  supervisor_sequence?: number | null
+  is_required?: boolean
+  skip_if_unresolved?: boolean
+}> {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((raw) => {
+      const row = raw as Record<string, unknown>
+      const id = Number(field<number>(row, 'id', 'ID'))
+      if (!id) return null
+      const jobTitleIdRaw = field<number>(row, 'job_title_id', 'JobTitleID')
+      const supervisorSeqRaw = field<number>(row, 'supervisor_sequence', 'SupervisorSequence')
+      const description = field<string>(row, 'description', 'Description')
+      const jobTitleMatch = field<string>(row, 'job_title_match', 'JobTitleMatch')
+      return {
+        id,
+        code: String(field<string>(row, 'code', 'Code') ?? ''),
+        name: String(field<string>(row, 'name', 'Name') ?? ''),
+        sequence: Number(field<number>(row, 'sequence', 'Sequence') ?? 0),
+        approver_role: String(field<string>(row, 'approver_role', 'ApproverRole') ?? ''),
+        description: description != null ? String(description) : undefined,
+        is_active: Boolean(field<boolean>(row, 'is_active', 'IsActive') ?? true),
+        workflow_profile_code: String(
+          field<string>(row, 'workflow_profile_code', 'WorkflowProfileCode') ?? 'default',
+        ),
+        stage_type: String(field<string>(row, 'stage_type', 'StageType') ?? 'supervisor'),
+        scope: String(field<string>(row, 'scope', 'Scope') ?? 'none'),
+        job_title_id: jobTitleIdRaw != null ? Number(jobTitleIdRaw) : null,
+        job_title_match: jobTitleMatch != null ? String(jobTitleMatch) : null,
+        supervisor_sequence: supervisorSeqRaw != null ? Number(supervisorSeqRaw) : null,
+        is_required: Boolean(field<boolean>(row, 'is_required', 'IsRequired') ?? true),
+        skip_if_unresolved: Boolean(
+          field<boolean>(row, 'skip_if_unresolved', 'SkipIfUnresolved') ?? true,
+        ),
+      }
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null)
+}

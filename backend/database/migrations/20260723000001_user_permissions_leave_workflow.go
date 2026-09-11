@@ -1,6 +1,8 @@
 package migrations
 
 import (
+	"strings"
+
 	"github.com/goravel/framework/contracts/database/schema"
 
 	"goravel/app/facades"
@@ -51,6 +53,10 @@ func (r *M20260723000001UserPermissionsLeaveWorkflow) seedLeaveWorkflowPermissio
 	rbac := services.NewRbacService()
 	for _, roleCode := range []string{"admin", "super_admin"} {
 		if err := rbac.GrantPermission(roleCode, perm.Code); err != nil {
+			// Roles are created by seeders; allow migrate on empty databases.
+			if strings.Contains(strings.ToLower(err.Error()), "role not found") {
+				continue
+			}
 			return err
 		}
 	}

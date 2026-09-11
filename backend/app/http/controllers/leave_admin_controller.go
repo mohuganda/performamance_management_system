@@ -256,7 +256,7 @@ func (c *LeaveAdminController) ListApprovalStages(ctx http.Context) http.Respons
 	if err != nil {
 		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
 	}
-	return ctx.Response().Success().Json(rows)
+	return ctx.Response().Success().Json(mapLeaveApprovalStages(rows))
 }
 
 // CreateApprovalStage godoc
@@ -276,7 +276,7 @@ func (c *LeaveAdminController) CreateApprovalStage(ctx http.Context) http.Respon
 	if err != nil {
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 	}
-	return ctx.Response().Status(http.StatusCreated).Json(row)
+	return ctx.Response().Status(http.StatusCreated).Json(mapLeaveApprovalStage(row))
 }
 
 // UpdateApprovalStage godoc
@@ -298,7 +298,7 @@ func (c *LeaveAdminController) UpdateApprovalStage(ctx http.Context) http.Respon
 	if err != nil {
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 	}
-	return ctx.Response().Success().Json(row)
+	return ctx.Response().Success().Json(mapLeaveApprovalStage(row))
 }
 
 func (c *LeaveAdminController) DeleteApprovalStage(ctx http.Context) http.Response {
@@ -323,7 +323,7 @@ func (c *LeaveAdminController) ListWorkflowStages(ctx http.Context) http.Respons
 	if err != nil {
 		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
 	}
-	return ctx.Response().Success().Json(rows)
+	return ctx.Response().Success().Json(mapLeaveApprovalStages(rows))
 }
 
 func (c *LeaveAdminController) Overview(ctx http.Context) http.Response {
@@ -437,4 +437,50 @@ func (c *LeaveAdminController) ListDepartments(ctx http.Context) http.Response {
 		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
 	}
 	return ctx.Response().Success().Json(rows)
+}
+
+type leaveApprovalStageDTO struct {
+	ID                   uint    `json:"id"`
+	Code                 string  `json:"code"`
+	Name                 string  `json:"name"`
+	Sequence             uint8   `json:"sequence"`
+	ApproverRole         string  `json:"approver_role"`
+	Description          *string `json:"description,omitempty"`
+	IsActive             bool    `json:"is_active"`
+	WorkflowProfileCode  string  `json:"workflow_profile_code"`
+	StageType            string  `json:"stage_type"`
+	Scope                string  `json:"scope"`
+	JobTitleID           *uint   `json:"job_title_id,omitempty"`
+	JobTitleMatch        *string `json:"job_title_match,omitempty"`
+	SupervisorSequence   *uint8  `json:"supervisor_sequence,omitempty"`
+	IsRequired           bool    `json:"is_required"`
+	SkipIfUnresolved     bool    `json:"skip_if_unresolved"`
+}
+
+func mapLeaveApprovalStage(row models.LeaveApprovalStage) leaveApprovalStageDTO {
+	return leaveApprovalStageDTO{
+		ID:                  row.ID,
+		Code:                row.Code,
+		Name:                row.Name,
+		Sequence:            row.Sequence,
+		ApproverRole:        row.ApproverRole,
+		Description:         row.Description,
+		IsActive:            row.IsActive,
+		WorkflowProfileCode: row.WorkflowProfileCode,
+		StageType:           row.StageType,
+		Scope:               row.Scope,
+		JobTitleID:          row.JobTitleID,
+		JobTitleMatch:       row.JobTitleMatch,
+		SupervisorSequence:  row.SupervisorSequence,
+		IsRequired:          row.IsRequired,
+		SkipIfUnresolved:    row.SkipIfUnresolved,
+	}
+}
+
+func mapLeaveApprovalStages(rows []models.LeaveApprovalStage) []leaveApprovalStageDTO {
+	out := make([]leaveApprovalStageDTO, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, mapLeaveApprovalStage(row))
+	}
+	return out
 }

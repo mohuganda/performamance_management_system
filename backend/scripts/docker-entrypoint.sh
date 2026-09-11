@@ -78,6 +78,7 @@ if [ "${LOAD_DEMO_DATA:-true}" = "true" ]; then
       echo "[entrypoint] Demo seed complete"
     else
       echo "[entrypoint] FATAL: db:seed failed on first boot"
+      rm -f "${SEED_MARKER}"
       exit 1
     fi
   fi

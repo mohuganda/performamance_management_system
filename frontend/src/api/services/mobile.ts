@@ -170,20 +170,73 @@ export const oosService = {
   },
 }
 
+export type AttendanceClockRow = {
+  id: number
+  clock_type: string
+  clocked_at: string
+  latitude: number
+  longitude: number
+  verification_status: string
+  out_of_station_request_id?: number | null
+  distance_from_destination_meters?: number | null
+  location_accuracy_percent?: number | null
+  accuracy_meters?: number | null
+  location_label?: string | null
+}
+
+function numOrNull(value: unknown): number | null {
+  if (value == null || value === '') return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+export function normalizeAttendanceClock(raw: unknown): AttendanceClockRow {
+  const row = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const id = Number(row.id ?? row.ID ?? 0)
+  return {
+    id,
+    clock_type: String(row.clock_type ?? row.ClockType ?? row.action ?? ''),
+    clocked_at: String(row.clocked_at ?? row.ClockedAt ?? row.created_at ?? row.CreatedAt ?? ''),
+    latitude: Number(row.latitude ?? row.Latitude ?? 0),
+    longitude: Number(row.longitude ?? row.Longitude ?? 0),
+    verification_status: String(
+      row.verification_status ?? row.VerificationStatus ?? 'pending',
+    ),
+    out_of_station_request_id: numOrNull(
+      row.out_of_station_request_id ?? row.OutOfStationRequestID,
+    ),
+    distance_from_destination_meters: numOrNull(
+      row.distance_from_destination_meters ?? row.DistanceFromDestinationMeters,
+    ),
+    location_accuracy_percent: numOrNull(
+      row.location_accuracy_percent ?? row.LocationAccuracyPercent,
+    ),
+    accuracy_meters: numOrNull(row.accuracy_meters ?? row.AccuracyMeters),
+    location_label:
+      row.location_label != null || row.LocationLabel != null
+        ? String(row.location_label ?? row.LocationLabel)
+        : null,
+  }
+}
+
 export const attendanceService = {
   clock: async (payload: {
-    action: 'in' | 'out'
+    clock_type: 'in' | 'out'
     latitude: number
     longitude: number
     accuracy_meters?: number
-    notes?: string
+    location_label?: string
+    out_of_station_request_id?: number
   }) => {
     const { data } = await apiClient.post('/mobile/attendance/clock', payload)
-    return data
+    return normalizeAttendanceClock(data)
   },
   listClocks: async (params?: { from?: string; to?: string }) => {
     const { data } = await apiClient.get('/mobile/attendance/clocks', { params })
-    return data
+    const rows = Array.isArray(data) ? data : Array.isArray((data as { data?: unknown })?.data)
+      ? ((data as { data: unknown[] }).data)
+      : []
+    return rows.map(normalizeAttendanceClock)
   },
 }
 

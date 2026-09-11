@@ -363,6 +363,22 @@ For an existing MySQL deployment, use the offline one-shot tool (stops the app b
 
 See `docs/superpowers/specs/2026-09-10-postgres-primary-dual-db-design.md` for the approved design.
 
+### Fast image rebuilds
+
+Dockerfiles use BuildKit cache mounts (Go module/build cache, npm cache) and no longer install a C compiler for the API image (`CGO_ENABLED=0`).
+
+`./scripts/build-fast.sh` **cross-compiles the API on the host** (typically ~20–40s on Apple Silicon) and packs a slim Alpine runtime image. Use `--docker-go` only when you need a full in-container Go build (much slower under Colima).
+
+```bash
+export DOCKER_BUILDKIT=1
+./scripts/build-fast.sh            # host Go compile + frontend
+./scripts/build-fast.sh backend    # API only (host compile)
+./scripts/build-fast.sh backend --docker-go
+./scripts/smoke-postgres-migrate.sh  # throwaway Postgres — full migrate smoke test
+```
+
+`setup.sh` enables BuildKit automatically and builds backend/frontend as separate steps so a frontend-only change does not always rebuild the Go image from scratch.
+
 ### Update application
 
 ```bash

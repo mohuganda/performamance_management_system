@@ -301,7 +301,7 @@ func (s *AuthService) CreateUser(input models.User, roleCodes []string, plainPas
 	return input, nil
 }
 
-func (s *AuthService) UpdateProfile(userID uint, profilePhoto, signatureImage *string) (models.User, error) {
+func (s *AuthService) UpdateProfile(userID uint, profilePhoto, signatureImage *string, duty *DutyStationUpdate) (models.User, error) {
 	var user models.User
 	if err := facades.Orm().Query().Where("id", userID).First(&user); err != nil {
 		return models.User{}, fmt.Errorf("user not found")
@@ -357,6 +357,16 @@ func (s *AuthService) UpdateProfile(userID uint, profilePhoto, signatureImage *s
 			user.SignatureUpdatedAt = &now
 		} else {
 			return models.User{}, fmt.Errorf("unsupported signature payload")
+		}
+	}
+
+	if duty != nil && (duty.Clear || duty.Latitude != nil || duty.Longitude != nil) {
+		if user.StaffID == nil || *user.StaffID == 0 {
+			return models.User{}, fmt.Errorf("staff linkage required to set duty station")
+		}
+		uid := userID
+		if err := UpsertStaffDutyStation(*user.StaffID, &uid, *duty); err != nil {
+			return models.User{}, err
 		}
 	}
 

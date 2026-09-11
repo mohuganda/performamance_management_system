@@ -1,6 +1,8 @@
 package migrations
 
 import (
+	"strings"
+
 	"goravel/app/facades"
 	"goravel/app/models"
 	"goravel/app/services"
@@ -44,6 +46,10 @@ func (r *M20260721000001SettingsTabPermissions) Up() error {
 	}
 	for _, code := range adminPerms {
 		if err := rbac.GrantPermission("admin", code); err != nil {
+			// Admin role is created by seeders; allow migrate on empty DBs.
+			if strings.Contains(strings.ToLower(err.Error()), "role not found") {
+				continue
+			}
 			return err
 		}
 	}

@@ -166,6 +166,14 @@ export function SettingsPage() {
     enabled: true,
   })
   const [googleMapsForm, setGoogleMapsForm] = useState({ api_key: '', country_code: 'ug' })
+  const [oosAttendanceForm, setOosAttendanceForm] = useState({
+    min_accuracy_percent: 70,
+    default_geofence_radius_meters: 500,
+  })
+  const [dutyStationAttendanceForm, setDutyStationAttendanceForm] = useState({
+    min_accuracy_percent: 90,
+    default_geofence_radius_meters: 500,
+  })
   const [emailForm, setEmailForm] = useState({
     driver: 'smtp',
     smtp: { host: '', port: '587', username: '', password: '', encryption: 'tls', from_address: '', from_name: '' },
@@ -216,6 +224,19 @@ export function SettingsPage() {
       api_key: settingsQuery.data.data_sources.google_maps?.api_key ?? '',
       country_code: settingsQuery.data.data_sources.google_maps?.country_code ?? 'ug',
     })
+    setOosAttendanceForm({
+      min_accuracy_percent:
+        settingsQuery.data.data_sources.oos?.attendance?.min_accuracy_percent ?? 70,
+      default_geofence_radius_meters:
+        settingsQuery.data.data_sources.oos?.attendance?.default_geofence_radius_meters ?? 500,
+    })
+    setDutyStationAttendanceForm({
+      min_accuracy_percent:
+        settingsQuery.data.data_sources.attendance?.duty_station?.min_accuracy_percent ?? 90,
+      default_geofence_radius_meters:
+        settingsQuery.data.data_sources.attendance?.duty_station?.default_geofence_radius_meters ??
+        500,
+    })
     setEmailForm({
       driver: settingsQuery.data.email.driver ?? 'smtp',
       smtp: { ...emailForm.smtp, ...settingsQuery.data.email.smtp },
@@ -254,10 +275,14 @@ export function SettingsPage() {
         ihris: ihrisForm,
         hrm_attend: hrmAttendForm,
         google_maps: googleMapsForm,
+        oos: { attendance: oosAttendanceForm },
+        attendance: { duty_station: dutyStationAttendanceForm },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
       queryClient.invalidateQueries({ queryKey: ['public-config', 'maps'] })
+      queryClient.invalidateQueries({ queryKey: ['public-config', 'oos-attendance'] })
+      queryClient.invalidateQueries({ queryKey: ['public-config', 'duty-station-attendance'] })
       toast.success('Data source settings saved.')
     },
     onError: (error: unknown) => notifyApiError(error, 'Could not save data sources'),
@@ -827,6 +852,112 @@ export function SettingsPage() {
                   loading={saveDataSources.isPending}
                 >
                   Save Google Maps settings
+                </Button>
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
+              title="Out-of-station attendance"
+              description="Accuracy score for clocks linked to an approved trip. Percentage is the default score; radius is used for the map geofence and scoring."
+              accent="green"
+            >
+              <div className="space-y-4">
+                <Field>
+                  <Input
+                    {...mt}
+                    type="number"
+                    label="Minimum accuracy to pass (%)"
+                    value={String(oosAttendanceForm.min_accuracy_percent)}
+                    onChange={(e) =>
+                      setOosAttendanceForm((f) => ({
+                        ...f,
+                        min_accuracy_percent: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                      }))
+                    }
+                  />
+                  <p className="mt-1 text-xs text-ui-muted">
+                    Clocks below this percentage (default 70%) are flagged as outside the destination geofence.
+                  </p>
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    type="number"
+                    label="Default geofence radius (meters)"
+                    value={String(oosAttendanceForm.default_geofence_radius_meters)}
+                    onChange={(e) =>
+                      setOosAttendanceForm((f) => ({
+                        ...f,
+                        default_geofence_radius_meters: Math.max(1, Number(e.target.value) || 500),
+                      }))
+                    }
+                  />
+                  <p className="mt-1 text-xs text-ui-muted">
+                    ≈ {(oosAttendanceForm.default_geofence_radius_meters / 1609.34).toFixed(2)} miles. Used when a
+                    request has no radius set.
+                  </p>
+                </Field>
+                <Button
+                  {...mt}
+                  size="sm"
+                  className="rounded-sm bg-moh-green normal-case"
+                  onClick={() => saveDataSources.mutate()}
+                  loading={saveDataSources.isPending}
+                >
+                  Save OOS attendance settings
+                </Button>
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
+              title="Duty-station attendance"
+              description="Accuracy score for clocks at the employee duty station (personal pin or facility). Default pass mark is 90%."
+              accent="green"
+            >
+              <div className="space-y-4">
+                <Field>
+                  <Input
+                    {...mt}
+                    type="number"
+                    label="Minimum accuracy to pass (%)"
+                    value={String(dutyStationAttendanceForm.min_accuracy_percent)}
+                    onChange={(e) =>
+                      setDutyStationAttendanceForm((f) => ({
+                        ...f,
+                        min_accuracy_percent: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                      }))
+                    }
+                  />
+                  <p className="mt-1 text-xs text-ui-muted">
+                    Clocks below this percentage (default 90%) are flagged as outside the duty-station geofence.
+                  </p>
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    type="number"
+                    label="Default geofence radius (meters)"
+                    value={String(dutyStationAttendanceForm.default_geofence_radius_meters)}
+                    onChange={(e) =>
+                      setDutyStationAttendanceForm((f) => ({
+                        ...f,
+                        default_geofence_radius_meters: Math.max(1, Number(e.target.value) || 500),
+                      }))
+                    }
+                  />
+                  <p className="mt-1 text-xs text-ui-muted">
+                    ≈ {(dutyStationAttendanceForm.default_geofence_radius_meters / 1609.34).toFixed(2)} miles.
+                    Used when the personal pin has no radius set.
+                  </p>
+                </Field>
+                <Button
+                  {...mt}
+                  size="sm"
+                  className="rounded-sm bg-moh-green normal-case"
+                  onClick={() => saveDataSources.mutate()}
+                  loading={saveDataSources.isPending}
+                >
+                  Save duty-station attendance settings
                 </Button>
               </div>
             </SettingsSection>

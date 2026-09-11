@@ -57,6 +57,18 @@ export type AdminSettings = {
       api_key: string
       country_code?: string
     }
+    oos?: {
+      attendance?: {
+        min_accuracy_percent: number
+        default_geofence_radius_meters: number
+      }
+    }
+    attendance?: {
+      duty_station?: {
+        min_accuracy_percent: number
+        default_geofence_radius_meters: number
+      }
+    }
     analytics?: {
       enabled: boolean
       connected: boolean
@@ -224,6 +236,11 @@ export const staffManagementService = {
       lock_email?: boolean
       lock_department?: boolean
       lock_mobile?: boolean
+      duty_station_latitude?: number
+      duty_station_longitude?: number
+      duty_station_label?: string
+      duty_station_radius_meters?: number
+      clear_duty_station?: boolean
     },
   ) => {
     const { data } = await apiClient.patch(`/admin/staff/${staffId}/hr-profile`, payload)

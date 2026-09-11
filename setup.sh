@@ -155,6 +155,10 @@ require_docker() {
     err "Docker Compose plugin is not available. Install docker-compose-plugin."
     exit 1
   fi
+  # Faster iterative builds (layer + Go/npm cache mounts in Dockerfiles)
+  export DOCKER_BUILDKIT=1
+  export COMPOSE_DOCKER_CLI_BUILD=1
+  export COMPOSE_BAKE="${COMPOSE_BAKE:-true}"
 }
 
 compose() {
@@ -539,11 +543,17 @@ write_override
 log "Using primary database: ${DB_CONNECTION}"
 log "Gateway will bind host port ${HTTP_PORT} (map to container :80)"
 
-log "Building and starting containers..."
+log "Building images (BuildKit)..."
 if [[ "${REBUILD}" == "true" ]]; then
-  compose build --no-cache
+  compose build --no-cache backend
+  compose build --no-cache frontend
+else
+  compose build backend
+  compose build frontend
 fi
-compose up -d --build
+
+log "Starting containers..."
+compose up -d --remove-orphans
 
 if [[ "${INSTALL_HOST_NGINX}" == "true" ]]; then
   install_host_nginx

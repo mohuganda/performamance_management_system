@@ -134,14 +134,19 @@ func (c *StaffAdminController) ListDepartments(ctx http.Context) http.Response {
 }
 
 type updateHrProfileBody struct {
-	HrDepartmentID *uint  `json:"hr_department_id"`
-	HrEmail        string `json:"hr_email"`
-	HrMobile       string `json:"hr_mobile"`
-	Notes          string `json:"notes"`
-	IsLeaveManager *bool  `json:"is_leave_manager"`
-	LockEmail      bool   `json:"lock_email"`
-	LockDepartment bool   `json:"lock_department"`
-	LockMobile     bool   `json:"lock_mobile"`
+	HrDepartmentID          *uint    `json:"hr_department_id"`
+	HrEmail                 string   `json:"hr_email"`
+	HrMobile                string   `json:"hr_mobile"`
+	Notes                   string   `json:"notes"`
+	IsLeaveManager          *bool    `json:"is_leave_manager"`
+	LockEmail               bool     `json:"lock_email"`
+	LockDepartment          bool     `json:"lock_department"`
+	LockMobile              bool     `json:"lock_mobile"`
+	DutyStationLatitude     *float64 `json:"duty_station_latitude"`
+	DutyStationLongitude    *float64 `json:"duty_station_longitude"`
+	DutyStationLabel        *string  `json:"duty_station_label"`
+	DutyStationRadiusMeters *int     `json:"duty_station_radius_meters"`
+	ClearDutyStation        bool     `json:"clear_duty_station"`
 }
 
 func (c *StaffAdminController) UpdateHrProfile(ctx http.Context) http.Response {
@@ -154,15 +159,22 @@ func (c *StaffAdminController) UpdateHrProfile(ctx http.Context) http.Response {
 		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
 	}
 	userID, _ := authctx.UserID(ctx)
+	dutyUpdate := body.ClearDutyStation || body.DutyStationLatitude != nil || body.DutyStationLongitude != nil
 	if err := c.staffAdmin.UpdateHrProfile(uint(staffID), userID, services.StaffHrProfileInput{
-		HrDepartmentID: body.HrDepartmentID,
-		HrEmail:        body.HrEmail,
-		HrMobile:       body.HrMobile,
-		Notes:          body.Notes,
-		IsLeaveManager: body.IsLeaveManager,
-		LockEmail:      body.LockEmail,
-		LockDepartment: body.LockDepartment,
-		LockMobile:     body.LockMobile,
+		HrDepartmentID:          body.HrDepartmentID,
+		HrEmail:                 body.HrEmail,
+		HrMobile:                body.HrMobile,
+		Notes:                   body.Notes,
+		IsLeaveManager:          body.IsLeaveManager,
+		LockEmail:               body.LockEmail,
+		LockDepartment:          body.LockDepartment,
+		LockMobile:              body.LockMobile,
+		DutyStationLatitude:     body.DutyStationLatitude,
+		DutyStationLongitude:    body.DutyStationLongitude,
+		DutyStationLabel:        body.DutyStationLabel,
+		DutyStationRadiusMeters: body.DutyStationRadiusMeters,
+		ClearDutyStation:        body.ClearDutyStation,
+		UpdateDutyStation:       dutyUpdate,
 	}); err != nil {
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 	}

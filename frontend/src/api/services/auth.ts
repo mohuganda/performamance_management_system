@@ -47,6 +47,14 @@ export interface StaffSupervisorSlot {
   supervisor_job_title?: string
 }
 
+export type EffectiveDutyStation = {
+  latitude: number
+  longitude: number
+  label: string
+  radius_meters: number
+  source: 'personal' | 'facility' | 'none' | string
+}
+
 export interface StaffProfileDetail {
   staff_id: number
   ihris_pid: string
@@ -62,7 +70,10 @@ export interface StaffProfileDetail {
   cadre?: string
   region?: string
   job_title?: string
+  facility_id?: number
   facility_name?: string
+  facility_latitude?: number | null
+  facility_longitude?: number | null
   institution_type?: string
   department_name?: string
   hr_department_name?: string
@@ -75,6 +86,11 @@ export interface StaffProfileDetail {
   supervisor_name?: string
   supervisors?: StaffSupervisorSlot[]
   ihris_last_sync_at?: string
+  duty_station_latitude?: number | null
+  duty_station_longitude?: number | null
+  duty_station_label?: string | null
+  duty_station_radius_meters?: number | null
+  effective_duty_station?: EffectiveDutyStation
 }
 
 export interface MeResponse {
@@ -104,6 +120,11 @@ export interface MeResponse {
 export interface UpdateProfilePayload {
   profile_photo?: string
   signature_image?: string
+  duty_station_latitude?: number
+  duty_station_longitude?: number
+  duty_station_label?: string
+  duty_station_radius_meters?: number
+  clear_duty_station?: boolean
 }
 
 export const authService = {

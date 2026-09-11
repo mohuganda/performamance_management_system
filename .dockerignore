@@ -1,0 +1,15 @@
+# Root context is used by frontend/Dockerfile.prod
+.git
+.cursor
+data
+**/node_modules
+**/dist
+**/.vite
+backend
+deploy/.env
+**/*.md
+**/coverage
+**/.DS_Store
+tmp
+storage
+agent-transcripts

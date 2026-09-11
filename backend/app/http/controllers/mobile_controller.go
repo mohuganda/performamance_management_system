@@ -305,11 +305,12 @@ func (c *MobileController) CreateOosRequest(ctx http.Context) http.Response {
 }
 
 type clockBody struct {
-	ClockType      string  `json:"clock_type"`
-	Latitude       float64 `json:"latitude"`
-	Longitude      float64 `json:"longitude"`
-	AccuracyMeters float64 `json:"accuracy_meters"`
-	LocationLabel  string  `json:"location_label"`
+	ClockType               string  `json:"clock_type"`
+	Latitude                float64 `json:"latitude"`
+	Longitude               float64 `json:"longitude"`
+	AccuracyMeters          float64 `json:"accuracy_meters"`
+	LocationLabel           string  `json:"location_label"`
+	OutOfStationRequestID   *uint   `json:"out_of_station_request_id"`
 }
 
 // Clock godoc
@@ -334,13 +335,14 @@ func (c *MobileController) Clock(ctx http.Context) http.Response {
 	}
 
 	clock, err := c.attendance.Clock(services.ClockInput{
-		StaffID:        staffID,
-		ClockType:      body.ClockType,
-		Latitude:       body.Latitude,
-		Longitude:      body.Longitude,
-		AccuracyMeters: body.AccuracyMeters,
-		LocationLabel:  body.LocationLabel,
-		Source:         "mobile",
+		StaffID:               staffID,
+		ClockType:             body.ClockType,
+		Latitude:              body.Latitude,
+		Longitude:             body.Longitude,
+		AccuracyMeters:        body.AccuracyMeters,
+		LocationLabel:         body.LocationLabel,
+		Source:                "mobile",
+		OutOfStationRequestID: body.OutOfStationRequestID,
 	})
 	if err != nil {
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})

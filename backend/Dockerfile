@@ -1,14 +1,19 @@
-# Build stage
+# syntax=docker/dockerfile:1.7
+
+# Build stage — CGO disabled, so no build-base/gcc (saves minutes on cold builds)
 FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
-RUN apk add --no-cache git build-base
+RUN apk add --no-cache git ca-certificates
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+	go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/moh-pms-api .
+RUN --mount=type=cache,target=/go/pkg/mod \
+	--mount=type=cache,target=/root/.cache/go-build \
+	CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/moh-pms-api .
 
 # Runtime stage
 FROM alpine:3.21
@@ -26,7 +31,7 @@ COPY --from=builder /app/resources /app/resources
 COPY --from=builder /app/public /app/public
 COPY --from=builder /app/scripts /app/scripts
 
-RUN chmod +x /app/scripts/docker-entrypoint.sh
+RUN chmod +x /app/scripts/docker-entrypoint.sh /app/scripts/docker-dev-entrypoint.sh
 
 EXPOSE 3030
 CMD ["/app/scripts/docker-entrypoint.sh"]

@@ -6,8 +6,14 @@ import { Briefcase, Camera, Contact, PenLine, Shield, UserCircle } from 'lucide-
 import { getApiErrorMessage } from '@/api/client'
 import { authService } from '@/api/services/auth'
 import { leaveService } from '@/api/services/mobile'
+import { Badge } from '@/components/atoms/Badge'
 import { AuthenticatorSetupCard } from '@/components/molecules/AuthenticatorSetupCard'
 import { EmployeeBiodataSummary } from '@/components/molecules/EmployeeBiodataSummary'
+import { OosAttendanceMap } from '@/components/molecules/OosAttendanceMap'
+import {
+  PlaceAutocompleteField,
+  type PlaceSelection,
+} from '@/components/molecules/PlaceAutocompleteField'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
 import { UserAvatar } from '@/components/atoms/UserAvatar'
@@ -117,6 +123,7 @@ export function ProfilePage() {
   const photoInputRef = useRef<HTMLInputElement>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [signatureDraft, setSignatureDraft] = useState<string | null>(null)
+  const [dutyPlaceQuery, setDutyPlaceQuery] = useState('')
 
   const meQuery = useQuery({
     queryKey: ['auth', 'me'],
@@ -174,7 +181,27 @@ export function ProfilePage() {
     setSignatureDraft(null)
   }
 
+  const handleDutyStationSelect = async (place: PlaceSelection) => {
+    setDutyPlaceQuery(place.name || place.address)
+    await updateMutation.mutateAsync({
+      duty_station_latitude: place.latitude,
+      duty_station_longitude: place.longitude,
+      duty_station_label: place.name || place.address,
+    })
+  }
+
   const leaveBalances = Array.isArray(balancesQuery.data) ? balancesQuery.data : []
+  const effective = staff?.effective_duty_station
+  const hasPersonalPin =
+    staff?.duty_station_latitude != null &&
+    staff?.duty_station_longitude != null &&
+    (Number(staff.duty_station_latitude) !== 0 || Number(staff.duty_station_longitude) !== 0)
+  const sourceLabel =
+    effective?.source === 'personal'
+      ? 'Personal'
+      : effective?.source === 'facility'
+        ? 'Facility'
+        : 'Not set'
 
   return (
     <div>
@@ -317,6 +344,64 @@ export function ProfilePage() {
                 <ProfileField label="Region" value={staff.region} />
                 <ProfileField label="iHRIS last sync" value={formatDateTime(staff.ihris_last_sync_at)} />
               </ProfileFieldGrid>
+
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Duty station
+                  </p>
+                  <Badge
+                    label={sourceLabel}
+                    tone={
+                      effective?.source === 'personal'
+                        ? 'success'
+                        : effective?.source === 'facility'
+                          ? 'neutral'
+                          : 'warning'
+                    }
+                  />
+                </div>
+                <Typography {...mt} className="mb-3 text-xs text-ui-muted">
+                  Clocks at duty station are scored against this pin (default pass mark 90%). Personal
+                  pin overrides the facility location.
+                </Typography>
+                {effective && effective.source !== 'none' ? (
+                  <OosAttendanceMap
+                    className="mb-4"
+                    destination={{
+                      lat: effective.latitude,
+                      lng: effective.longitude,
+                      name: effective.label || staff.facility_name || 'Duty station',
+                    }}
+                    radiusMeters={effective.radius_meters || 500}
+                  />
+                ) : (
+                  <Typography {...mt} className="mb-3 text-sm text-amber-800">
+                    No duty-station location yet. Set a personal pin below, or ask HR to map the
+                    facility.
+                  </Typography>
+                )}
+                <PlaceAutocompleteField
+                  label="Set personal duty-station pin"
+                  value={dutyPlaceQuery || staff.duty_station_label || ''}
+                  onChange={setDutyPlaceQuery}
+                  onPlaceSelect={(place) => void handleDutyStationSelect(place)}
+                  placeholder="Search building, address, or landmark"
+                />
+                {hasPersonalPin ? (
+                  <Button
+                    {...mt}
+                    size="sm"
+                    variant="outlined"
+                    className="mt-3 rounded-sm border-moh-green/30 normal-case text-moh-green"
+                    disabled={updateMutation.isPending}
+                    onClick={() => updateMutation.mutate({ clear_duty_station: true })}
+                  >
+                    Clear personal pin
+                  </Button>
+                ) : null}
+              </div>
+
               {(staff.supervisors?.length ?? 0) > 0 || staff.supervisor_name ? (
                 <div className="mt-4 border-t border-gray-100 pt-3">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
