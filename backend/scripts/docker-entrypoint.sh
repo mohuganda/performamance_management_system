@@ -37,6 +37,9 @@ REDIS_PORT=$(env_quote "${REDIS_PORT:-6379}")
 ADMIN_EMAIL=$(env_quote "${ADMIN_EMAIL}")
 ADMIN_PASSWORD=$(env_quote "${ADMIN_PASSWORD}")
 ADMIN_NAME=$(env_quote "${ADMIN_NAME:-PMS Administrator}")
+SUPER_ADMIN_EMAIL=$(env_quote "${SUPER_ADMIN_EMAIL:-}")
+SUPER_ADMIN_PASSWORD=$(env_quote "${SUPER_ADMIN_PASSWORD:-}")
+SUPER_ADMIN_NAME=$(env_quote "${SUPER_ADMIN_NAME:-System Super Admin}")
 FILE_STORAGE_ROOT=$(env_quote "${FILE_STORAGE_ROOT:-/var/lib/moh-pms/media}")
 EOF
 }

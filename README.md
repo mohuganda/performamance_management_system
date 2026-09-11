@@ -148,6 +148,45 @@ docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env --profil
 
 Migrations run automatically on API container start. Demo seed does **not** re-run if `${DATA_DIR}/storage/.initial_seed_complete` exists.
 
+#### Rebuild **with** demo accounts (training / empty Postgres)
+
+`--rebuild` alone does **not** load demo data if `LOAD_DEMO_DATA=false` in `deploy/.env` or if the seed marker file already exists. Production uses **`deploy/.env`**, not `backend/.env`.
+
+```bash
+# 1) Clear the one-time seed marker (path = your --data-dir)
+rm -f /var/performance_data/storage/.initial_seed_complete
+
+# 2) Rebuild and force demo seed (writes LOAD_DEMO_DATA=true into deploy/.env)
+./setup.sh --host 45.10.154.35 --http-port 8081 \
+  --data-dir /var/performance_data \
+  --demo-data \
+  --rebuild
+```
+
+Demo logins (password from `ADMIN_PASSWORD`, default `Demo@Moh2026!`):
+
+| Email | Role |
+|-------|------|
+| `worker@moh.go.ug` | Staff |
+| `admin@moh.go.ug` | Admin |
+| `hr@moh.go.ug` | HR |
+
+Or seed without a full rebuild:
+
+```bash
+rm -f /var/performance_data/storage/.initial_seed_complete
+# ensure LOAD_DEMO_DATA=true in deploy/.env
+docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env --profile app up -d backend
+# or:
+docker exec moh-pms-api ./moh-pms-api artisan db:seed --force
+```
+
+#### Super admin (`SUPER_ADMIN_*`)
+
+`backend/.env` is **local only**. Production reads `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` from **`deploy/.env`** (passed into the API container). If those vars are missing, `EnsureSuperAdmin` is a no-op and `super@moh.go.ug` will not work.
+
+After `git pull` of the wiring fix, set them in `deploy/.env` (or re-run `setup.sh` so they are written), recreate the API, then sign in with that email/password (min 12 characters).
+
 ### Quick examples
 
 ```bash
