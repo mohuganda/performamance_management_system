@@ -41,9 +41,12 @@ performamance_management_system/
     ├── DEPLOYMENT.md
     ├── USER_GUIDE.md
     ├── ANALYTICS.md
+    ├── api/mobile-oos-approvals.md    # Places, OOS, approvals API guide
     └── REACT_IMPLEMENTATION_GUIDE.md
 ```
 
+**Mobile / integrations API guide:** [docs/api/mobile-oos-approvals.md](docs/api/mobile-oos-approvals.md)  
+Interactive Swagger: prefer **`/swagger/index.html`** (see [Migrations & seeding](#migrations--seeding) for port notes).
 ## Quick Start (development — auto reload)
 
 For day-to-day feature work, use the **dev stack** so Go and React changes apply automatically (no rebuild):
@@ -121,9 +124,29 @@ chmod +x setup.sh
 ./setup.sh --no-demo-data --admin-password 'YourSecureAdminPass123!'
 ```
 
-Open **`http://<server-ip>/`** in your browser (append `:PORT` if not using port 80). Swagger: **`http://<server-ip>[:PORT]/swagger/index.html`**.
+Open **`http://<server-ip>/`** in your browser (append `:PORT` if not using port 80).
+
+| Surface | URL |
+|---------|-----|
+| Web UI | `http://<host>[:PORT]/` |
+| API | `http://<host>[:PORT]/api/v1` |
+| Swagger | `http://<host>[:PORT]/swagger/index.html` |
+
+Always open **`/swagger/index.html`**. Bare `/swagger` can 301 to port 80 and break when the gateway listens on **8080/8081**.
 
 After flipping **`DB_CONNECTION`**, see [Migrations & seeding](#migrations--seeding) — use the MySQL→Postgres cutover script or an explicit `db:seed`, not env alone.
+
+### Update an existing server
+
+```bash
+cd /path/to/performamance_management_system
+git pull
+./setup.sh --rebuild          # rebuild images + restart (keeps volumes / DB)
+# or, gateway-only after nginx conf changes:
+docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env --profile app up -d gateway
+```
+
+Migrations run automatically on API container start. Demo seed does **not** re-run if `${DATA_DIR}/storage/.initial_seed_complete` exists.
 
 ### Quick examples
 
@@ -179,10 +202,10 @@ The Docker **gateway** container routes `/` → frontend, `/api/` → backend, a
 ### Stack layout
 
 ```text
-Browser → nginx gateway (:80)
-            ├── /        → frontend (static React build)
-            ├── /api/    → backend (:3030)
-            └── /swagger → API docs
+Browser → nginx gateway (:80 or :HTTP_PORT)
+            ├── /                    → frontend (static React build)
+            ├── /api/                → backend (:3030)
+            └── /swagger/index.html  → API docs (use full path)
 ```
 
 ## Local Development
@@ -235,6 +258,8 @@ Schema changes live in `backend/database/migrations/` and are registered in `bac
 | `go run . artisan migrate` | Apply pending schema migrations only |
 | `go run . artisan db:seed` | RBAC/roles, admin user, configs, catalogs, demo accounts |
 | `./scripts/load-demo-data.sh` | Local helper: migrate + seed against your `.env` DB |
+| `docker exec moh-pms-api ./moh-pms-api artisan migrate` | Same migrate inside production API container |
+| `docker exec moh-pms-api ./moh-pms-api artisan db:seed --force` | Seed once inside production API container |
 
 **Docker / production boot** (`backend/scripts/docker-entrypoint.sh`):
 
@@ -242,30 +267,48 @@ Schema changes live in `backend/database/migrations/` and are registered in `bac
 2. Runs **`db:seed`** only when `LOAD_DEMO_DATA=true` **and** the marker `${DATA_DIR}/storage/.initial_seed_complete` is absent.
 3. If `LOAD_DEMO_DATA=false` (typical production via `./setup.sh --no-demo-data`), you get **schema only** — no users/roles until you seed or import data.
 
-**Switching to Postgres does not copy MySQL data and does not re-seed by itself.** Changing `DB_CONNECTION=postgres` only points the API at Postgres.
+#### Switching MySQL → Postgres (production)
+
+**Changing `DB_CONNECTION=postgres` alone does not copy MySQL data and does not re-seed.** Use the cutover script while MySQL still has the live data:
+
+```bash
+# Optional dry-run (stops app containers in real runs; dry-run exits early)
+./scripts/migrate-mysql-to-postgres.sh --dry-run
+
+# Offline cutover: stop app → migrate schema on Postgres → pgloader → flip deploy/.env
+./scripts/migrate-mysql-to-postgres.sh
+
+# If a previous attempt left schema/data on Postgres:
+./scripts/migrate-mysql-to-postgres.sh --force
+```
+
+Then bring the app back (script prints the compose command; or `./setup.sh --rebuild`).
 
 | Goal | What to run |
 |------|-------------|
-| Keep existing MySQL data | `./scripts/migrate-mysql-to-postgres.sh` (schema + **pgloader**; leaves `LOAD_DEMO_DATA=false`) |
-| Fresh Postgres + demo/admin seed | Remove `${DATA_DIR}/storage/.initial_seed_complete`, set `LOAD_DEMO_DATA=true`, recreate backend — or `docker exec moh-pms-api ./moh-pms-api artisan db:seed --force` |
-| Force re-seed after a wipe | `rm -f "${DATA_DIR:-/var/lib/moh-pms}/storage/.initial_seed_complete"` then restart with `LOAD_DEMO_DATA=true` |
+| Keep existing MySQL data | `./scripts/migrate-mysql-to-postgres.sh` (schema + **pgloader**) |
+| Fresh Postgres + demo/admin seed | `rm -f "${DATA_DIR:-/var/lib/moh-pms}/storage/.initial_seed_complete"`, set `LOAD_DEMO_DATA=true`, recreate backend — or `docker exec moh-pms-api ./moh-pms-api artisan db:seed --force` |
+| Force re-seed after a wipe | Remove the seed marker, then restart with `LOAD_DEMO_DATA=true` |
 
-Check row counts after cutover/seed:
+Verify after cutover/seed:
 
 ```bash
 docker exec moh-pms-postgres psql -U pms -d moh_pms -c 'SELECT COUNT(*) FROM users;'
+grep DB_CONNECTION deploy/.env
 ```
 
-Full cutover notes: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+More detail: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) (Database backups + MySQL → PostgreSQL cutover).
 
-Regenerate Swagger after API changes:
+#### Swagger
+
+Regenerate after API changes:
 
 ```bash
 cd backend
 ~/go/bin/swag init --parseDependency --parseInternal
 ```
 
-Use **`/swagger/index.html`** (not bare `/swagger`) when the gateway is on a non-80 port (e.g. `:8081`), so redirects do not drop the port.
+Open **`/swagger/index.html`**. On non-80 ports (e.g. `http://45.x.x.x:8081/swagger/index.html`) do not rely on bare `/swagger`.
 
 ### Frontend
 

@@ -202,6 +202,20 @@ if ! docker run --rm --network "${NET}" dimitri/pgloader:latest \
     "postgresql://${DB_USER}:${DB_PASS}@postgres:5432/${DB_NAME}"
 fi
 
+log "Repairing users.is_active from MySQL (TINYINT → boolean cast is often wrong)..."
+# Without this, login returns "account is disabled" even when row counts match.
+docker exec moh-pms-mysql mysql -N -u"${DB_USER}" -p"${DB_PASS}" "${DB_NAME}" \
+  -e "SELECT LOWER(email), IF(COALESCE(is_active,1)=1,'true','false') FROM users;" 2>/dev/null \
+| while IFS=$'\t' read -r email active; do
+    [[ -z "${email}" ]] && continue
+    email_esc="${email//\'/\'\'}"
+    docker exec moh-pms-postgres psql -U "${DB_USER}" -d "${DB_NAME}" -v ON_ERROR_STOP=1 \
+      -c "UPDATE users SET is_active = ${active} WHERE LOWER(email) = '${email_esc}';" >/dev/null
+  done || warn "Could not sync users.is_active from MySQL — run: UPDATE users SET is_active = true;"
+
+docker exec moh-pms-postgres psql -U "${DB_USER}" -d "${DB_NAME}" -c \
+  "UPDATE roles SET is_active = COALESCE(is_active, true) WHERE is_active IS NULL;" >/dev/null || true
+
 log "Resetting Postgres sequences..."
 docker exec -i moh-pms-postgres psql -U "${DB_USER}" -d "${DB_NAME}" <<'SQL'
 DO $$
@@ -237,6 +251,24 @@ for table in users staff_hr_profiles leave_requests system_configs; do
     ok=false
   fi
 done
+
+pg_users="$(table_count_postgres users | tr -d '[:space:]')"
+pg_users="${pg_users:-ERR}"
+if [[ "${pg_users}" == "0" || "${pg_users}" == "ERR" ]]; then
+  err "Postgres users table is empty after pgloader (count=${pg_users})."
+  err "Refusing to flip DB_CONNECTION. Fix data load, then re-run with --force."
+  err "Check: docker logs from the pgloader step above; MySQL still has rows?"
+  exit 1
+fi
+
+if [[ "${ok}" != "true" ]]; then
+  warn "Some table counts mismatched — investigate before removing MySQL."
+  if [[ "${FORCE}" != "true" ]]; then
+    err "Refusing to flip DB_CONNECTION on mismatched counts. Re-run with --force to override."
+    exit 2
+  fi
+  warn "--force set: continuing despite mismatches."
+fi
 
 log "Updating deploy/.env to postgres..."
 tmp="$(mktemp)"
@@ -277,5 +309,6 @@ EOF
 
 if [[ "${ok}" != "true" ]]; then
   warn "Some table counts mismatched — investigate before removing MySQL."
-  exit 2
 fi
+
+exit 0
