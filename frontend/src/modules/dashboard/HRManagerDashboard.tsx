@@ -19,6 +19,7 @@ import { MetricCard } from '@/components/dashboard/MetricCard'
 import { UgandaDistrictMap } from '@/components/dashboard/UgandaDistrictMap'
 import { DashboardErrorBoundary } from '@/components/organisms/DashboardErrorBoundary'
 import { DashboardHeader } from '@/components/organisms/DashboardHeader'
+import { EmployeeBiodataSummaryCard } from '@/components/molecules/EmployeeBiodataSummary'
 import { ProgressBar } from '@/components/molecules/ProgressBar'
 import { Card } from '@/components/atoms/Card'
 import { QueryState } from '@/components/organisms/QueryState'
@@ -142,6 +143,7 @@ export function HRManagerDashboard() {
             context={orgContext.display_context ?? 'Ministry of Health Uganda'}
             quarter={quarter}
           />
+          <EmployeeBiodataSummaryCard />
 
           {orgContext.breadcrumb?.length ? (
             <p className="-mt-4 text-xs text-gray-500">
@@ -192,7 +194,7 @@ export function HRManagerDashboard() {
             </div>
           ) : null}
 
-          <Card>
+          <Card className="dashboard-flat-card">
             <ProgressBar
               value={taskCompletion.percent ?? 0}
               label={taskLabel}

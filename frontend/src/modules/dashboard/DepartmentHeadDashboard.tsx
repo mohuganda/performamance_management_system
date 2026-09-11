@@ -9,6 +9,7 @@ import { AttendanceTrendChart } from '@/components/dashboard/AttendanceTrendChar
 import { DashboardDrilldownPanel, useDashboardDrilldown } from '@/components/dashboard/DashboardDrilldownPanel'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { DashboardHeader } from '@/components/organisms/DashboardHeader'
+import { EmployeeBiodataSummaryCard } from '@/components/molecules/EmployeeBiodataSummary'
 import { ProgressBar } from '@/components/molecules/ProgressBar'
 import { Card } from '@/components/atoms/Card'
 import { QueryState } from '@/components/organisms/QueryState'
@@ -54,7 +55,7 @@ export function DepartmentHeadDashboard() {
     xAxis: {
       categories: trendQuarters.map((q) => q.label),
     },
-    yAxis: { min: 50, max: 100, title: { text: 'Task completion %' } },
+    yAxis: { min: 0, max: 100, title: { text: 'Task completion %' } },
     legend: { enabled: false },
     series: [
       {
@@ -84,6 +85,7 @@ export function DepartmentHeadDashboard() {
             context={orgContext.display_context ?? 'Department'}
             quarter={quarter}
           />
+          <EmployeeBiodataSummaryCard />
 
           {orgContext.breadcrumb?.length ? (
             <p className="-mt-4 text-xs text-gray-500">
@@ -93,7 +95,7 @@ export function DepartmentHeadDashboard() {
 
           {integration ? <AttendanceIntegrationBanner data={integration} /> : null}
 
-          <Card>
+          <Card className="dashboard-flat-card">
             <ProgressBar
               value={taskCompletion.percent ?? 0}
               label={taskLabel}

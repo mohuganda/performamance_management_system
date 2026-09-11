@@ -320,12 +320,17 @@ func (c *AuthController) ChangePassword(ctx http.Context) http.Response {
 }
 
 type updateProfileBody struct {
-	ProfilePhoto   *string `json:"profile_photo"`
-	SignatureImage *string `json:"signature_image"`
+	ProfilePhoto            *string  `json:"profile_photo"`
+	SignatureImage          *string  `json:"signature_image"`
+	DutyStationLatitude     *float64 `json:"duty_station_latitude"`
+	DutyStationLongitude    *float64 `json:"duty_station_longitude"`
+	DutyStationLabel        *string  `json:"duty_station_label"`
+	DutyStationRadiusMeters *int     `json:"duty_station_radius_meters"`
+	ClearDutyStation        bool     `json:"clear_duty_station"`
 }
 
 // UpdateProfile godoc
-// @Summary      Update profile photo and/or signature
+// @Summary      Update profile photo, signature, and/or duty-station pin
 // @Tags         auth
 // @Accept       json
 // @Security     BearerAuth
@@ -339,10 +344,21 @@ func (c *AuthController) UpdateProfile(ctx http.Context) http.Response {
 	if err := ctx.Request().Bind(&body); err != nil {
 		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
 	}
-	if body.ProfilePhoto == nil && body.SignatureImage == nil {
+	dutyUpdate := body.ClearDutyStation || body.DutyStationLatitude != nil || body.DutyStationLongitude != nil
+	if body.ProfilePhoto == nil && body.SignatureImage == nil && !dutyUpdate {
 		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "nothing to update"})
 	}
-	user, err := c.auth.UpdateProfile(userID, body.ProfilePhoto, body.SignatureImage)
+	var duty *services.DutyStationUpdate
+	if dutyUpdate {
+		duty = &services.DutyStationUpdate{
+			Latitude:     body.DutyStationLatitude,
+			Longitude:    body.DutyStationLongitude,
+			Label:        body.DutyStationLabel,
+			RadiusMeters: body.DutyStationRadiusMeters,
+			Clear:        body.ClearDutyStation,
+		}
+	}
+	user, err := c.auth.UpdateProfile(userID, body.ProfilePhoto, body.SignatureImage, duty)
 	if err != nil {
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 	}

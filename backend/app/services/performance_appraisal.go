@@ -480,7 +480,6 @@ func (s *PerformanceService) ListPendingAppraisalReviews(supervisorStaffID uint)
 	if err := facades.Orm().Query().
 		WhereIn("staff_id", toAnySlice(supervised)).
 		Where("financial_year_id", fy.ID).
-		Where("report_type", "endterm").
 		WhereIn("status", []any{"submitted", "supervisor_review", "countersigning", "responsible_review"}).
 		Get(&reports); err != nil {
 		return nil, err
@@ -502,9 +501,14 @@ func (s *PerformanceService) ListPendingAppraisalReviews(supervisorStaffID uint)
 		if r.SubmittedAt != nil {
 			item.SubmittedAt = r.SubmittedAt.Format(time.RFC3339)
 		}
-		item.CanAct = s.supervisorCanReview(r, r.PendingSupervisorSequence, supervisorStaffID, "appraiser") ||
-			s.canCountersign(r, supervisorStaffID, s.supervisorsForStaff(r.StaffID)) ||
-			s.canResponsibleOfficer(r, supervisorStaffID)
+		if r.ReportType == "endterm" {
+			item.CanAct = s.supervisorCanReview(r, r.PendingSupervisorSequence, supervisorStaffID, "appraiser") ||
+				s.canCountersign(r, supervisorStaffID, s.supervisorsForStaff(r.StaffID)) ||
+				s.canResponsibleOfficer(r, supervisorStaffID)
+		} else {
+			// Quarterly / midterm reports: any assigned supervisor can approve or return.
+			item.CanAct = r.Status == "submitted" && s.isAssignedSupervisor(supervisorStaffID, r.StaffID)
+		}
 		out = append(out, item)
 	}
 
@@ -516,6 +520,18 @@ func (s *PerformanceService) ListPendingAppraisalReviews(supervisorStaffID uint)
 	})
 
 	return out, nil
+}
+
+func (s *PerformanceService) isAssignedSupervisor(supervisorStaffID, staffID uint) bool {
+	if supervisorStaffID == 0 || staffID == 0 {
+		return false
+	}
+	for _, id := range s.supervisedStaffIDs(supervisorStaffID) {
+		if id == staffID {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *PerformanceService) GetAppraisalForReview(viewerStaffID, reportID uint) (AppraisalBundle, error) {
@@ -552,6 +568,11 @@ func (s *PerformanceService) ReviewAppraisal(supervisorStaffID uint, input Appra
 		return AppraisalBundle{}, fmt.Errorf("performance report not found")
 	}
 
+	// Quarterly / midterm reports use a simple supervisor approve/return flow.
+	if report.ReportType != "endterm" {
+		return s.reviewPeriodReport(supervisorStaffID, report, decision, input.Comments)
+	}
+
 	role := strings.TrimSpace(input.CommentRole)
 	if role == "" {
 		role = "appraiser"
@@ -584,6 +605,39 @@ func (s *PerformanceService) ReviewAppraisal(supervisorStaffID uint, input Appra
 	default:
 		return AppraisalBundle{}, fmt.Errorf("unsupported comment role")
 	}
+}
+
+func (s *PerformanceService) reviewPeriodReport(
+	supervisorStaffID uint,
+	report models.PerformanceReport,
+	decision string,
+	comments string,
+) (AppraisalBundle, error) {
+	if report.Status != "submitted" {
+		return AppraisalBundle{}, fmt.Errorf("this report is not awaiting supervisor approval (status: %s)", report.Status)
+	}
+	if !s.isAssignedSupervisor(supervisorStaffID, report.StaffID) {
+		return AppraisalBundle{}, fmt.Errorf("not authorized to review this report")
+	}
+
+	if decision == "return" {
+		report.Status = "returned"
+		report.ApprovedAt = nil
+		_ = s.appendTrail(report.ID, supervisorStaffID, "returned", "appraiser", comments)
+	} else {
+		now := time.Now()
+		report.Status = "approved"
+		report.ApprovedAt = &now
+		_ = s.appendTrail(report.ID, supervisorStaffID, "approved", "appraiser", comments)
+	}
+	if err := facades.Orm().Query().Save(&report); err != nil {
+		return AppraisalBundle{}, err
+	}
+
+	return AppraisalBundle{
+		ReportID:     report.ID,
+		ReportStatus: report.Status,
+	}, nil
 }
 
 func (s *PerformanceService) approveAsAppraiser(supervisorStaffID uint, report models.PerformanceReport, input AppraisalReviewInput) (AppraisalBundle, error) {
@@ -667,6 +721,258 @@ type PendingPpaReview struct {
 	SubmittedAt string  `json:"submitted_at,omitempty"`
 }
 
+type PpaReviewDetail struct {
+	PpaID         uint              `json:"ppa_id"`
+	StaffID       uint              `json:"staff_id"`
+	StaffName     string            `json:"staff_name"`
+	Status        string            `json:"status"`
+	TotalWeight   float64           `json:"total_weight"`
+	FinancialYear string            `json:"financial_year"`
+	SubmittedAt   string            `json:"submitted_at,omitempty"`
+	ApprovedAt    string            `json:"approved_at,omitempty"`
+	SubjectGroups []ReportFormGroup `json:"subject_groups"`
+}
+
+type ReportReviewDetail struct {
+	ReportID      uint              `json:"report_id"`
+	ReportType    string            `json:"report_type"`
+	ReportLabel   string            `json:"report_label"`
+	StaffID       uint              `json:"staff_id"`
+	StaffName     string            `json:"staff_name"`
+	Status        string            `json:"status"`
+	FinancialYear string            `json:"financial_year"`
+	SubmittedAt   string            `json:"submitted_at,omitempty"`
+	PpaID         uint              `json:"ppa_id,omitempty"`
+	PpaStatus     string            `json:"ppa_status,omitempty"`
+	SubjectGroups []ReportFormGroup `json:"subject_groups"`
+	Appraisal     *AppraisalBundle  `json:"appraisal,omitempty"`
+}
+
+func (s *PerformanceService) assertCanReviewStaff(viewerStaffID, targetStaffID uint) error {
+	if viewerStaffID == 0 || targetStaffID == 0 {
+		return fmt.Errorf("not authorized")
+	}
+	if viewerStaffID == targetStaffID {
+		return nil
+	}
+	for _, id := range s.supervisedStaffIDs(viewerStaffID) {
+		if id == targetStaffID {
+			return nil
+		}
+	}
+	return fmt.Errorf("not authorized to review this staff member")
+}
+
+func (s *PerformanceService) buildPpaSubjectGroups(ppa models.Ppa) []ReportFormGroup {
+	ctx, _ := s.staffContext(ppa.StaffID)
+	resolved, _ := s.resolveAssignedKpis(ctx)
+
+	var ppaKpis []models.PpaKpi
+	_ = facades.Orm().Query().Where("ppa_id", ppa.ID).Get(&ppaKpis)
+
+	byArea := map[uint8][]ReportKpiField{}
+	for _, row := range ppaKpis {
+		var kpi models.Kpi
+		if err := facades.Orm().Query().Where("id", row.KpiID).First(&kpi); err != nil || kpi.ID == 0 {
+			continue
+		}
+		meta := resolved[kpi.ID]
+		target := 0.0
+		if row.TargetValue != nil {
+			target = *row.TargetValue
+		}
+		field := ReportKpiField{
+			PpaKpiID:            row.ID,
+			KpiID:               kpi.ID,
+			Code:                kpi.KpiCode,
+			Name:                s.kpiDisplayName(kpi),
+			Frequency:           kpi.Frequency,
+			ComputationCategory: kpi.ComputationCategory,
+			SubjectAreaName:     SubjectAreaNamePtr(kpi.SubjectArea),
+			Source:              meta.Source,
+			WeightPercentage:    row.WeightPercentage,
+			TargetValue:         target,
+			IsCumulative:        kpi.IsCumulative,
+		}
+		byArea[SubjectAreaSortKey(kpi.SubjectArea)] = append(byArea[SubjectAreaSortKey(kpi.SubjectArea)], field)
+	}
+
+	groups := make([]ReportFormGroup, 0, len(byArea))
+	areaIDs := make([]uint8, 0, len(byArea))
+	for id := range byArea {
+		areaIDs = append(areaIDs, id)
+	}
+	sort.Slice(areaIDs, func(i, j int) bool { return areaIDs[i] < areaIDs[j] })
+	for _, id := range areaIDs {
+		groups = append(groups, ReportFormGroup{
+			SubjectAreaID:   id,
+			SubjectAreaName: SubjectAreaName(id),
+			Kpis:            byArea[id],
+		})
+	}
+	return groups
+}
+
+func (s *PerformanceService) buildReportSubjectGroups(report models.PerformanceReport, ppa models.Ppa) []ReportFormGroup {
+	entriesByPpaKpi := map[uint]models.PerformanceReportEntry{}
+	var entries []models.PerformanceReportEntry
+	_ = facades.Orm().Query().Where("performance_report_id", report.ID).Get(&entries)
+	for _, e := range entries {
+		entriesByPpaKpi[e.PpaKpiID] = e
+	}
+
+	ctx, _ := s.staffContext(ppa.StaffID)
+	resolved, _ := s.resolveAssignedKpis(ctx)
+
+	var ppaKpis []models.PpaKpi
+	_ = facades.Orm().Query().Where("ppa_id", ppa.ID).Get(&ppaKpis)
+
+	byArea := map[uint8][]ReportKpiField{}
+	for _, row := range ppaKpis {
+		var kpi models.Kpi
+		if err := facades.Orm().Query().Where("id", row.KpiID).First(&kpi); err != nil || kpi.ID == 0 {
+			continue
+		}
+		meta := resolved[kpi.ID]
+		target := 0.0
+		if row.TargetValue != nil {
+			target = *row.TargetValue
+		}
+		field := ReportKpiField{
+			PpaKpiID:            row.ID,
+			KpiID:               kpi.ID,
+			Code:                kpi.KpiCode,
+			Name:                s.kpiDisplayName(kpi),
+			Frequency:           kpi.Frequency,
+			ComputationCategory: kpi.ComputationCategory,
+			SubjectAreaName:     SubjectAreaNamePtr(kpi.SubjectArea),
+			Source:              meta.Source,
+			WeightPercentage:    row.WeightPercentage,
+			TargetValue:         target,
+			IsCumulative:        kpi.IsCumulative,
+		}
+		if kpi.IsCumulative {
+			field.PriorReports = s.priorCumulativeReports(ppa.StaffID, ppa.FinancialYearID, row.ID, report.ReportType)
+		}
+		if entry, ok := entriesByPpaKpi[row.ID]; ok {
+			if entry.Narrative != nil {
+				field.Narrative = *entry.Narrative
+			}
+		}
+		actual, hasActual := resolveReportKpiActual(entriesByPpaKpi[row.ID], report.ReportType, target, kpi.IsCumulative, field.PriorReports)
+		if hasActual {
+			field.ActualValue = actual
+			if target > 0 {
+				field.ProgressPercent = (actual / target) * 100
+				if field.ProgressPercent > 100 {
+					field.ProgressPercent = 100
+				}
+			}
+		}
+		byArea[SubjectAreaSortKey(kpi.SubjectArea)] = append(byArea[SubjectAreaSortKey(kpi.SubjectArea)], field)
+	}
+
+	groups := make([]ReportFormGroup, 0, len(byArea))
+	areaIDs := make([]uint8, 0, len(byArea))
+	for id := range byArea {
+		areaIDs = append(areaIDs, id)
+	}
+	sort.Slice(areaIDs, func(i, j int) bool { return areaIDs[i] < areaIDs[j] })
+	for _, id := range areaIDs {
+		groups = append(groups, ReportFormGroup{
+			SubjectAreaID:   id,
+			SubjectAreaName: SubjectAreaName(id),
+			Kpis:            byArea[id],
+		})
+	}
+	return groups
+}
+
+func (s *PerformanceService) GetPpaReviewDetail(viewerStaffID, ppaID uint) (PpaReviewDetail, error) {
+	if ppaID == 0 {
+		return PpaReviewDetail{}, fmt.Errorf("ppa_id is required")
+	}
+	var ppa models.Ppa
+	if err := facades.Orm().Query().Where("id", ppaID).First(&ppa); err != nil || ppa.ID == 0 {
+		return PpaReviewDetail{}, fmt.Errorf("performance plan not found")
+	}
+	if err := s.assertCanReviewStaff(viewerStaffID, ppa.StaffID); err != nil {
+		return PpaReviewDetail{}, err
+	}
+
+	staffMap := loadStaffByIDs([]uint{ppa.StaffID})
+	fyLabel := ""
+	var fy models.FinancialYear
+	if err := facades.Orm().Query().Where("id", ppa.FinancialYearID).First(&fy); err == nil && fy.ID > 0 {
+		fyLabel = fy.YearLabel
+	}
+
+	detail := PpaReviewDetail{
+		PpaID:         ppa.ID,
+		StaffID:       ppa.StaffID,
+		StaffName:     staffDisplayName(staffMap[ppa.StaffID]),
+		Status:        ppa.Status,
+		TotalWeight:   ppa.TotalWeight,
+		FinancialYear: fyLabel,
+		SubjectGroups: s.buildPpaSubjectGroups(ppa),
+	}
+	if ppa.SubmittedAt != nil {
+		detail.SubmittedAt = ppa.SubmittedAt.Format(time.RFC3339)
+	}
+	if ppa.ApprovedAt != nil {
+		detail.ApprovedAt = ppa.ApprovedAt.Format(time.RFC3339)
+	}
+	return detail, nil
+}
+
+func (s *PerformanceService) GetReportReviewDetail(viewerStaffID, reportID uint) (ReportReviewDetail, error) {
+	if reportID == 0 {
+		return ReportReviewDetail{}, fmt.Errorf("report_id is required")
+	}
+	var report models.PerformanceReport
+	if err := facades.Orm().Query().Where("id", reportID).First(&report); err != nil || report.ID == 0 {
+		return ReportReviewDetail{}, fmt.Errorf("performance report not found")
+	}
+	if err := s.assertCanReviewStaff(viewerStaffID, report.StaffID); err != nil {
+		return ReportReviewDetail{}, err
+	}
+
+	ppa, err := s.loadPpa(report.StaffID, report.FinancialYearID)
+	if err != nil {
+		return ReportReviewDetail{}, fmt.Errorf("linked performance plan not found")
+	}
+
+	staffMap := loadStaffByIDs([]uint{report.StaffID})
+	fyLabel := ""
+	var fy models.FinancialYear
+	if err := facades.Orm().Query().Where("id", report.FinancialYearID).First(&fy); err == nil && fy.ID > 0 {
+		fyLabel = fy.YearLabel
+	}
+
+	detail := ReportReviewDetail{
+		ReportID:      report.ID,
+		ReportType:    report.ReportType,
+		ReportLabel:   reportTypeLabel(report.ReportType),
+		StaffID:       report.StaffID,
+		StaffName:     staffDisplayName(staffMap[report.StaffID]),
+		Status:        report.Status,
+		FinancialYear: fyLabel,
+		PpaID:         ppa.ID,
+		PpaStatus:     ppa.Status,
+		SubjectGroups: s.buildReportSubjectGroups(report, ppa),
+	}
+	if report.SubmittedAt != nil {
+		detail.SubmittedAt = report.SubmittedAt.Format(time.RFC3339)
+	}
+	if report.ReportType == "endterm" {
+		bundle, bundleErr := s.loadAppraisalBundle(report, viewerStaffID)
+		if bundleErr == nil {
+			detail.Appraisal = &bundle
+		}
+	}
+	return detail, nil
+}
+
 func (s *PerformanceService) ListPendingPpaReviews(supervisorStaffID uint) ([]PendingPpaReview, error) {
 	supervised := s.supervisedStaffIDs(supervisorStaffID)
 	if len(supervised) == 0 {
@@ -744,8 +1050,9 @@ func (s *PerformanceService) ReviewPpa(supervisorStaffID uint, input PpaReviewIn
 		ppa.Status = "approved"
 		ppa.ApprovedAt = &now
 	} else {
-		ppa.Status = "draft"
+		ppa.Status = "returned"
 		ppa.ApprovedAt = nil
+		ppa.SubmittedAt = nil
 	}
 	if err := facades.Orm().Query().Save(&ppa); err != nil {
 		return models.Ppa{}, err

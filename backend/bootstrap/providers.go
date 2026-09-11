@@ -61,5 +61,7 @@ func Providers() []foundation.ServiceProvider {
 		&mysql.ServiceProvider{},
 		&redis.ServiceProvider{},
 		&providers.RbacServiceProvider{},
+		&providers.BackupScheduleProvider{},
+		&providers.SyncScheduleProvider{},
 	}
 }

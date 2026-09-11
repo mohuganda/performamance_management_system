@@ -14,7 +14,9 @@ import { HRManagerDashboard } from '@/modules/dashboard/HRManagerDashboard'
 import { LoginPage } from '@/modules/auth/LoginPage'
 import { ActivateAccountPage } from '@/modules/auth/ActivateAccountPage'
 import { ApprovalsPage } from '@/modules/approvals/ApprovalsPage'
+import { ApprovalDetailPage } from '@/modules/approvals/ApprovalDetailPage'
 import { LeavePage } from '@/modules/leave/LeavePage'
+import { LeavePlanPage } from '@/modules/leave/LeavePlanPage'
 import { OutOfStationPage } from '@/modules/out-of-station/OutOfStationPage'
 import { AttendancePage } from '@/modules/attendance/AttendancePage'
 import { PerformancePage } from '@/modules/performance/PerformancePage'
@@ -26,7 +28,6 @@ import { LeaveAdminPage } from '@/modules/admin/LeaveAdminPage'
 import { StaffManagementPage } from '@/modules/admin/StaffManagementPage'
 import { RbacAdminPage } from '@/modules/admin/RbacAdminPage'
 import { KpiAdminPage } from '@/modules/admin/KpiAdminPage'
-import { SystemConfigPage } from '@/modules/admin/SystemConfigPage'
 
 function DashboardRouter() {
   const { hasPermission } = useAuthStore()
@@ -109,8 +110,17 @@ function AuthenticatedApp() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardRouter />} />
         <Route path="approvals" element={<ApprovalsPage />} />
+        <Route path="approvals/:module/:refId" element={<ApprovalDetailPage />} />
         <Route path="performance" element={<PerformancePage />} />
         <Route path="performance/reports" element={<PerformanceReportsPage />} />
+        <Route
+          path="leave-plan"
+          element={
+            <RequirePermission permission="leave.plans.view">
+              <LeavePlanPage />
+            </RequirePermission>
+          }
+        />
         <Route
           path="leave"
           element={
@@ -160,16 +170,7 @@ function AuthenticatedApp() {
         />
         <Route
           path="admin/system"
-          element={
-            <RequirePermission
-              permission={[
-                'settings.manage',
-                'settings.data_sources.manage',
-              ]}
-            >
-              <SystemConfigPage />
-            </RequirePermission>
-          }
+          element={<Navigate to="/settings?tab=data-sources" replace />}
         />
         <Route
           path="admin/kpi"

@@ -19,6 +19,8 @@ This guide explains how to use the web application for day-to-day performance ma
 13. [Troubleshooting](#13-troubleshooting)
 14. [Accessing a deployed server](#14-accessing-a-deployed-server)
 
+**Also see:** Appearance under [Profile and settings](#11-profile-and-settings) · Approvals in [Navigation and roles](#3-navigation-and-roles) · Doris technical guide in [ANALYTICS.md](./ANALYTICS.md)
+
 ---
 
 ## 1. Getting started
@@ -261,11 +263,20 @@ The sidebar shows only the sections your account is allowed to access. Menu grou
 | Group | Items | Who typically sees it |
 |-------|-------|------------------------|
 | **Dashboard** | Overview | All roles with dashboard permission |
-| **Performance** | PPA, quarterly reporting, **Performance reports** | Staff with `performance.view` |
-| **Time & Attendance** | Leave, Out of station, Attendance | Staff and supervisors |
-| **Notifications** | Alerts and updates | Everyone |
-| **My Account** | Profile, Settings | Everyone |
+| **Approvals** | Unified leave / OOS / performance inbox | Approvers (and any signed-in user — inbox may be empty) |
+| **Performance** | PPA, quarterly reporting | Staff with `performance.view` |
+| **Out of Station & Leave** | Leave, Out of station, Attendance | Staff and supervisors |
+| **Settings** | Preferences, appearance, data sources, … | Everyone (admin tabs by permission) |
+| **Reports** | Scoped performance status & scores | Staff with report access |
 | **Administration** | Leave, Staff, KPI, Access control | HR officers and admins |
+
+### Appearance (dark mode)
+
+Use the **moon/sun** control in the top header (before the notification bell), or **Settings → Preferences → Appearance**, to choose Light, Dark, or System. Your choice is saved in this browser.
+
+### Approvals inbox
+
+Open **Approvals** for a single list of items waiting for you (leave, out-of-station, and performance reviews). Act on each item from the inbox; Leave and Out of Station pages also still show pending queues where relevant.
 
 ### What each role does
 
@@ -521,6 +532,11 @@ The bell icon in the header shows unread count. Open a notification to see detai
 - Update contact details where permitted
 - Upload **photo** and **signature** for official documents
 
+### Appearance (dark mode)
+
+- Toggle theme from the header (moon/sun), account menu, or **Settings → Preferences → Appearance**
+- Options: **Light**, **Dark**, or **System** (follow your device)
+
 ### Settings
 
 Go to **Settings** in the sidebar. Tabs depend on your role.
@@ -528,6 +544,7 @@ Go to **Settings** in the sidebar. Tabs depend on your role.
 #### Preferences (all users)
 
 - **Active reporting quarter** — controls the quarter label used across dashboards and performance screens
+- **Appearance** — Light, Dark, or System theme (also available from the moon/sun toggle next to notifications)
 - **Admin table pagination** (admins) — default rows per page for Staff Management, KPI catalog, and similar tables
 
 #### Data sources (administrators)
@@ -536,6 +553,7 @@ Go to **Settings** in the sidebar. Tabs depend on your role.
 |---------|---------|
 | **iHRIS API** | Connection URL, import rules (require email/mobile, demo table toggle) |
 | **HRM Attend integration** | Base URL and enable/disable data exchange with HRM Attend |
+| **Apache Doris analytics** | OLAP store for faster dashboard/attendance aggregates (**on by default**). Start Doris with `docker-compose.analytics.yml`, then sync OLTP data. Dashboards fall back to MySQL if Doris is offline. |
 | **Sync status** | Run batched iHRIS import; view progress and skipped records |
 
 #### Email configuration (administrators)

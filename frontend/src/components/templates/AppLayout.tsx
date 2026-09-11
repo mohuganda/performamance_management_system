@@ -11,6 +11,7 @@ import { ChevronDown, LogOut } from 'lucide-react'
 import { BrandLogo } from '@/components/atoms/BrandLogo'
 import { UserAccountMenu } from '@/components/molecules/UserAccountMenu'
 import { useAuthStore } from '@/stores/appStore'
+import { useOrgUiChrome } from '@/hooks/useOrgUiChrome'
 import { redirectToLogin } from '@/utils/authRedirect'
 import {
   collectNavPaths,
@@ -46,10 +47,8 @@ function NavGroupMenu({
           variant="text"
           size="sm"
           className={cn(
-            'relative flex items-center gap-1.5 rounded-sm px-3 py-2 normal-case',
-            itemActive
-              ? 'font-semibold text-ui-text after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-uganda-yellow'
-              : 'text-ui-muted hover:bg-ui-subtle hover:text-ui-text',
+            'app-nav-item relative flex items-center gap-1.5 rounded-sm px-3 py-2 normal-case',
+            itemActive ? 'app-nav-item-active font-semibold' : '',
           )}
         >
           <Icon className="h-4 w-4" />
@@ -67,10 +66,8 @@ function NavGroupMenu({
           variant="text"
           size="sm"
           className={cn(
-            'relative flex items-center gap-1.5 rounded-sm px-3 py-2 normal-case',
-            active
-              ? 'font-semibold text-ui-text after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-uganda-yellow'
-              : 'text-ui-muted hover:bg-ui-subtle hover:text-ui-text',
+            'app-nav-item relative flex items-center gap-1.5 rounded-sm px-3 py-2 normal-case',
+            active ? 'app-nav-item-active font-semibold' : '',
           )}
         >
           <GroupIcon className="h-4 w-4" />
@@ -78,7 +75,7 @@ function NavGroupMenu({
           <ChevronDown className="h-3.5 w-3.5 opacity-70" />
         </Button>
       </MenuHandler>
-      <MenuList {...mt} className="min-w-[240px] rounded-sm border border-ui-border p-1.5 shadow-lg">
+      <MenuList {...mt} className="min-w-[240px] rounded-sm border border-ui-border bg-ui-surface p-1.5 text-ui-text shadow-lg">
         {group.items.map((item) => (
           <NavGroupMenuItem key={item.id} item={item} pathname={pathname} navPaths={navPaths} />
         ))}
@@ -99,17 +96,19 @@ function NavGroupMenuItem({
   const Icon = item.icon
   const active = isNavPathActive(pathname, item.path, navPaths)
   return (
-    <NavLink to={item.path}>
+    <NavLink to={item.path} aria-current={active ? 'page' : undefined}>
       <MenuItem
         {...mt}
         className={cn(
-          'flex items-start gap-3 rounded-sm py-2.5',
-          active ? 'bg-moh-green/10' : 'hover:bg-ui-subtle',
+          'flex items-start gap-3 rounded-sm py-2.5 text-ui-text',
+          active
+            ? 'bg-ui-subtle ring-1 ring-inset ring-uganda-yellow/50'
+            : 'hover:bg-ui-subtle',
         )}
       >
-        <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', active ? 'text-moh-green' : 'text-ui-muted')} />
+        <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', active ? 'text-uganda-yellow' : 'text-ui-muted')} />
         <div>
-          <p className={cn('text-sm font-medium', active ? 'text-moh-green' : 'text-ui-text')}>
+          <p className={cn('text-sm font-medium', active ? 'text-ui-text' : 'text-ui-text')}>
             {item.label}
           </p>
           {item.description ? (
@@ -123,22 +122,32 @@ function NavGroupMenuItem({
 
 export function AppLayout() {
   const { displayName, permissions, logout, quarter, roles, profilePhoto } = useAuthStore()
+  const { chrome } = useOrgUiChrome()
   const location = useLocation()
 
   const groups = visibleNavGroups(permissions)
   const navPaths = collectNavPaths(groups)
   const roleLabel = roles[0]?.replace(/_/g, ' ') ?? 'User'
+  const headerInherits = chrome.headerChrome !== 'light'
 
   return (
     <div className="flex min-h-screen flex-col bg-ui-bg">
-      <header className="border-b border-ui-border bg-ui-surface">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-          <BrandLogo size="md" />
+      <header
+        className={cn(
+          'app-header border-b',
+          headerInherits
+            ? 'app-chrome border-[color:var(--nav-border)] bg-[color:var(--nav-bg)] text-[color:var(--nav-fg)]'
+            : 'border-ui-border bg-ui-surface text-ui-text',
+        )}
+      >
+        <div className="mx-auto flex max-w-[90rem] items-center justify-between gap-4 px-4 py-3">
+          <BrandLogo size="md" tone={headerInherits ? 'nav' : 'default'} />
           <div className="flex items-center gap-2">
             <UserAccountMenu
               displayName={displayName}
               roleLabel={roleLabel}
               profilePhoto={profilePhoto}
+              onColoredChrome={headerInherits}
             />
           </div>
         </div>
@@ -146,10 +155,10 @@ export function AppLayout() {
 
       <Navbar
         {...mt}
-        className="sticky top-0 z-40 rounded-none border-b border-ui-border bg-ui-surface px-4 py-0 shadow-sm"
+        className="app-chrome sticky top-0 z-40 rounded-none border-b border-[color:var(--nav-border)] bg-[color:var(--nav-bg)] px-4 py-0 text-[color:var(--nav-fg)] shadow-sm"
         fullWidth
       >
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2 py-2">
+        <div className="mx-auto flex w-full max-w-[90rem] flex-wrap items-center justify-between gap-2 py-2">
           <nav className="hidden items-center gap-0.5 lg:flex">
             {groups.map((group) => (
               <NavGroupMenu key={group.id} group={group} pathname={location.pathname} navPaths={navPaths} />
@@ -157,12 +166,12 @@ export function AppLayout() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <span className="hidden text-xs text-ui-muted lg:inline">{quarter}</span>
+            <span className="app-nav-muted hidden text-xs lg:inline">{quarter}</span>
             <Button
               {...mt}
               variant="outlined"
               size="sm"
-              className="flex items-center gap-1 rounded-sm border-ui-border text-ui-text"
+              className="app-nav-outline flex items-center gap-1 rounded-sm"
               onClick={async () => {
                 await logout()
                 redirectToLogin()
@@ -174,10 +183,10 @@ export function AppLayout() {
           </div>
         </div>
 
-        <div className="mx-auto w-full max-w-7xl pb-2 lg:hidden">
+        <div className="mx-auto w-full max-w-[90rem] pb-2 lg:hidden">
           {groups.map((group) => (
             <div key={group.id} className="mb-2">
-              <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-ui-muted">
+              <p className="app-nav-muted mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide">
                 {group.label}
               </p>
               <div className="flex flex-wrap gap-1">
@@ -191,7 +200,7 @@ export function AppLayout() {
                         variant={active ? 'filled' : 'outlined'}
                         className={cn(
                           'rounded-sm px-2 py-1 text-xs normal-case',
-                          active ? 'bg-uganda-black' : 'border-ui-border text-ui-text',
+                          active ? 'app-nav-chip-active' : 'app-nav-outline',
                         )}
                       >
                         {item.label}
@@ -205,7 +214,7 @@ export function AppLayout() {
         </div>
       </Navbar>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">
+      <main className="mx-auto w-full max-w-[90rem] flex-1 p-4 md:p-6">
         <Outlet />
       </main>
 

@@ -1,13 +1,24 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Card, Textarea, Typography } from '@material-tailwind/react'
 import { differenceInCalendarDays, format, parseISO } from 'date-fns'
 import { getApiErrorMessage } from '@/api/client'
+import { Badge } from '@/components/atoms/Badge'
 import { FileAttachmentField } from '@/components/molecules/FileAttachmentField'
+import { FormStatusAlert, type FormStatusType } from '@/components/molecules/FormStatusAlert'
+import { RequestHistoryPanel } from '@/components/molecules/RequestHistoryPanel'
+import {
+  RequestDetailDialog,
+  RequestRowActions,
+  canDeleteRequest,
+  canPreviewPrintRequest,
+  canRecallRequest,
+} from '@/components/molecules/RequestDetailDialog'
 import { SearchableSelect } from '@/components/molecules/SearchableSelect'
+import { SegmentedTabs } from '@/components/molecules/SegmentedTabs'
 import { leaveService } from '@/api/services/mobile'
 import { DatePickerField } from '@/components/molecules/DatePickerField'
-import { FormStatusAlert, type FormStatusType } from '@/components/molecules/FormStatusAlert'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { ProcessGuide } from '@/components/organisms/ProcessGuide'
 import { QueryState } from '@/components/organisms/QueryState'
@@ -15,10 +26,18 @@ import { notifyApiError, toast } from '@/features/toast'
 import { useAuthStore } from '@/stores/appStore'
 import { serializeAttachments, type AttachmentMeta } from '@/utils/attachments'
 import { normalizeLeaveTypes } from '@/utils/normalizeApi'
-import { mt } from '@/utils/mt'
+import {
+  formatRequestPeriod,
+  pickField,
+  pickString,
+  requestStatus,
+  statusTone,
+} from '@/utils/requestRow'
 import { minLeaveStartDate, validateLeaveDates, type LeavePolicyConfig } from '@/utils/leavePolicy'
+import { mt } from '@/utils/mt'
 
 type FormAlert = { type: FormStatusType; message: string; title?: string }
+type LeaveTab = 'apply' | 'history' | 'approvals'
 
 function validateLeaveForm(
   form: {
@@ -26,6 +45,7 @@ function validateLeaveForm(
     start_date: string
     end_date: string
     reason: string
+    oic_staff_id: string
   },
   policy: LeavePolicyConfig | undefined,
   leaveType: { code?: string; advance_notice_days?: number | null } | undefined,
@@ -35,6 +55,7 @@ function validateLeaveForm(
   if (!form.end_date) return 'Enter an end date.'
   const dateError = validateLeaveDates(form, policy, leaveType)
   if (dateError) return dateError
+  if (!form.oic_staff_id) return 'Select an Officer in Charge (OIC) for your leave period.'
   if (!form.reason.trim()) return 'Provide a reason for your leave request.'
   return null
 }
@@ -70,17 +91,21 @@ export function LeavePage() {
   const canCreate = hasPermission('leave.requests.create')
   const canApprove = hasPermission('leave.requests.approve')
 
+  const [tab, setTab] = useState<LeaveTab>(canCreate ? 'apply' : 'history')
   const [form, setForm] = useState({
     leave_type_id: '',
     start_date: '',
     end_date: '',
     reason: '',
+    oic_staff_id: '',
     submit: true,
   })
   const [approvalComment, setApprovalComment] = useState('')
   const [attachments, setAttachments] = useState<AttachmentMeta[]>([])
   const [formAlert, setFormAlert] = useState<FormAlert | null>(null)
   const [approvalAlert, setApprovalAlert] = useState<FormAlert | null>(null)
+  const [detailRow, setDetailRow] = useState<Record<string, unknown> | null>(null)
+  const [actionId, setActionId] = useState<number | null>(null)
 
   const balancesQuery = useQuery({
     queryKey: ['leave', 'balances'],
@@ -91,6 +116,13 @@ export function LeavePage() {
   const typesQuery = useQuery({
     queryKey: ['leave', 'types'],
     queryFn: () => leaveService.listTypes(),
+  })
+
+  const oicQuery = useQuery({
+    queryKey: ['leave', 'oic-candidates'],
+    queryFn: () => leaveService.listOicCandidates(),
+    enabled: Boolean(staffId) && canCreate,
+    staleTime: 60_000,
   })
 
   const configQuery = useQuery({
@@ -121,11 +153,12 @@ export function LeavePage() {
         end_date: form.end_date,
         reason: form.reason,
         medical_report_url: serializeAttachments(attachments),
+        oic_staff_id: Number(form.oic_staff_id),
         submit,
       }),
     onSuccess: (_data, submit) => {
       queryClient.invalidateQueries({ queryKey: ['leave'] })
-      setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', submit: true })
+      setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', oic_staff_id: '', submit: true })
       setAttachments([])
       const message = submit
         ? 'Your leave request has been submitted for supervisor approval.'
@@ -136,6 +169,7 @@ export function LeavePage() {
         message,
       })
       toast.success(message, submit ? 'Leave submitted' : 'Draft saved')
+      if (submit) setTab('history')
     },
     onError: (error: unknown) => {
       const message = getApiErrorMessage(error, 'Could not save leave request')
@@ -167,6 +201,34 @@ export function LeavePage() {
     },
   })
 
+  const recallMutation = useMutation({
+    mutationFn: (id: number) => leaveService.recallRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leave'] })
+      setDetailRow(null)
+      setActionId(null)
+      toast.success('Leave request recalled to draft.', 'Leave')
+    },
+    onError: (error: unknown) => {
+      setActionId(null)
+      notifyApiError(error, 'Could not recall leave request')
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => leaveService.deleteRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leave'] })
+      setDetailRow(null)
+      setActionId(null)
+      toast.success('Leave request deleted.', 'Leave')
+    },
+    onError: (error: unknown) => {
+      setActionId(null)
+      notifyApiError(error, 'Could not delete leave request')
+    },
+  })
+
   const handleCreate = (submit: boolean) => {
     const validationError = validateLeaveForm(form, leavePolicy, selectedLeaveType)
     if (validationError) {
@@ -186,7 +248,7 @@ export function LeavePage() {
 
   const staffLinked = Boolean(staffId)
   const leaveTypes = normalizeLeaveTypes(typesQuery.data)
-  const typeById = new Map(leaveTypes.map((t) => [t.id, t.name]))
+  const typeById = new Map(leaveTypes.map((t) => [String(t.id), t.name]))
   const selectedLeaveType = leaveTypes.find((t) => String(t.id) === form.leave_type_id)
   const leaveDays =
     form.start_date && form.end_date
@@ -204,12 +266,42 @@ export function LeavePage() {
   const showAdvanceNotice =
     leavePolicy?.enforce_advance_notice !== false && !sickExempt && advanceNoticeDays > 0
 
+  const requestRows = useMemo(
+    () => (Array.isArray(requestsQuery.data) ? (requestsQuery.data as Record<string, unknown>[]) : []),
+    [requestsQuery.data],
+  )
+  const pendingCount = Array.isArray(pendingQuery.data) ? pendingQuery.data.length : 0
+
+  const resolveLeaveType = (row: Record<string, unknown>) => {
+    const typeId = String(pickField(row, 'leave_type_id', 'LeaveTypeID') ?? '')
+    return pickString(row, 'leave_type_name', 'LeaveTypeName') || typeById.get(typeId) || '—'
+  }
+
+  const tabs = [
+    ...(canCreate ? [{ value: 'apply' as const, label: 'New application' }] : []),
+    {
+      value: 'history' as const,
+      label: canApprove ? 'Requests' : 'My requests',
+      count: requestRows.length,
+    },
+    ...(canApprove
+      ? [{ value: 'approvals' as const, label: 'Approvals', count: pendingCount }]
+      : []),
+  ]
+
   return (
     <div>
       <PageHeader
         title="Leave Management"
         subtitle="Apply for leave and track approvals through your configured workflow"
       />
+      {hasPermission('leave.plans.view') ? (
+        <p className="mb-4 text-sm">
+          <Link to="/leave-plan" className="font-medium text-moh-green underline-offset-2 hover:underline">
+            Manage annual leave plan →
+          </Link>
+        </p>
+      ) : null}
 
       <ProcessGuide title="How leave application works" steps={LEAVE_STEPS} />
 
@@ -222,7 +314,11 @@ export function LeavePage() {
         </Card>
       ) : null}
 
-      {canApprove && staffLinked ? (
+      {staffLinked ? (
+        <SegmentedTabs className="mb-6" tabs={tabs} value={tab} onChange={(value) => setTab(value)} />
+      ) : null}
+
+      {staffLinked && tab === 'approvals' && canApprove ? (
         <QueryState
           isLoading={pendingQuery.isLoading}
           isError={pendingQuery.isError}
@@ -231,7 +327,7 @@ export function LeavePage() {
           variant="cards"
           onRetry={() => pendingQuery.refetch()}
         >
-          <Card {...mt} className="mb-6 rounded-sm border border-uganda-yellow/50 bg-uganda-yellow/5 p-4">
+          <Card {...mt} className="rounded-sm border border-uganda-yellow/50 bg-uganda-yellow/5 p-4">
             <Typography {...mt} className="mb-3 text-sm font-bold uppercase text-ui-text">
               Pending approvals — action required
             </Typography>
@@ -260,7 +356,7 @@ export function LeavePage() {
                   }) => (
                     <div
                       key={row.approval_id}
-                      className="rounded-sm border border-ui-border bg-white p-3"
+                      className="rounded-sm border border-ui-border bg-ui-surface p-3"
                     >
                       <p className="font-semibold">{row.staff_name}</p>
                       {row.stage_name ? (
@@ -320,51 +416,51 @@ export function LeavePage() {
         </QueryState>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <QueryState
-          isLoading={balancesQuery.isLoading}
-          isError={balancesQuery.isError}
-          error={balancesQuery.error}
-          label="leave balances"
-          variant="cards"
-          onRetry={() => balancesQuery.refetch()}
-        >
-          <Card {...mt} className="rounded-sm border border-moh-green/15 p-4 lg:col-span-1">
-            <Typography {...mt} className="mb-3 text-sm font-bold uppercase text-moh-green">
-              Leave Balances
-            </Typography>
-            {Array.isArray(balancesQuery.data) && balancesQuery.data.length > 0 ? (
-              <ul className="space-y-2 text-sm">
-                {balancesQuery.data.map((row: Record<string, unknown>) => {
-                  const typeId = row.leave_type_id as number
-                  const typeName = typeById.get(typeId) ?? 'Leave'
-                  const remaining =
-                    Number(row.entitled_days ?? 0) +
-                    Number(row.carried_over_days ?? 0) -
-                    Number(row.used_days ?? 0)
-                  return (
-                    <li
-                      key={String(row.id ?? typeId)}
-                      className="flex justify-between border-b border-gray-100 py-2"
-                    >
-                      <span>{typeName}</span>
-                      <span className="font-semibold text-moh-green">{remaining} days</span>
-                    </li>
-                  )
-                })}
-              </ul>
-            ) : (
-              <Typography {...mt} className="text-sm text-gray-500">
-                No balance records for this year.
+      {staffLinked && tab === 'apply' && canCreate ? (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <QueryState
+            isLoading={balancesQuery.isLoading}
+            isError={balancesQuery.isError}
+            error={balancesQuery.error}
+            label="leave balances"
+            variant="cards"
+            onRetry={() => balancesQuery.refetch()}
+          >
+            <Card {...mt} className="rounded-sm border border-moh-green/15 p-4 lg:col-span-1">
+              <Typography {...mt} className="mb-3 text-sm font-bold uppercase text-moh-green">
+                Leave Balances
               </Typography>
-            )}
-          </Card>
-        </QueryState>
+              {Array.isArray(balancesQuery.data) && balancesQuery.data.length > 0 ? (
+                <ul className="space-y-2 text-sm">
+                  {balancesQuery.data.map((row: Record<string, unknown>) => {
+                    const typeId = row.leave_type_id as number
+                    const typeName = typeById.get(String(typeId)) ?? 'Leave'
+                    const remaining =
+                      Number(row.entitled_days ?? 0) +
+                      Number(row.carried_over_days ?? 0) -
+                      Number(row.used_days ?? 0)
+                    return (
+                      <li
+                        key={String(row.id ?? typeId)}
+                        className="flex justify-between border-b border-gray-100 py-2"
+                      >
+                        <span>{typeName}</span>
+                        <span className="font-semibold text-moh-green">{remaining} days</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : (
+                <Typography {...mt} className="text-sm text-gray-500">
+                  No balance records for this year.
+                </Typography>
+              )}
+            </Card>
+          </QueryState>
 
-        {canCreate && staffLinked ? (
           <Card {...mt} className="rounded-sm border border-moh-green/15 p-4 lg:col-span-2">
             <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
-              Step 2 — New Leave Application
+              New leave application
             </Typography>
             {formAlert ? (
               <FormStatusAlert
@@ -420,6 +516,21 @@ export function LeavePage() {
                 className="rounded-sm"
               />
               <div className="md:col-span-2">
+                <SearchableSelect
+                  label="Officer in charge (OIC)"
+                  value={form.oic_staff_id}
+                  placeholder="Search who will cover while you are away…"
+                  emptyLabel="Select OIC"
+                  allowClear={false}
+                  options={(Array.isArray(oicQuery.data) ? oicQuery.data : []).map((c) => ({
+                    value: String(c.staff_id),
+                    label: c.name,
+                    description: c.job_title,
+                  }))}
+                  onChange={(v) => setForm((f) => ({ ...f, oic_staff_id: v }))}
+                />
+              </div>
+              <div className="md:col-span-2">
                 <Textarea
                   {...mt}
                   label="Reason"
@@ -462,53 +573,188 @@ export function LeavePage() {
               </div>
             </form>
           </Card>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      <QueryState
-        isLoading={requestsQuery.isLoading}
-        isError={requestsQuery.isError}
-        error={requestsQuery.error}
-        label="leave requests"
-        variant="table"
-        onRetry={() => requestsQuery.refetch()}
-      >
-        <Card {...mt} className="mt-6 rounded-sm border border-moh-green/15 p-4">
-          <Typography {...mt} className="mb-3 text-sm font-bold uppercase text-moh-green">
-            {canApprove ? 'All leave requests (team + mine)' : 'My leave requests'}
-          </Typography>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
-                  <th className="py-2 pr-4">Type</th>
-                  <th className="py-2 pr-4">Period</th>
-                  <th className="py-2 pr-4">Status</th>
-                  <th className="py-2">Days</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(Array.isArray(requestsQuery.data) ? requestsQuery.data : []).map(
-                  (row: Record<string, unknown>) => (
-                    <tr key={String(row.id)} className="border-b border-gray-100">
-                      <td className="py-2 pr-4">
-                        {typeById.get(row.leave_type_id as number) ?? '—'}
-                      </td>
-                      <td className="py-2 pr-4">
-                        {String(row.start_date).slice(0, 10)} – {String(row.end_date).slice(0, 10)}
-                      </td>
-                      <td className="py-2 pr-4 font-medium capitalize text-moh-green">
-                        {String(row.status ?? 'pending')}
-                      </td>
-                      <td className="py-2">{String(row.days_requested ?? '—')}</td>
-                    </tr>
-                  ),
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </QueryState>
+      {staffLinked && tab === 'history' ? (
+        <QueryState
+          isLoading={requestsQuery.isLoading}
+          isError={requestsQuery.isError}
+          error={requestsQuery.error}
+          label="leave requests"
+          variant="table"
+          onRetry={() => requestsQuery.refetch()}
+        >
+          <RequestHistoryPanel
+            title={canApprove ? 'Leave requests' : 'My leave requests'}
+            rows={requestRows}
+            exportFilename="leave-requests"
+            searchPlaceholder="Search by type, OIC, reason, or status…"
+            emptyLabel="No leave requests match your filters."
+            getStatus={(row) => requestStatus(row)}
+            getSearchText={(row) =>
+              [
+                resolveLeaveType(row),
+                formatRequestPeriod(row),
+                pickString(row, 'oic_name', 'OicName'),
+                pickString(row, 'reason', 'Reason'),
+                requestStatus(row),
+                pickString(row, 'days_requested', 'DaysRequested'),
+              ].join(' ')
+            }
+            columns={[
+              {
+                key: 'type',
+                label: 'Type',
+                render: (row) => <span className="font-medium text-ui-text">{resolveLeaveType(row)}</span>,
+                exportValue: (row) => resolveLeaveType(row),
+              },
+              {
+                key: 'period',
+                label: 'Period',
+                render: (row) => formatRequestPeriod(row),
+                exportValue: (row) => formatRequestPeriod(row),
+              },
+              {
+                key: 'oic',
+                label: 'OIC',
+                render: (row) => pickString(row, 'oic_name', 'OicName') || '—',
+                exportValue: (row) => pickString(row, 'oic_name', 'OicName') || '—',
+              },
+              {
+                key: 'days',
+                label: 'Days',
+                render: (row) => pickString(row, 'days_requested', 'DaysRequested') || '—',
+                exportValue: (row) => pickString(row, 'days_requested', 'DaysRequested') || '—',
+              },
+              {
+                key: 'status',
+                label: 'Status',
+                render: (row) => {
+                  const status = requestStatus(row)
+                  return <Badge label={status.replace(/_/g, ' ')} tone={statusTone(status)} />
+                },
+                exportValue: (row) => requestStatus(row).replace(/_/g, ' '),
+              },
+              {
+                key: 'actions',
+                label: 'Actions',
+                className: 'w-[220px]',
+                render: (row) => {
+                  const id = Number(row.id ?? row.ID ?? 0)
+                  const status = requestStatus(row)
+                  return (
+                    <RequestRowActions
+                      status={status}
+                      onPreview={() => setDetailRow(row)}
+                      onRecall={
+                        canRecallRequest(status)
+                          ? () => {
+                              if (
+                                !window.confirm(
+                                  'Recall this leave request from approval? It will return to draft.',
+                                )
+                              ) {
+                                return
+                              }
+                              setActionId(id)
+                              recallMutation.mutate(id)
+                            }
+                          : undefined
+                      }
+                      onDelete={
+                        canDeleteRequest(status)
+                          ? () => {
+                              if (
+                                !window.confirm(
+                                  'Delete this leave request permanently? This cannot be undone.',
+                                )
+                              ) {
+                                return
+                              }
+                              setActionId(id)
+                              deleteMutation.mutate(id)
+                            }
+                          : undefined
+                      }
+                      recalling={recallMutation.isPending && actionId === id}
+                      deleting={deleteMutation.isPending && actionId === id}
+                    />
+                  )
+                },
+                exportValue: () => '',
+              },
+            ]}
+          />
+        </QueryState>
+      ) : null}
+
+      <RequestDetailDialog
+        open={Boolean(detailRow)}
+        title="Leave request"
+        status={detailRow ? requestStatus(detailRow) : ''}
+        onClose={() => setDetailRow(null)}
+        canPrint={detailRow ? canPreviewPrintRequest(requestStatus(detailRow)) : false}
+        canRecall={detailRow ? canRecallRequest(requestStatus(detailRow)) : false}
+        canDelete={detailRow ? canDeleteRequest(requestStatus(detailRow)) : false}
+        recalling={
+          Boolean(detailRow) &&
+          recallMutation.isPending &&
+          actionId === Number(detailRow!.id ?? detailRow!.ID ?? 0)
+        }
+        deleting={
+          Boolean(detailRow) &&
+          deleteMutation.isPending &&
+          actionId === Number(detailRow!.id ?? detailRow!.ID ?? 0)
+        }
+        onRecall={
+          detailRow && canRecallRequest(requestStatus(detailRow))
+            ? () => {
+                const id = Number(detailRow.id ?? detailRow.ID ?? 0)
+                if (
+                  !window.confirm(
+                    'Recall this leave request from approval? It will return to draft.',
+                  )
+                ) {
+                  return
+                }
+                setActionId(id)
+                recallMutation.mutate(id)
+              }
+            : undefined
+        }
+        onDelete={
+          detailRow && canDeleteRequest(requestStatus(detailRow))
+            ? () => {
+                const id = Number(detailRow.id ?? detailRow.ID ?? 0)
+                if (
+                  !window.confirm(
+                    'Delete this leave request permanently? This cannot be undone.',
+                  )
+                ) {
+                  return
+                }
+                setActionId(id)
+                deleteMutation.mutate(id)
+              }
+            : undefined
+        }
+        fields={
+          detailRow
+            ? [
+                { label: 'Type', value: resolveLeaveType(detailRow) },
+                { label: 'Period', value: formatRequestPeriod(detailRow) },
+                { label: 'Days', value: pickString(detailRow, 'days_requested', 'DaysRequested') || '—' },
+                { label: 'OIC', value: pickString(detailRow, 'oic_name', 'OicName') || '—' },
+                { label: 'Reason', value: pickString(detailRow, 'reason', 'Reason') || '—' },
+                {
+                  label: 'Approval stage',
+                  value: pickString(detailRow, 'approval_stage', 'ApprovalStage') || '—',
+                },
+              ]
+            : []
+        }
+      />
     </div>
   )
 }

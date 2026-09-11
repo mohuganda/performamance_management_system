@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bell,
   Database,
+  DatabaseBackup,
   Layers,
   Mail,
   SlidersHorizontal,
@@ -24,16 +25,28 @@ import { kpiAdminService } from '@/api/services/kpiAdmin'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
 import { SettingsTabNav } from '@/components/molecules/SettingsTabNav'
+import { ThemeAppearancePicker } from '@/components/molecules/ThemeAppearancePicker'
+import { NavPalettePicker } from '@/components/molecules/NavPalettePicker'
 import {
   canAccessSettingsTab,
   canManagePreferencesAdmin,
   hasAnyAdminSettingsPermission,
 } from '@/constants/settingsPermissions'
 import { useAuthStore } from '@/stores/appStore'
+import {
+  applyOrgUiChrome,
+  DEFAULT_CUSTOM_NAV,
+  NAV_PRESET_OPTIONS,
+  orgUiChromeFromAdminSettings,
+  orgUiChromeToPayload,
+  type NavPresetId,
+  type OrgUiChrome,
+} from '@/stores/uiPreferencesStore'
 import { mt } from '@/utils/mt'
 import { notifyApiError, toast } from '@/features/toast'
 import { cn } from '@/utils/cn'
 import { ListsAdminPanel } from '@/modules/settings/ListsAdminPanel'
+import { BackupsAdminPanel } from '@/modules/settings/BackupsAdminPanel'
 
 /** Wrapper so Material Tailwind outlined labels don't collide with neighbours. */
 function Field({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -131,23 +144,45 @@ export function SettingsPage() {
   const canNotifications = canAccessSettingsTab(hasPermission, 'notifications')
   const canPerformance = canAccessSettingsTab(hasPermission, 'performance')
   const canKpiSettings = canAccessSettingsTab(hasPermission, 'kpi')
+  const canBackups = canAccessSettingsTab(hasPermission, 'backups')
   const canLoadSettings = hasAnyAdminSettingsPermission(hasPermission)
   const canSyncIhris = hasPermission('ihris.sync')
 
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'preferences')
   const [pageSizeSetting, setPageSizeSetting] = useState('20')
+  const [chromeForm, setChromeForm] = useState<OrgUiChrome>({
+    navPresetId: 'teal',
+    customNav: DEFAULT_CUSTOM_NAV,
+    headerChrome: 'inherit',
+    floatingLabels: true,
+  })
   const [ihrisForm, setIhrisForm] = useState({
     api_url: '',
     require_email: true,
     require_mobile: false,
     use_demo_data: false,
+    overwrite_enabled: false,
   })
   const [hrmAttendForm, setHrmAttendForm] = useState({
     api_url: 'http://localhost/attend',
     summary_path: '/attendance/attendance_summary',
     enabled: true,
+    export_push_enabled: false,
+    export_push_path: '/api/outoftstation_clockin',
+    basic_user: '',
+    basic_password: '',
+    jwt_token: '',
+    export_pull_token: '',
   })
   const [googleMapsForm, setGoogleMapsForm] = useState({ api_key: '', country_code: 'ug' })
+  const [oosAttendanceForm, setOosAttendanceForm] = useState({
+    min_accuracy_percent: 70,
+    default_geofence_radius_meters: 500,
+  })
+  const [dutyStationAttendanceForm, setDutyStationAttendanceForm] = useState({
+    min_accuracy_percent: 90,
+    default_geofence_radius_meters: 500,
+  })
   const [emailForm, setEmailForm] = useState({
     driver: 'smtp',
     smtp: { host: '', port: '587', username: '', password: '', encryption: 'tls', from_address: '', from_name: '' },
@@ -178,6 +213,19 @@ export function SettingsPage() {
     refetchInterval: (q) => (q.state.data?.status === 'running' ? 3000 : false),
   })
 
+  const hrmSyncStatusQuery = useQuery({
+    queryKey: ['hrm-attend', 'sync', 'status'],
+    queryFn: () => hrmAttendAdminService.status(),
+    enabled: canDataSources,
+    refetchInterval: (q) => (q.state.data?.status === 'running' ? 3000 : false),
+  })
+
+  const hrmExportStatusQuery = useQuery({
+    queryKey: ['hrm-attend', 'export', 'status'],
+    queryFn: () => hrmAttendAdminService.exportStatus(),
+    enabled: canDataSources,
+  })
+
   useEffect(() => {
     if (!settingsQuery.data) return
     const ihris = settingsQuery.data.data_sources.ihris
@@ -186,16 +234,36 @@ export function SettingsPage() {
       require_email: ihris.require_email ?? true,
       require_mobile: ihris.require_mobile ?? false,
       use_demo_data: ihris.use_demo_data ?? false,
+      overwrite_enabled: ihris.overwrite_enabled ?? false,
     })
     const hrm = settingsQuery.data.data_sources.hrm_attend
     setHrmAttendForm({
       api_url: hrm?.api_url ?? 'http://localhost/attend',
       summary_path: hrm?.summary_path ?? '/attendance/attendance_summary',
       enabled: hrm?.enabled ?? true,
+      export_push_enabled: hrm?.export_push_enabled ?? false,
+      export_push_path: hrm?.export_push_path ?? '/api/outoftstation_clockin',
+      basic_user: hrm?.basic_user ?? '',
+      basic_password: '',
+      jwt_token: '',
+      export_pull_token: '',
     })
     setGoogleMapsForm({
       api_key: settingsQuery.data.data_sources.google_maps?.api_key ?? '',
       country_code: settingsQuery.data.data_sources.google_maps?.country_code ?? 'ug',
+    })
+    setOosAttendanceForm({
+      min_accuracy_percent:
+        settingsQuery.data.data_sources.oos?.attendance?.min_accuracy_percent ?? 70,
+      default_geofence_radius_meters:
+        settingsQuery.data.data_sources.oos?.attendance?.default_geofence_radius_meters ?? 500,
+    })
+    setDutyStationAttendanceForm({
+      min_accuracy_percent:
+        settingsQuery.data.data_sources.attendance?.duty_station?.min_accuracy_percent ?? 90,
+      default_geofence_radius_meters:
+        settingsQuery.data.data_sources.attendance?.duty_station?.default_geofence_radius_meters ??
+        500,
     })
     setEmailForm({
       driver: settingsQuery.data.email.driver ?? 'smtp',
@@ -203,19 +271,52 @@ export function SettingsPage() {
       exchange: { ...emailForm.exchange, ...settingsQuery.data.email.exchange },
     })
     setPageSizeSetting(String(settingsQuery.data.ui?.admin_page_size ?? 20))
+    setChromeForm(orgUiChromeFromAdminSettings(settingsQuery.data.ui))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsQuery.data])
 
+  const updateChromeForm = (next: OrgUiChrome) => {
+    setChromeForm(next)
+    applyOrgUiChrome(next)
+  }
+
+  const setNavPresetId = (navPresetId: NavPresetId) => {
+    let customNav = chromeForm.customNav
+    if (navPresetId !== 'custom') {
+      const preset = NAV_PRESET_OPTIONS.find((p) => p.id === navPresetId)
+      if (preset) customNav = { ...preset.colors }
+    }
+    updateChromeForm({ ...chromeForm, navPresetId, customNav })
+  }
+
+  const setCustomNav = (partial: Partial<OrgUiChrome['customNav']>) => {
+    updateChromeForm({
+      ...chromeForm,
+      navPresetId: 'custom',
+      customNav: { ...chromeForm.customNav, ...partial },
+    })
+  }
+
   const saveDataSources = useMutation({
-    mutationFn: () =>
-      adminSettingsService.update('data_sources', {
+    mutationFn: () => {
+      const hrmPayload: Record<string, unknown> = { ...hrmAttendForm }
+      if (!hrmAttendForm.basic_password) delete hrmPayload.basic_password
+      if (!hrmAttendForm.jwt_token) delete hrmPayload.jwt_token
+      if (!hrmAttendForm.export_pull_token) delete hrmPayload.export_pull_token
+      return adminSettingsService.update('data_sources', {
         ihris: ihrisForm,
-        hrm_attend: hrmAttendForm,
+        hrm_attend: hrmPayload,
         google_maps: googleMapsForm,
-      }),
+        oos: { attendance: oosAttendanceForm },
+        attendance: { duty_station: dutyStationAttendanceForm },
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
       queryClient.invalidateQueries({ queryKey: ['public-config', 'maps'] })
+      queryClient.invalidateQueries({ queryKey: ['public-config', 'oos-attendance'] })
+      queryClient.invalidateQueries({ queryKey: ['public-config', 'duty-station-attendance'] })
+      queryClient.invalidateQueries({ queryKey: ['hrm-attend', 'export', 'status'] })
       toast.success('Data source settings saved.')
     },
     onError: (error: unknown) => notifyApiError(error, 'Could not save data sources'),
@@ -232,44 +333,85 @@ export function SettingsPage() {
 
   const saveUi = useMutation({
     mutationFn: () =>
-      adminSettingsService.update('ui', { admin_page_size: Number(pageSizeSetting) || 20 }),
+      adminSettingsService.update('ui', {
+        admin_page_size: Number(pageSizeSetting) || 20,
+        ...orgUiChromeToPayload(chromeForm),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'page-size'] })
-      toast.success('UI preferences saved.')
+      queryClient.invalidateQueries({ queryKey: ['public-config', 'ui-chrome'] })
+      toast.success('Organisation UI settings saved.')
     },
-    onError: (error: unknown) => notifyApiError(error, 'Could not save UI preferences'),
+    onError: (error: unknown) => notifyApiError(error, 'Could not save UI settings'),
   })
 
   const syncMutation = useMutation({
-    mutationFn: async () => {
-      let runId = syncStatusQuery.data?.run_id
-      let hasMore = true
-      while (hasMore) {
-        const result = await ihrisAdminService.syncBatch({
-          run_id: runId,
-          pages_per_batch: 1,
-        })
-        runId = result.run_id
-        hasMore = result.has_more ?? false
-        await queryClient.setQueryData(['ihris', 'sync', 'status'], result)
-        if (!hasMore) break
-      }
-    },
-    onSuccess: () => {
+    mutationFn: async () => ihrisAdminService.start({ run_id: syncStatusQuery.data?.run_id }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['ihris', 'sync', 'status'], result)
       queryClient.invalidateQueries({ queryKey: ['ihris', 'sync', 'status'] })
-      toast.success('iHRIS sync completed.')
+      toast.success('iHRIS background sync started.')
     },
-    onError: (error: unknown) => notifyApiError(error, 'iHRIS sync failed'),
+    onError: (error: unknown) => notifyApiError(error, 'iHRIS sync failed to start'),
+  })
+
+  const resumeIhrisMutation = useMutation({
+    mutationFn: async () => ihrisAdminService.resume({ run_id: syncStatusQuery.data?.run_id }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['ihris', 'sync', 'status'], result)
+      queryClient.invalidateQueries({ queryKey: ['ihris', 'sync', 'status'] })
+      toast.success('iHRIS sync resumed.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not resume iHRIS sync'),
+  })
+
+  const cancelIhrisMutation = useMutation({
+    mutationFn: async () => ihrisAdminService.cancel({ run_id: syncStatusQuery.data?.run_id }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['ihris', 'sync', 'status'], result)
+      queryClient.invalidateQueries({ queryKey: ['ihris', 'sync', 'status'] })
+      toast.success('iHRIS sync cancelled.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not cancel iHRIS sync'),
   })
 
   const hrmAttendSyncMutation = useMutation({
-    mutationFn: () => hrmAttendAdminService.syncSummaries(),
+    mutationFn: () => hrmAttendAdminService.start(),
     onSuccess: (result) => {
+      queryClient.setQueryData(['hrm-attend', 'sync', 'status'], result)
+      queryClient.invalidateQueries({ queryKey: ['hrm-attend', 'sync', 'status'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
-      toast.success(result.message ?? `Imported ${result.imported} attendance summaries.`)
+      toast.success('HRM Attend background sync started.')
     },
-    onError: (error: unknown) => notifyApiError(error, 'HRM Attend sync failed'),
+    onError: (error: unknown) => notifyApiError(error, 'HRM Attend sync failed to start'),
+  })
+
+  const resumeHrmMutation = useMutation({
+    mutationFn: () => hrmAttendAdminService.resume({ run_id: hrmSyncStatusQuery.data?.run_id }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['hrm-attend', 'sync', 'status'], result)
+      toast.success('HRM Attend sync resumed.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not resume HRM sync'),
+  })
+
+  const cancelHrmMutation = useMutation({
+    mutationFn: () => hrmAttendAdminService.cancel({ run_id: hrmSyncStatusQuery.data?.run_id }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['hrm-attend', 'sync', 'status'], result)
+      toast.success('HRM Attend sync cancelled.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not cancel HRM sync'),
+  })
+
+  const hrmExportPushMutation = useMutation({
+    mutationFn: () => hrmAttendAdminService.pushExport(100),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['hrm-attend', 'export', 'status'] })
+      toast.success(`Export push: ${result.pushed} pushed, ${result.failed} failed.`)
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Export push failed'),
   })
 
   const dorisSyncMutation = useMutation({
@@ -324,11 +466,12 @@ export function SettingsPage() {
         { id: 'lists' as const, label: 'Lists', icon: Layers, visible: canLists },
         { id: 'kpi' as const, label: 'KPI', icon: Target, visible: canKpiSettings },
         { id: 'data-sources' as const, label: 'Data sources', icon: Database, visible: canDataSources },
+        { id: 'backups' as const, label: 'Backups', icon: DatabaseBackup, visible: canBackups },
         { id: 'email' as const, label: 'Email', icon: Mail, visible: canEmail },
         { id: 'notifications' as const, label: 'Notifications', icon: Bell, visible: canNotifications },
         { id: 'performance' as const, label: 'Performance', icon: BarChart3, visible: canPerformance },
       ].filter((tab) => tab.visible),
-    [canLists, canKpiSettings, canDataSources, canEmail, canNotifications, canPerformance],
+    [canLists, canKpiSettings, canDataSources, canBackups, canEmail, canNotifications, canPerformance],
   )
 
   const selectTab = (tab: string) => {
@@ -375,13 +518,13 @@ export function SettingsPage() {
     <div className="pb-10">
       <PageHeader
         title="Settings"
-        subtitle="Preferences, reference lists, data sources, email, and notifications"
+        subtitle="Preferences, reference lists, data sources, email, notifications, and system policies"
       />
 
       <SettingsTabNav tabs={settingsTabs} value={activeTab} onChange={selectTab} />
 
       {activeTab === 'preferences' ? (
-        <div className="grid max-w-xl gap-6">
+        <div className="grid gap-6 lg:grid-cols-2">
           <SettingsSection title="User preferences" description="Controls your active reporting period across dashboards and performance pages.">
             <Field>
               <Select
@@ -397,6 +540,91 @@ export function SettingsPage() {
                 ))}
               </Select>
             </Field>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Appearance"
+            description="Choose light, dark, or match your device. Your choice is saved on this browser."
+            className="lg:col-span-2"
+          >
+            <ThemeAppearancePicker />
+            {canPrefsAdmin ? (
+              <>
+                <div className="mt-6">
+                  <p className="mb-1 text-sm font-semibold text-ui-text">Top navigation colors</p>
+                  <p className="mb-3 text-xs text-ui-muted">
+                    Pick a preset or build a custom bar. Each option includes background, text, and
+                    active accent colors. Saved for all users in the organisation.
+                  </p>
+                  <NavPalettePicker
+                    navPresetId={chromeForm.navPresetId}
+                    customNav={chromeForm.customNav}
+                    onPresetChange={setNavPresetId}
+                    onCustomNavChange={setCustomNav}
+                  />
+                </div>
+                <div className="mt-6">
+                  <p className="mb-1 text-sm font-semibold text-ui-text">Brand header</p>
+                  <p className="mb-3 text-xs text-ui-muted">
+                    The top row with logo and account menu. Defaults to matching the navigation colors.
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {(
+                      [
+                        {
+                          value: 'inherit' as const,
+                          label: 'Inherit nav colors',
+                          description: 'Same bar as navigation (default)',
+                        },
+                        {
+                          value: 'light' as const,
+                          label: 'Light',
+                          description: 'White/light surface, independent of nav',
+                        },
+                      ] as const
+                    ).map((option) => {
+                      const selected = chromeForm.headerChrome === option.value
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            updateChromeForm({ ...chromeForm, headerChrome: option.value })
+                          }
+                          aria-pressed={selected}
+                          className={cn(
+                            'rounded-sm border px-3 py-2.5 text-left transition',
+                            selected
+                              ? 'border-uganda-yellow bg-uganda-yellow/15 text-ui-text ring-1 ring-uganda-yellow/40'
+                              : 'border-ui-border bg-ui-surface text-ui-muted hover:border-ui-text/20 hover:bg-ui-subtle hover:text-ui-text',
+                          )}
+                        >
+                          <span className="block text-sm font-semibold text-ui-text">{option.label}</span>
+                          <span className="mt-0.5 block text-xs text-ui-muted">{option.description}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <ToggleRow
+                    label="Floating field labels"
+                    hint="Sit labels on the input border (Material-style). On by default — turn off to place labels above fields."
+                    checked={chromeForm.floatingLabels}
+                    onChange={(floatingLabels) => updateChromeForm({ ...chromeForm, floatingLabels })}
+                  />
+                </div>
+                <Button
+                  {...mt}
+                  size="sm"
+                  className="mt-6 rounded-sm bg-moh-green normal-case"
+                  onClick={() => saveUi.mutate()}
+                  loading={saveUi.isPending}
+                >
+                  Save organisation appearance
+                </Button>
+              </>
+            ) : null}
           </SettingsSection>
 
           {canPrefsAdmin ? (
@@ -433,6 +661,8 @@ export function SettingsPage() {
       ) : null}
 
       {activeTab === 'lists' && canLists ? <ListsAdminPanel /> : null}
+
+      {activeTab === 'backups' && canBackups ? <BackupsAdminPanel /> : null}
 
       {activeTab === 'data-sources' && canDataSources ? (
         <QueryState
@@ -488,6 +718,22 @@ export function SettingsPage() {
                     checked={ihrisForm.use_demo_data}
                     onChange={(checked) => setIhrisForm((f) => ({ ...f, use_demo_data: checked }))}
                   />
+                  <ToggleRow
+                    label="Allow iHRIS to overwrite staff fields"
+                    hint={
+                      ihrisForm.overwrite_enabled
+                        ? 'Sync will update email, mobile, and department from iHRIS when values differ.'
+                        : 'Protected fields are not replaced by sync (recommended default).'
+                    }
+                    checked={ihrisForm.overwrite_enabled}
+                    onChange={(checked) => setIhrisForm((f) => ({ ...f, overwrite_enabled: checked }))}
+                    highlight={!ihrisForm.overwrite_enabled}
+                  />
+                  <div className="rounded-sm border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
+                    When overwrite is disabled, HR edits in Staff Management are preserved. HR email
+                    and mobile overrides in staff profiles always take precedence. Per-staff lock
+                    toggles were removed — use this global setting instead.
+                  </div>
                 </div>
                 <Button
                   {...mt}
@@ -503,7 +749,7 @@ export function SettingsPage() {
 
             <SettingsSection
               title="HRM Attend integration"
-              description="Pull end-of-month duty-station attendance summaries from HRM Attend for staff already in PMS."
+              description="Pull monthly duty-station summaries and push OOS attendance clocks to HRM Attend. Sync runs on the server so leaving this page does not stop it."
               accent="blue"
             >
               <div className="space-y-6">
@@ -543,6 +789,20 @@ export function SettingsPage() {
                   </p>
                 ) : null}
                 <p className="text-xs text-gray-500">
+                  Status: <span className="font-semibold capitalize">{hrmSyncStatusQuery.data?.status ?? 'idle'}</span>
+                  {hrmSyncStatusQuery.data?.year_month
+                    ? ` · ${hrmSyncStatusQuery.data.year_month}`
+                    : ''}
+                  {typeof hrmSyncStatusQuery.data?.imported === 'number'
+                    ? ` · imported ${hrmSyncStatusQuery.data.imported}`
+                    : ''}
+                </p>
+                {hrmSyncStatusQuery.data?.last_error ? (
+                  <div className="rounded-sm bg-red-50 p-3 text-xs text-red-700">
+                    {hrmSyncStatusQuery.data.last_error}
+                  </div>
+                ) : null}
+                <p className="text-xs text-gray-500">
                   Fetches monthly summaries from{' '}
                   <code className="text-[11px]">
                     {hrmAttendForm.api_url.replace(/\/$/, '')}
@@ -550,6 +810,94 @@ export function SettingsPage() {
                   </code>{' '}
                   and imports only rows matching PMS staff (by iHRIS PID, card number, or NIN).
                 </p>
+                <div className="border-t border-gray-100 pt-4 space-y-4">
+                  <p className="text-sm font-semibold text-ui-text">OOS clock export to HRM</p>
+                  <ToggleRow
+                    label="Enable push of OOS attendance clocks"
+                    hint="Posts to /api/outoftstation_clockin with source=performance_system"
+                    checked={hrmAttendForm.export_push_enabled}
+                    onChange={(checked) =>
+                      setHrmAttendForm((f) => ({ ...f, export_push_enabled: checked }))
+                    }
+                  />
+                  <Field>
+                    <Input
+                      {...mt}
+                      label="Export push path"
+                      value={hrmAttendForm.export_push_path}
+                      onChange={(e) =>
+                        setHrmAttendForm((f) => ({ ...f, export_push_path: e.target.value }))
+                      }
+                    />
+                  </Field>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <Input
+                        {...mt}
+                        label="Attend API username (JWT login)"
+                        value={hrmAttendForm.basic_user}
+                        onChange={(e) =>
+                          setHrmAttendForm((f) => ({ ...f, basic_user: e.target.value }))
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <Input
+                        {...mt}
+                        type="password"
+                        label="Attend API password"
+                        value={hrmAttendForm.basic_password}
+                        onChange={(e) =>
+                          setHrmAttendForm((f) => ({ ...f, basic_password: e.target.value }))
+                        }
+                        placeholder="Leave blank to keep existing"
+                      />
+                    </Field>
+                  </div>
+                  <Field>
+                    <Input
+                      {...mt}
+                      type="password"
+                      label="Optional JWT override"
+                      value={hrmAttendForm.jwt_token}
+                      onChange={(e) =>
+                        setHrmAttendForm((f) => ({ ...f, jwt_token: e.target.value }))
+                      }
+                      placeholder={
+                        settingsQuery.data?.data_sources.hrm_attend?.jwt_token_set
+                          ? 'Token is set — leave blank to keep'
+                          : 'Or paste a Bearer token (skips login)'
+                      }
+                    />
+                  </Field>
+                  <p className="text-xs text-gray-500">
+                    Push uses <code className="text-[11px]">Authorization: Bearer</code> (Attend JWT).
+                    Username/password call <code className="text-[11px]">/api/login</code> unless a JWT
+                    override is stored.
+                  </p>
+                  <Field>
+                    <Input
+                      {...mt}
+                      type="password"
+                      label="Pull API token (for HRM → PMS)"
+                      value={hrmAttendForm.export_pull_token}
+                      onChange={(e) =>
+                        setHrmAttendForm((f) => ({ ...f, export_pull_token: e.target.value }))
+                      }
+                      placeholder={
+                        settingsQuery.data?.data_sources.hrm_attend?.export_pull_token_set
+                          ? 'Token is set — leave blank to keep'
+                          : 'Set a shared secret for pull'
+                      }
+                    />
+                  </Field>
+                  <p className="text-xs text-gray-500">
+                    Pending clocks: {hrmExportStatusQuery.data?.pending ?? '—'}
+                    {hrmExportStatusQuery.data?.last_push_at
+                      ? ` · last push ${hrmExportStatusQuery.data.last_push_at} (${hrmExportStatusQuery.data.last_push_status ?? ''})`
+                      : ''}
+                  </p>
+                </div>
                 <div className="flex flex-wrap gap-3">
                   <Button
                     {...mt}
@@ -566,10 +914,49 @@ export function SettingsPage() {
                     variant="outlined"
                     className="rounded-sm normal-case"
                     onClick={() => hrmAttendSyncMutation.mutate()}
-                    loading={hrmAttendSyncMutation.isPending}
-                    disabled={hrmSyncBlocked}
+                    loading={hrmAttendSyncMutation.isPending || hrmSyncStatusQuery.data?.status === 'running'}
+                    disabled={hrmSyncBlocked || hrmSyncStatusQuery.data?.status === 'running'}
                   >
-                    Sync last month&apos;s summaries
+                    {hrmSyncStatusQuery.data?.status === 'running'
+                      ? 'Sync in progress…'
+                      : "Sync last month's summaries"}
+                  </Button>
+                  {(hrmSyncStatusQuery.data?.status === 'failed' ||
+                    hrmSyncStatusQuery.data?.status === 'running') && (
+                    <Button
+                      {...mt}
+                      size="sm"
+                      variant="outlined"
+                      className="rounded-sm normal-case"
+                      onClick={() => resumeHrmMutation.mutate()}
+                      loading={resumeHrmMutation.isPending}
+                      disabled={hrmSyncBlocked}
+                    >
+                      Resume
+                    </Button>
+                  )}
+                  {hrmSyncStatusQuery.data?.status === 'running' ? (
+                    <Button
+                      {...mt}
+                      size="sm"
+                      variant="outlined"
+                      className="rounded-sm normal-case text-red-700"
+                      onClick={() => cancelHrmMutation.mutate()}
+                      loading={cancelHrmMutation.isPending}
+                    >
+                      Cancel
+                    </Button>
+                  ) : null}
+                  <Button
+                    {...mt}
+                    size="sm"
+                    variant="outlined"
+                    className="rounded-sm normal-case"
+                    onClick={() => hrmExportPushMutation.mutate()}
+                    loading={hrmExportPushMutation.isPending}
+                    disabled={hrmSyncBlocked || !hrmAttendForm.export_push_enabled}
+                  >
+                    Push OOS clocks now
                   </Button>
                 </div>
                 {hrmSyncBlocked && hrmAttendForm.enabled && hrmNeedsProductionHost ? (
@@ -581,12 +968,12 @@ export function SettingsPage() {
             </SettingsSection>
 
             <SettingsSection
-              title="Apache Doris analytics (optional)"
-              description="OLAP read replica for faster attendance, leave, and dashboard reports. MySQL remains the system of record for all writes."
+              title="Apache Doris analytics"
+              description="OLAP read store for faster attendance, leave, and dashboard reports. Enabled by default. MySQL remains the system of record for all writes."
               accent="blue"
             >
               <div className="space-y-4">
-                <div className="rounded-sm border border-gray-100 bg-gray-50/80 p-3 text-sm text-gray-700">
+                <div className="rounded-sm border border-ui-border bg-ui-subtle/80 p-3 text-sm text-ui-text">
                   <p>
                     Status:{' '}
                     <span className="font-semibold">
@@ -598,20 +985,27 @@ export function SettingsPage() {
                     </span>
                   </p>
                   {analyticsStatus?.message ? (
-                    <p className="mt-1 text-xs text-gray-500">{analyticsStatus.message}</p>
+                    <p className="mt-1 text-xs text-ui-muted">{analyticsStatus.message}</p>
                   ) : null}
                   {analyticsStatus?.database ? (
-                    <p className="mt-1 text-xs text-gray-500">Database: {analyticsStatus.database}</p>
+                    <p className="mt-1 text-xs text-ui-muted">Database: {analyticsStatus.database}</p>
                   ) : null}
                   {analyticsStatus?.last_sync_at ? (
-                    <p className="mt-1 text-xs text-gray-500">Last OLTP sync: {analyticsStatus.last_sync_at}</p>
+                    <p className="mt-1 text-xs text-ui-muted">Last OLTP sync: {analyticsStatus.last_sync_at}</p>
                   ) : null}
                 </div>
                 {!analyticsStatus?.enabled ? (
-                  <p className="text-xs text-gray-500">
-                    Set <code className="text-[11px]">ANALYTICS_DB_ENABLED=true</code> on the API server and start
-                    Doris (see <code className="text-[11px]">docker-compose.analytics.yml</code>). Dashboards
-                    automatically fall back to MySQL when Doris is off.
+                  <p className="text-xs text-ui-muted">
+                    Analytics is disabled. Set <code className="text-[11px]">ANALYTICS_DB_ENABLED=true</code> on
+                    the API (default) and start Doris with{' '}
+                    <code className="text-[11px]">docker compose -f docker-compose.analytics.yml up -d</code>.
+                    Dashboards fall back to MySQL when Doris is off or unreachable.
+                  </p>
+                ) : !analyticsStatus?.connected ? (
+                  <p className="text-xs text-ui-muted">
+                    Doris is enabled but not reachable yet. Start it with{' '}
+                    <code className="text-[11px]">docker compose -f docker-compose.analytics.yml up -d</code>, then
+                    sync OLTP data here. Dashboards keep using MySQL until the connection succeeds.
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-3">
@@ -622,7 +1016,6 @@ export function SettingsPage() {
                       className="rounded-sm normal-case"
                       onClick={() => dorisSyncMutation.mutate()}
                       loading={dorisSyncMutation.isPending}
-                      disabled={!analyticsStatus.connected}
                     >
                       Sync OLTP data to Doris
                     </Button>
@@ -663,8 +1056,8 @@ export function SettingsPage() {
                   <code className="text-[11px]">ug,ke,tz</code>). Leave blank to search globally.
                 </p>
                 <p className="text-xs text-gray-500">
-                  Enable the <strong>Maps JavaScript API</strong> and <strong>Places API</strong> for this key.
-                  The key is exposed to signed-in users for destination lookup on travel forms.
+                  Enable <strong>Places API (New)</strong> for this key (legacy Places Autocomplete is not used).
+                  Restrict the key by HTTP referrer to your PMS site. The key is exposed to signed-in users for destination lookup.
                 </p>
                 <Button
                   {...mt}
@@ -674,6 +1067,112 @@ export function SettingsPage() {
                   loading={saveDataSources.isPending}
                 >
                   Save Google Maps settings
+                </Button>
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
+              title="Out-of-station attendance"
+              description="Accuracy score for clocks linked to an approved trip. Percentage is the default score; radius is used for the map geofence and scoring."
+              accent="green"
+            >
+              <div className="space-y-4">
+                <Field>
+                  <Input
+                    {...mt}
+                    type="number"
+                    label="Minimum accuracy to pass (%)"
+                    value={String(oosAttendanceForm.min_accuracy_percent)}
+                    onChange={(e) =>
+                      setOosAttendanceForm((f) => ({
+                        ...f,
+                        min_accuracy_percent: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                      }))
+                    }
+                  />
+                  <p className="mt-1 text-xs text-ui-muted">
+                    Clocks below this percentage (default 70%) are flagged as outside the destination geofence.
+                  </p>
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    type="number"
+                    label="Default geofence radius (meters)"
+                    value={String(oosAttendanceForm.default_geofence_radius_meters)}
+                    onChange={(e) =>
+                      setOosAttendanceForm((f) => ({
+                        ...f,
+                        default_geofence_radius_meters: Math.max(1, Number(e.target.value) || 500),
+                      }))
+                    }
+                  />
+                  <p className="mt-1 text-xs text-ui-muted">
+                    ≈ {(oosAttendanceForm.default_geofence_radius_meters / 1609.34).toFixed(2)} miles. Used when a
+                    request has no radius set.
+                  </p>
+                </Field>
+                <Button
+                  {...mt}
+                  size="sm"
+                  className="rounded-sm bg-moh-green normal-case"
+                  onClick={() => saveDataSources.mutate()}
+                  loading={saveDataSources.isPending}
+                >
+                  Save OOS attendance settings
+                </Button>
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
+              title="Duty-station attendance"
+              description="Accuracy score for clocks at the employee duty station (personal pin or facility). Default pass mark is 90%."
+              accent="green"
+            >
+              <div className="space-y-4">
+                <Field>
+                  <Input
+                    {...mt}
+                    type="number"
+                    label="Minimum accuracy to pass (%)"
+                    value={String(dutyStationAttendanceForm.min_accuracy_percent)}
+                    onChange={(e) =>
+                      setDutyStationAttendanceForm((f) => ({
+                        ...f,
+                        min_accuracy_percent: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                      }))
+                    }
+                  />
+                  <p className="mt-1 text-xs text-ui-muted">
+                    Clocks below this percentage (default 90%) are flagged as outside the duty-station geofence.
+                  </p>
+                </Field>
+                <Field>
+                  <Input
+                    {...mt}
+                    type="number"
+                    label="Default geofence radius (meters)"
+                    value={String(dutyStationAttendanceForm.default_geofence_radius_meters)}
+                    onChange={(e) =>
+                      setDutyStationAttendanceForm((f) => ({
+                        ...f,
+                        default_geofence_radius_meters: Math.max(1, Number(e.target.value) || 500),
+                      }))
+                    }
+                  />
+                  <p className="mt-1 text-xs text-ui-muted">
+                    ≈ {(dutyStationAttendanceForm.default_geofence_radius_meters / 1609.34).toFixed(2)} miles.
+                    Used when the personal pin has no radius set.
+                  </p>
+                </Field>
+                <Button
+                  {...mt}
+                  size="sm"
+                  className="rounded-sm bg-moh-green normal-case"
+                  onClick={() => saveDataSources.mutate()}
+                  loading={saveDataSources.isPending}
+                >
+                  Save duty-station attendance settings
                 </Button>
               </div>
             </SettingsSection>
@@ -713,16 +1212,45 @@ export function SettingsPage() {
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <Button
-                  {...mt}
-                  size="sm"
-                  className="rounded-sm bg-uganda-black normal-case"
-                  onClick={() => syncMutation.mutate()}
-                  loading={syncMutation.isPending || sync?.status === 'running'}
-                  disabled={sync?.status === 'running'}
-                >
-                  {sync?.status === 'running' ? 'Sync in progress…' : 'Start iHRIS sync'}
-                </Button>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    {...mt}
+                    size="sm"
+                    className="rounded-sm bg-uganda-black normal-case"
+                    onClick={() => syncMutation.mutate()}
+                    loading={syncMutation.isPending || sync?.status === 'running'}
+                    disabled={sync?.status === 'running'}
+                  >
+                    {sync?.status === 'running' ? 'Sync in progress…' : 'Start iHRIS sync'}
+                  </Button>
+                  {(sync?.status === 'failed' || sync?.status === 'running' || sync?.has_more) && (
+                    <Button
+                      {...mt}
+                      size="sm"
+                      variant="outlined"
+                      className="rounded-sm normal-case"
+                      onClick={() => resumeIhrisMutation.mutate()}
+                      loading={resumeIhrisMutation.isPending}
+                    >
+                      Resume
+                    </Button>
+                  )}
+                  {sync?.status === 'running' ? (
+                    <Button
+                      {...mt}
+                      size="sm"
+                      variant="outlined"
+                      className="rounded-sm normal-case text-red-700"
+                      onClick={() => cancelIhrisMutation.mutate()}
+                      loading={cancelIhrisMutation.isPending}
+                    >
+                      Cancel
+                    </Button>
+                  ) : null}
+                </div>
+                <p className="mt-3 text-xs text-gray-500">
+                  Sync runs on the server (also scheduled daily at 03:00). You can leave this page.
+                </p>
               </SettingsSection>
             ) : null}
           </div>
@@ -733,7 +1261,7 @@ export function SettingsPage() {
         <SettingsSection
           title="Email configuration"
           description="SMTP or Microsoft Exchange for system notifications and reminders."
-          className="max-w-3xl"
+          className="w-full"
         >
           <div className="space-y-6">
             <Field>
@@ -925,7 +1453,7 @@ export function SettingsPage() {
           variant="form"
           onRetry={() => settingsQuery.refetch()}
         >
-          <div className="max-w-3xl space-y-5">
+          <div className="w-full space-y-5">
             <p className="text-sm text-gray-600">
               Reminder types configured for leave, performance plans, and approvals. Use the test action
               below to trigger a send cycle without waiting for the scheduler.
@@ -993,7 +1521,7 @@ export function SettingsPage() {
           variant="form"
           onRetry={() => performanceSettingsQuery.refetch()}
         >
-          <div className="grid max-w-3xl gap-6">
+          <div className="grid w-full gap-6 lg:grid-cols-2">
             <SettingsSection
               title="Reporting windows"
               description="MoH practice: each quarterly report opens in the first weeks of the following quarter (e.g. Q1 report in Q2). Use test override to open all periods while testing."
@@ -1103,7 +1631,7 @@ export function SettingsPage() {
           <SettingsSection
             title="KPI Management"
             description="Configure the national KPI catalog and assign indicators to jobs, departments, and individual staff. Administrators have full access; HR officers receive these permissions by default and can be adjusted in Access Control."
-            className="max-w-3xl"
+            className="w-full"
           >
             <div className="mb-6 space-y-2">
               {(kpiPermissionsQuery.data?.permissions ?? []).map((p) => (

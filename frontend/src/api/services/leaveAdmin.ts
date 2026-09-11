@@ -2,7 +2,7 @@ import apiClient from '../client'
 import type { PaginatedResponse } from '@/types/pagination'
 import { unwrapPaginated } from '@/types/pagination'
 import { asArray } from '@/utils/asArray'
-import { normalizeLeaveTypes } from '@/utils/normalizeApi'
+import { normalizeLeaveApprovalStages, normalizeLeaveTypes } from '@/utils/normalizeApi'
 
 export type LeavePolicySettings = {
   advance_notice_days: number
@@ -224,7 +224,7 @@ export const leaveAdminService = {
   },
   listApprovalStages: async (): Promise<LeaveApprovalStage[]> => {
     const { data } = await apiClient.get('/admin/leave/approval-stages')
-    return asArray<LeaveApprovalStage>(data)
+    return normalizeLeaveApprovalStages(data) as LeaveApprovalStage[]
   },
   listWorkflowProfiles: async (): Promise<LeaveWorkflowProfile[]> => {
     const { data } = await apiClient.get('/admin/leave/workflow-profiles')
@@ -232,15 +232,15 @@ export const leaveAdminService = {
   },
   listWorkflowStages: async (profile = 'default'): Promise<LeaveApprovalStage[]> => {
     const { data } = await apiClient.get('/admin/leave/workflow-stages', { params: { profile } })
-    return asArray<LeaveApprovalStage>(data)
+    return normalizeLeaveApprovalStages(data) as LeaveApprovalStage[]
   },
   createApprovalStage: async (payload: Partial<LeaveApprovalStage>) => {
     const { data } = await apiClient.post('/admin/leave/approval-stages', payload)
-    return data as LeaveApprovalStage
+    return (normalizeLeaveApprovalStages([data])[0] ?? data) as LeaveApprovalStage
   },
   updateApprovalStage: async (id: number, payload: Partial<LeaveApprovalStage>) => {
     const { data } = await apiClient.put(`/admin/leave/approval-stages/${id}`, payload)
-    return data as LeaveApprovalStage
+    return (normalizeLeaveApprovalStages([data])[0] ?? data) as LeaveApprovalStage
   },
   deleteApprovalStage: async (id: number) => {
     const { data } = await apiClient.delete(`/admin/leave/approval-stages/${id}`)

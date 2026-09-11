@@ -5,8 +5,8 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-moh_pms}
+      MYSQL_USER: ${MYSQL_USER:-pms}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - ${DATA_DIR}/mysql:/var/lib/mysql
@@ -18,7 +18,26 @@ services:
       retries: 18
       start_period: 120s
     profiles:
-      - app
+      - mysql
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: moh-pms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-moh_pms}
+      POSTGRES_USER: ${DB_USERNAME:-pms}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ${DATA_DIR}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    profiles:
+      - postgres
 
   redis:
     image: redis:7-alpine
@@ -43,6 +62,10 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+        required: false
+      postgres:
+        condition: service_healthy
+        required: false
       redis:
         condition: service_healthy
     environment:
@@ -59,18 +82,36 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       ADMIN_NAME: ${ADMIN_NAME}
-      DB_CONNECTION: mysql
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_DATABASE: ${MYSQL_DATABASE}
-      DB_USERNAME: ${MYSQL_USER}
-      DB_PASSWORD: ${MYSQL_PASSWORD}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}
+      SUPER_ADMIN_NAME: ${SUPER_ADMIN_NAME:-System Super Admin}
+      DB_CONNECTION: ${DB_CONNECTION:-postgres}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-moh_pms}
+      DB_USERNAME: ${DB_USERNAME:-pms}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SCHEMA: ${DB_SCHEMA:-public}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      FILE_STORAGE_ROOT: ${FILE_STORAGE_ROOT:-/var/lib/moh-pms/media}
+      DB_BACKUP_DIR: ${DB_BACKUP_DIR_CONTAINER:-/var/lib/moh-pms/db-backups}
+      DB_BACKUP_USE_DOCKER_EXEC: ${DB_BACKUP_USE_DOCKER_EXEC:-true}
       IHRIS_USE_DEMO_DATA: ${IHRIS_USE_DEMO_DATA}
       LOAD_DEMO_DATA: ${LOAD_DEMO_DATA}
+      ANALYTICS_DB_ENABLED: ${ANALYTICS_DB_ENABLED:-true}
+      ANALYTICS_DB_HOST: ${ANALYTICS_DB_HOST:-host.docker.internal}
+      ANALYTICS_DB_PORT: ${ANALYTICS_DB_PORT:-9030}
+      ANALYTICS_DB_DATABASE: ${ANALYTICS_DB_DATABASE:-moh_pms_analytics}
+      ANALYTICS_DB_USERNAME: ${ANALYTICS_DB_USERNAME:-root}
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${DATA_DIR}/storage:/app/storage
+      - ${DATA_DIR}/media:/var/lib/moh-pms/media
+      - ${DB_BACKUP_DIR:-/home/moh-pms/db-backups}:/var/lib/moh-pms/db-backups
+      - /var/run/docker.sock:/var/run/docker.sock
     expose:
       - "3030"
     healthcheck:
@@ -112,4 +153,3 @@ services:
       - ./nginx/gateway.conf:/etc/nginx/conf.d/default.conf:ro
     profiles:
       - app
-

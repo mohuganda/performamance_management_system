@@ -5,6 +5,7 @@ import { TablePagination } from '@/components/molecules/TablePagination'
 import { useClientPagination } from '@/hooks/useClientPagination'
 import { isScoreColumn, statusTone } from '@/utils/trafficSignal'
 import { Database } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 
 interface DataTableProps {
@@ -18,6 +19,15 @@ interface DataTableProps {
   highlighted?: boolean
   /** When set, paginate rows client-side with this page size */
   perPage?: number
+}
+
+function actionHref(label: string, explicitUrl?: string | number): string | null {
+  if (typeof explicitUrl === 'string' && explicitUrl.startsWith('/')) return explicitUrl
+  const key = label.trim().toLowerCase()
+  if (key === 'review' || key === 'start') return '/performance'
+  if (key === 'apply' || key === 'view') return '/leave'
+  if (key.includes('approve')) return '/approvals'
+  return null
 }
 
 export function DataTable({
@@ -49,23 +59,23 @@ export function DataTable({
         className,
       )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-moh-green/10 bg-gradient-to-r from-moh-background via-white to-moh-background/40 px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ui-border bg-ui-subtle/60 px-4 py-3">
         <div>
-          <h2 className="text-sm font-bold uppercase tracking-wide text-moh-green">{title}</h2>
-          {description ? <p className="mt-0.5 text-xs text-gray-500">{description}</p> : null}
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ui-text">{title}</h2>
+          {description ? <p className="mt-0.5 text-xs text-ui-muted">{description}</p> : null}
         </div>
-        <div className="inline-flex items-center gap-2 rounded-full border border-moh-green/20 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm">
-          <Database className="h-3.5 w-3.5 text-moh-green" />
+        <div className="inline-flex items-center gap-2 rounded-full border border-ui-border bg-ui-surface px-3 py-1.5 text-xs font-medium text-ui-muted shadow-sm">
+          <Database className="h-3.5 w-3.5 text-ui-text" />
           <span>
-            <strong className="text-moh-green">{total.toLocaleString()}</strong> record
+            <strong className="text-ui-text">{total.toLocaleString()}</strong> record
             {total === 1 ? '' : 's'}
           </span>
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
+        <table className="min-w-full text-left text-sm text-ui-text">
           <thead>
-            <tr className="border-b border-moh-green/10 bg-moh-green/[0.06] text-[11px] font-semibold uppercase tracking-wider text-gray-600">
+            <tr className="border-b border-ui-border bg-ui-subtle text-[11px] font-semibold uppercase tracking-wider text-ui-muted">
               {displayColumns.map((column) => (
                 <th
                   key={column}
@@ -76,10 +86,10 @@ export function DataTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-ui-border">
             {displayRows.length === 0 ? (
               <tr>
-                <td colSpan={displayColumns.length} className="px-4 py-12 text-center text-sm text-gray-400">
+                <td colSpan={displayColumns.length} className="px-4 py-12 text-center text-sm text-ui-muted">
                   {emptyMessage}
                 </td>
               </tr>
@@ -88,26 +98,45 @@ export function DataTable({
                 <tr
                   key={index}
                   className={cn(
-                    'transition-colors hover:bg-moh-green/[0.04]',
-                    index % 2 === 1 && 'bg-gray-50/60',
+                    'transition-colors hover:bg-ui-subtle/80',
+                    index % 2 === 1 && 'bg-ui-subtle/40',
                   )}
                 >
                   {showRowNumbers ? (
-                    <td className="px-4 py-3 text-center text-xs font-medium tabular-nums text-gray-500">
+                    <td className="px-4 py-3 text-center text-xs font-medium tabular-nums text-ui-muted">
                       {rowOffset + index + 1}
                     </td>
                   ) : null}
-                  {columns.map((column) => (
-                    <td key={column} className="px-4 py-3 align-top">
-                      {column === 'Status' && typeof row[column] === 'string' ? (
-                        <Badge label={String(row[column])} tone={statusTone(String(row[column]))} />
-                      ) : isScoreColumn(column) ? (
-                        <TrafficScore value={row[column] ?? '—'} />
-                      ) : (
-                        row[column]
-                      )}
-                    </td>
-                  ))}
+                  {columns.map((column) => {
+                    const value = row[column]
+                    const isActionCol = column === 'Action' || column === 'Actions'
+                    if (isActionCol && typeof value === 'string' && value.trim()) {
+                      const href = actionHref(value, row.action_url ?? row.ActionURL)
+                      if (href) {
+                        return (
+                          <td key={column} className="px-4 py-3 align-top">
+                            <Link
+                              to={href}
+                              className="inline-flex items-center rounded-sm bg-moh-green px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-moh-green/90"
+                            >
+                              {value}
+                            </Link>
+                          </td>
+                        )
+                      }
+                    }
+                    return (
+                      <td key={column} className="px-4 py-3 align-top">
+                        {column === 'Status' && typeof value === 'string' ? (
+                          <Badge label={String(value)} tone={statusTone(String(value))} />
+                        ) : isScoreColumn(column) ? (
+                          <TrafficScore value={value ?? '—'} />
+                        ) : (
+                          value
+                        )}
+                      </td>
+                    )
+                  })}
                 </tr>
               ))
             )}

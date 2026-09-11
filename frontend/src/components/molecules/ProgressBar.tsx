@@ -23,7 +23,11 @@ export function ProgressBar({ value, label, sublabel, onClick, active }: Progres
             }
           : undefined
       }
-      className={clickable ? `space-y-2 rounded-sm p-2 transition hover:bg-moh-green/5 ${active ? 'ring-2 ring-moh-green' : ''}` : 'space-y-2'}
+      className={
+        clickable
+          ? `space-y-2 rounded-sm p-2 transition hover:bg-moh-green/5 ${active ? 'bg-moh-green/10' : ''}`
+          : 'space-y-2'
+      }
     >
       {(label || sublabel) && (
         <div className="flex items-center justify-between text-sm">

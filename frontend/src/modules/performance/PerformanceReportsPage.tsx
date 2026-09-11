@@ -226,7 +226,7 @@ export function PerformanceReportsPage() {
       >
         {report ? (
           <div className="space-y-6">
-            <Card {...mt} className="rounded-sm border border-moh-green/15 p-5 shadow-sm">
+            <Card {...mt} className="rounded-sm border border-ui-border bg-ui-surface p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex gap-4">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm bg-gradient-to-br from-sky-100 to-indigo-100 text-indigo-700">

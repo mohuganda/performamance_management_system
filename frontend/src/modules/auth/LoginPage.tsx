@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Eye, EyeOff } from 'lucide-react'
 import { Button, Card, Input, Typography } from '@material-tailwind/react'
 import { BrandLogo } from '@/components/atoms/BrandLogo'
 import { getApiErrorMessage } from '@/api/client'
@@ -23,6 +24,7 @@ export function LoginPage() {
   const [info, setInfo] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showDemoAccounts, setShowDemoAccounts] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const switchMode = (next: LoginMode) => {
     setMode(next)
@@ -145,17 +147,33 @@ export function LoginPage() {
                   className="rounded-sm"
                   color="gray"
                 />
-                <Input
-                  {...mt}
-                  type="password"
-                  label="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  className="rounded-sm"
-                  color="gray"
-                />
+                <div className="relative">
+                  <Input
+                    {...mt}
+                    type={showPassword ? 'text' : 'password'}
+                    label="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                    className="rounded-sm !pr-11"
+                    color="gray"
+                    containerProps={{ className: 'min-w-0' }}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-sm p-1 text-ui-muted hover:text-ui-text focus:outline-none focus-visible:ring-2 focus-visible:ring-moh-green/40"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showPassword}
+                    onClick={() => setShowPassword((v) => !v)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" aria-hidden />
+                    ) : (
+                      <Eye className="h-5 w-5" aria-hidden />
+                    )}
+                  </button>
+                </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                   <button

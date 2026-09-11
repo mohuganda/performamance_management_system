@@ -3,6 +3,8 @@ package migrations
 import (
 	"github.com/goravel/framework/contracts/database/schema"
 	"github.com/goravel/framework/facades"
+
+	"goravel/app/support/dbdialect"
 )
 
 type M20260711000001AddKpiSubjectArea struct{}
@@ -17,7 +19,10 @@ func (r *M20260711000001AddKpiSubjectArea) Up() error {
 	}
 	if !facades.Schema().HasColumn("kpis", "subject_area") {
 		if err := facades.Schema().Table("kpis", func(table schema.Blueprint) {
-			table.UnsignedTinyInteger("subject_area").Nullable().After("computation_category")
+			col := table.UnsignedTinyInteger("subject_area").Nullable()
+			if dbdialect.IsMysql() {
+				col.After("computation_category")
+			}
 		}); err != nil {
 			return err
 		}

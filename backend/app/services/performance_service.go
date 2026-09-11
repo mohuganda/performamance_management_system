@@ -2,8 +2,8 @@ package services
 
 import (
 	"fmt"
-	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"goravel/app/facades"
@@ -514,7 +514,10 @@ func (s *PerformanceService) GetReportForm(staffID uint, reportType string) (Rep
 
 	ppa, err := s.loadPpa(staffID, fy.ID)
 	if err != nil {
-		return ReportForm{}, fmt.Errorf("submit your performance plan before filing quarterly reports")
+		return ReportForm{}, fmt.Errorf("submit and get your performance plan approved before filing quarterly reports")
+	}
+	if ppa.Status != "approved" {
+		return ReportForm{}, fmt.Errorf("your performance plan must be approved before filing quarterly reports (current status: %s)", ppa.Status)
 	}
 
 	quarter, err := s.ensureQuarter(fy, reportType)
@@ -697,19 +700,30 @@ func (s *PerformanceService) SavePpaPlan(staffID uint, inputs []PpaKpiInput) (mo
 	if err != nil {
 		return models.Ppa{}, err
 	}
-	if ppa.Status != "draft" && ppa.Status != "supervisor_review" {
-		return models.Ppa{}, fmt.Errorf("PPA cannot be edited in status %s", ppa.Status)
+	if ppa.Status != "draft" && ppa.Status != "returned" {
+		return models.Ppa{}, fmt.Errorf("PPA cannot be edited in status %s — wait for supervisor return, or edit only drafts and returned plans", ppa.Status)
 	}
 
 	total := 0.0
+	seen := map[uint]struct{}{}
 	for _, input := range inputs {
+		if input.KpiID == 0 {
+			continue
+		}
+		if input.WeightPercentage < 0 {
+			return models.Ppa{}, fmt.Errorf("KPI weight cannot be negative")
+		}
 		total += input.WeightPercentage
+		seen[input.KpiID] = struct{}{}
 	}
 	if total > 100.01 {
 		return models.Ppa{}, fmt.Errorf("total KPI weight cannot exceed 100%% (got %.1f)", total)
 	}
 
 	for _, input := range inputs {
+		if input.KpiID == 0 {
+			continue
+		}
 		target := input.TargetValue
 		var existing models.PpaKpi
 		if err := facades.Orm().Query().
@@ -735,8 +749,19 @@ func (s *PerformanceService) SavePpaPlan(staffID uint, inputs []PpaKpiInput) (mo
 		}
 	}
 
+	// Drop KPIs removed from this draft so edits fully replace the plan.
+	var existingRows []models.PpaKpi
+	_ = facades.Orm().Query().Where("ppa_id", ppa.ID).Get(&existingRows)
+	for _, row := range existingRows {
+		if _, ok := seen[row.KpiID]; ok {
+			continue
+		}
+		_, _ = facades.Orm().Query().Delete(&row)
+	}
+
 	ppa.TotalWeight = total
 	ppa.Status = "draft"
+	ppa.SubmittedAt = nil
 	if err := facades.Orm().Query().Save(&ppa); err != nil {
 		return models.Ppa{}, err
 	}
@@ -760,7 +785,18 @@ func (s *PerformanceService) SubmitPpa(staffID uint) error {
 		Where("staff_id", staffID).
 		Where("financial_year_id", fy.ID).
 		First(&ppa); err != nil || ppa.ID == 0 {
-		return fmt.Errorf("performance plan not found — add KPIs first")
+		return fmt.Errorf("performance plan not found — save a draft with KPIs first")
+	}
+	if ppa.Status != "draft" && ppa.Status != "returned" {
+		return fmt.Errorf("only draft or returned plans can be submitted (current status: %s)", ppa.Status)
+	}
+
+	kpiCount, err := facades.Orm().Query().Model(&models.PpaKpi{}).Where("ppa_id", ppa.ID).Count()
+	if err != nil {
+		return err
+	}
+	if kpiCount == 0 {
+		return fmt.Errorf("add at least one KPI and save as draft before submitting")
 	}
 	if ppa.TotalWeight < 99.9 {
 		return fmt.Errorf("PPA total weight must reach 100%% before submission (currently %.1f%%)", ppa.TotalWeight)
@@ -883,69 +919,15 @@ func reportTypeLabel(reportType string) string {
 
 func resolveReportKpiActual(
 	entry models.PerformanceReportEntry,
-	reportType string,
-	target float64,
-	isCumulative bool,
-	prior []PriorReportSnapshot,
+	_ string,
+	_ float64,
+	_ bool,
+	_ []PriorReportSnapshot,
 ) (float64, bool) {
 	if entry.ID > 0 && entry.ActualValue != nil {
 		return *entry.ActualValue, true
 	}
-	suggested := suggestedReportActual(reportType, target, isCumulative, prior)
-	if suggested > 0 {
-		return suggested, true
-	}
 	return 0, false
-}
-
-// suggestedReportActual pre-fills report forms when no saved entry exists yet.
-func suggestedReportActual(reportType string, target float64, isCumulative bool, prior []PriorReportSnapshot) float64 {
-	if target <= 0 {
-		return 0
-	}
-	if isCumulative {
-		fraction := cumulativeYtdFraction(reportType)
-		ytd := target * fraction
-		if len(prior) > 0 {
-			last := prior[len(prior)-1].ActualValue
-			if ytd < last {
-				ytd = last
-			}
-		}
-		return math.Round(ytd*10) / 10
-	}
-	mult := periodAchievementFactor(reportType)
-	return math.Round(target*mult*10) / 10
-}
-
-func cumulativeYtdFraction(reportType string) float64 {
-	switch reportType {
-	case "q1":
-		return 0.27
-	case "midterm":
-		return 0.52
-	case "q3":
-		return 0.76
-	case "endterm":
-		return 0.94
-	default:
-		return 0.5
-	}
-}
-
-func periodAchievementFactor(reportType string) float64 {
-	switch reportType {
-	case "q1":
-		return 0.88
-	case "midterm":
-		return 0.91
-	case "q3":
-		return 0.93
-	case "endterm":
-		return 0.96
-	default:
-		return 0.9
-	}
 }
 
 func (s *PerformanceService) SubmitReport(staffID uint, reportType string, entries []ReportEntryInput) error {
@@ -956,10 +938,10 @@ func (s *PerformanceService) SubmitReport(staffID uint, reportType string, entri
 
 	ppa, err := s.loadPpa(staffID, fy.ID)
 	if err != nil {
-		return fmt.Errorf("submit your performance plan before filing quarterly reports")
+		return fmt.Errorf("submit and get your performance plan approved before filing quarterly reports")
 	}
-	if ppa.Status == "draft" {
-		return fmt.Errorf("submit your performance plan before filing quarterly reports")
+	if ppa.Status != "approved" {
+		return fmt.Errorf("your performance plan must be approved before filing quarterly reports (current status: %s)", ppa.Status)
 	}
 
 	if err := s.config.AssertOpen(reportType, fy, time.Now()); err != nil {
@@ -990,6 +972,9 @@ func (s *PerformanceService) SubmitReport(staffID uint, reportType string, entri
 	}
 
 	now := time.Now()
+	if !reportEditableByStaff(report.Status) {
+		return fmt.Errorf("this report cannot be edited while status is %s", report.Status)
+	}
 	report.SubmittedAt = &now
 	if reportType == "endterm" {
 		if err := s.initAppraisalOnSubmit(&report, staffID); err != nil {
@@ -1029,6 +1014,16 @@ func (s *PerformanceService) SubmitReport(staffID uint, reportType string, entri
 	}
 
 	return nil
+}
+
+func reportEditableByStaff(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "", "draft", "returned":
+		return true
+	default:
+		// submitted, supervisor_review, approved, rejected, countersigning, etc.
+		return false
+	}
 }
 
 func quarterSummariesFromWindows(windows []ReportingWindowStatus) []QuarterCycleSummary {

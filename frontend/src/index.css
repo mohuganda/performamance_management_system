@@ -1,9 +1,10 @@
 @import 'tailwindcss';
 @config '../tailwind.config.cjs';
 @import './styles/toast.css';
+@import './styles/fields.css';
 
 @theme {
-  /* Professional grey UI */
+  /* Professional grey UI — values overridden under .dark */
   --color-ui-bg: #f4f4f5;
   --color-ui-surface: #ffffff;
   --color-ui-text: #18181b;
@@ -36,14 +37,419 @@
   --radius-lg: 0.375rem;
 }
 
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+
+  --color-ui-bg: #0c0c0e;
+  --color-ui-surface: #18181b;
+  --color-ui-text: #f4f4f5;
+  --color-ui-muted: #a1a1aa;
+  --color-ui-border: #3f3f46;
+  --color-ui-subtle: #27272a;
+
+  --color-uganda-black: #f4f4f5;
+  --color-moh-green: #f4f4f5;
+  --color-moh-background: #0c0c0e;
+  --color-moh-card: #18181b;
+
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+  --color-moh-success: #4ade80;
+  --color-moh-warning: #fbbf24;
+  --color-moh-error: #f87171;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
   font-family: var(--font-sans);
   background: var(--color-ui-bg);
   color: var(--color-ui-text);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 #root {
   min-height: 100vh;
+}
+
+/* Dashboard metric/summary tiles: no box frame (accent is a child bar, not a border) */
+.dashboard-stat-card {
+  border: 0 !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+.dashboard-stat-card:hover,
+.dashboard-stat-card:focus,
+.dashboard-stat-card:focus-visible,
+.dashboard-stat-card[aria-pressed='true'] {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+/* Progress / flat tiles that should have no frame at all */
+.dashboard-flat-card {
+  border: 0 !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+/* Soft remaps for components that hard-code light palette utilities. */
+html.dark .bg-white,
+html.dark .\!bg-white,
+html.dark [class*='bg-white'] {
+  background-color: var(--color-ui-surface) !important;
+}
+
+/* Material Tailwind Card often ships with white + fixed blue-gray text */
+html.dark .rounded-xl.bg-white,
+html.dark div.rounded-lg.bg-white,
+html.dark .shadow-md.bg-white {
+  background-color: var(--color-ui-surface) !important;
+  color: var(--color-ui-text) !important;
+}
+
+html.dark .bg-gray-50,
+html.dark .bg-gray-50\/60,
+html.dark .bg-gray-100,
+html.dark .bg-zinc-50,
+html.dark .bg-zinc-100,
+html.dark .bg-blue-gray-50,
+html.dark .bg-blue-gray-100 {
+  background-color: var(--color-ui-subtle) !important;
+}
+
+html.dark .text-gray-400,
+html.dark .text-gray-500,
+html.dark .text-gray-600,
+html.dark .text-zinc-400,
+html.dark .text-zinc-500,
+html.dark .text-zinc-600,
+html.dark .text-blue-gray-400,
+html.dark .text-blue-gray-500,
+html.dark .text-blue-gray-600 {
+  color: var(--color-ui-muted) !important;
+}
+
+html.dark .text-gray-700,
+html.dark .text-gray-800,
+html.dark .text-gray-900,
+html.dark .text-zinc-700,
+html.dark .text-zinc-800,
+html.dark .text-zinc-900,
+html.dark .text-blue-gray-700,
+html.dark .text-blue-gray-800,
+html.dark .text-blue-gray-900,
+html.dark .text-black {
+  color: var(--color-ui-text) !important;
+}
+
+html.dark .border-gray-100,
+html.dark .border-gray-200,
+html.dark .border-gray-300,
+html.dark .border-zinc-100,
+html.dark .border-zinc-200,
+html.dark .border-zinc-300,
+html.dark .border-blue-gray-50,
+html.dark .border-blue-gray-100,
+html.dark .border-blue-gray-200 {
+  border-color: var(--color-ui-border) !important;
+}
+
+html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-zinc-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-zinc-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--color-ui-border) !important;
+}
+
+html.dark .shadow-sm,
+html.dark .shadow,
+html.dark .shadow-md,
+html.dark .shadow-lg,
+html.dark .shadow-xl {
+  --tw-shadow-color: rgb(0 0 0 / 0.45);
+}
+
+/* Soft tinted surfaces used on dashboards and chips */
+html.dark .bg-emerald-50\/60,
+html.dark .bg-emerald-50 {
+  background-color: rgb(6 78 59 / 0.28) !important;
+}
+
+html.dark .bg-amber-50\/50,
+html.dark .bg-amber-50,
+html.dark .bg-moh-warning\/5 {
+  background-color: rgb(120 53 15 / 0.28) !important;
+}
+
+html.dark .bg-blue-50\/50,
+html.dark .bg-blue-50,
+html.dark .bg-sky-50 {
+  background-color: rgb(30 58 138 / 0.3) !important;
+}
+
+html.dark .bg-red-50\/40,
+html.dark .bg-red-50 {
+  background-color: rgb(127 29 29 / 0.28) !important;
+}
+
+html.dark .bg-purple-50\/40,
+html.dark .bg-purple-50,
+html.dark .bg-violet-50 {
+  background-color: rgb(88 28 135 / 0.28) !important;
+}
+
+html.dark .bg-green-50,
+html.dark .bg-uganda-yellow\/5 {
+  background-color: rgb(6 78 59 / 0.28) !important;
+}
+
+html.dark .bg-amber-100 {
+  background-color: rgb(120 53 15 / 0.4) !important;
+}
+
+html.dark .bg-blue-100,
+html.dark .bg-sky-100 {
+  background-color: rgb(30 58 138 / 0.4) !important;
+}
+
+html.dark .bg-red-100 {
+  background-color: rgb(127 29 29 / 0.4) !important;
+}
+
+html.dark .bg-purple-100,
+html.dark .bg-violet-100 {
+  background-color: rgb(88 28 135 / 0.4) !important;
+}
+
+html.dark .bg-emerald-100 {
+  background-color: rgb(6 78 59 / 0.4) !important;
+}
+
+html.dark .text-amber-800,
+html.dark .text-amber-700 {
+  color: #fcd34d !important;
+}
+
+html.dark .text-blue-800,
+html.dark .text-blue-700,
+html.dark .text-sky-800,
+html.dark .text-sky-700 {
+  color: #93c5fd !important;
+}
+
+html.dark .text-red-700,
+html.dark .text-red-600 {
+  color: #fca5a5 !important;
+}
+
+html.dark .text-purple-800,
+html.dark .text-violet-800,
+html.dark .text-violet-700 {
+  color: #d8b4fe !important;
+}
+
+html.dark .text-green-800,
+html.dark .text-emerald-800 {
+  color: #6ee7b7 !important;
+}
+
+/* Primary filled CTAs stay high-contrast on dark canvases */
+html.dark button.bg-moh-green,
+html.dark a.bg-moh-green,
+html.dark .bg-moh-green:not([class*='bg-moh-green/']) {
+  background-color: #f4f4f5 !important;
+  color: #18181b !important;
+}
+
+html.dark button.bg-uganda-black,
+html.dark a.bg-uganda-black {
+  background-color: #f4f4f5 !important;
+  color: #18181b !important;
+}
+
+/* Material Tailwind navbar / cards / menus force white */
+html.dark nav.sticky,
+html.dark .navbar,
+html.dark [class*='navbar'] {
+  background-color: var(--color-ui-surface) !important;
+  color: var(--color-ui-text) !important;
+}
+
+html.dark [role='menu'],
+html.dark [role='listbox'],
+html.dark .MuiPaper-root {
+  background-color: var(--color-ui-surface) !important;
+  color: var(--color-ui-text) !important;
+  border-color: var(--color-ui-border) !important;
+}
+
+html.dark [role='menuitem'],
+html.dark [role='option'] {
+  color: var(--color-ui-text) !important;
+}
+
+html.dark [role='menuitem']:hover,
+html.dark [role='menuitem']:focus,
+html.dark [role='menuitem']:focus-visible,
+html.dark [role='option']:hover,
+html.dark [role='option']:focus {
+  background-color: var(--color-ui-subtle) !important;
+  color: var(--color-ui-text) !important;
+}
+
+/* Active/current nav item — avoid white-on-white from MT + light primary token */
+html.dark [role='menuitem'].bg-ui-subtle,
+html.dark [role='menuitem'][aria-current='page'],
+html.dark a[aria-current='page'] [role='menuitem'] {
+  background-color: var(--color-ui-subtle) !important;
+  color: var(--color-ui-text) !important;
+}
+
+/* Tables */
+html.dark table thead tr,
+html.dark table thead th {
+  background-color: var(--color-ui-subtle) !important;
+  color: var(--color-ui-muted) !important;
+  border-color: var(--color-ui-border) !important;
+}
+
+html.dark table tbody td {
+  border-color: var(--color-ui-border) !important;
+  color: var(--color-ui-text);
+}
+
+html.dark table tbody tr:hover {
+  background-color: rgb(244 244 245 / 0.04) !important;
+}
+
+/* Material Tailwind Input / Select fields */
+html.dark .peer,
+html.dark input,
+html.dark textarea,
+html.dark select {
+  color: var(--color-ui-text) !important;
+}
+
+html.dark .peer:focus ~ label,
+html.dark label {
+  color: var(--color-ui-muted);
+}
+
+html.dark [class*='border-blue-gray'],
+html.dark .peer ~ * {
+  border-color: var(--color-ui-border);
+}
+
+/* Gradients that baked in white mid-stops */
+html.dark .from-moh-background,
+html.dark .via-white,
+html.dark .to-moh-background\/40 {
+  --tw-gradient-from: var(--color-ui-subtle) !important;
+  --tw-gradient-to: var(--color-ui-surface) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--color-ui-surface), var(--tw-gradient-to) !important;
+}
+
+/* ——— Top navigation chrome (Settings → Appearance; colors applied via JS) ——— */
+:root {
+  --nav-bg: #0b4f4a;
+  --nav-fg: #ffffff;
+  --nav-active: #fcdc04;
+  --nav-active-fg: #1a1a1a;
+  --nav-muted: rgba(255, 255, 255, 0.75);
+  --nav-border: rgba(255, 255, 255, 0.18);
+  --nav-hover: rgba(255, 255, 255, 0.12);
+  --nav-outline: rgba(255, 255, 255, 0.45);
+}
+
+.app-chrome {
+  color: var(--nav-fg);
+  background-color: var(--nav-bg) !important;
+}
+
+.app-nav-muted {
+  color: var(--nav-muted) !important;
+}
+
+.app-nav-item {
+  color: var(--nav-muted) !important;
+}
+
+.app-nav-item:hover {
+  background-color: var(--nav-hover) !important;
+  color: var(--nav-fg) !important;
+}
+
+.app-nav-item-active {
+  color: var(--nav-fg) !important;
+}
+
+.app-nav-item-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0.5rem;
+  right: 0.5rem;
+  height: 0.125rem;
+  background-color: var(--nav-active);
+}
+
+.app-nav-outline {
+  border-color: var(--nav-outline) !important;
+  color: var(--nav-fg) !important;
+  background-color: transparent !important;
+}
+
+.app-nav-outline:hover {
+  background-color: var(--nav-hover) !important;
+}
+
+.app-nav-chip-active {
+  background-color: var(--nav-active) !important;
+  color: var(--nav-active-fg) !important;
+  border-color: var(--nav-active) !important;
+}
+
+/* Header account controls on colored chrome */
+.app-chrome button,
+.app-chrome a[aria-label] {
+  color: var(--nav-muted);
+}
+
+.app-chrome button:hover,
+.app-chrome a[aria-label]:hover {
+  background-color: var(--nav-hover) !important;
+  color: var(--nav-fg) !important;
+}
+
+.app-chrome .text-ui-text {
+  color: var(--nav-fg) !important;
+}
+
+.app-chrome .text-ui-muted {
+  color: var(--nav-muted) !important;
+}
+
+.app-chrome .hover\:bg-ui-subtle:hover {
+  background-color: var(--nav-hover) !important;
 }

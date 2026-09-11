@@ -20,7 +20,7 @@ type HrmAttendService struct {
 func NewHrmAttendService() *HrmAttendService {
 	return &HrmAttendService{
 		settings: NewSettingsService(),
-		client:   &http.Client{Timeout: 4 * time.Second},
+		client:   &http.Client{Timeout: 120 * time.Second},
 	}
 }
 
@@ -154,10 +154,8 @@ func (s *HrmAttendService) MonthlySummaries(months int) []HrmAttendSummary {
 	if live := s.fetchLiveSummaries(months); len(live) > 0 {
 		return live
 	}
-	if isProductionDeployment() {
-		return nil
-	}
-	return s.demoSummaries(months)
+	// Prefer empty over fabricated demo curves so dashboards stay realistic.
+	return nil
 }
 
 func (s *HrmAttendService) fetchLiveSummaries(months int) []HrmAttendSummary {

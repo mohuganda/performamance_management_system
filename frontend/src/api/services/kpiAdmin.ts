@@ -111,6 +111,11 @@ export const kpiAdminService = {
     assignable_type?: string
     kpi_id?: number
     search?: string
+    facility_type_ref_id?: number
+    facility_id?: number
+    department_id?: number
+    job_id?: number
+    staff_id?: number
     page?: number
     per_page?: number
   }): Promise<PaginatedResponse<KpiAssignmentRow>> => {
@@ -135,6 +140,13 @@ export const kpiAdminService = {
   },
   removeAssignment: async (id: number) => {
     const { data } = await apiClient.delete(`/admin/kpi/assignments/${id}`)
+    return data
+  },
+  removeAssignmentsBulk: async (ids: number[]) => {
+    const { data } = await apiClient.post<{ message: string; removed: number }>(
+      '/admin/kpi/assignments/bulk-remove',
+      { ids },
+    )
     return data
   },
   listJobs: async () => {

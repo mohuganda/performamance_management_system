@@ -1,11 +1,21 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Card, Textarea, Typography } from '@material-tailwind/react'
 import { parseISO, startOfDay } from 'date-fns'
 import { FileAttachmentField } from '@/components/molecules/FileAttachmentField'
 import { DatePickerField } from '@/components/molecules/DatePickerField'
 import { PlaceAutocompleteField, type PlaceSelection } from '@/components/molecules/PlaceAutocompleteField'
+import {
+  RequestDetailDialog,
+  RequestRowActions,
+  canDeleteRequest,
+  canPreviewPrintRequest,
+  canRecallRequest,
+} from '@/components/molecules/RequestDetailDialog'
+import { RequestHistoryPanel } from '@/components/molecules/RequestHistoryPanel'
 import { SearchableSelect } from '@/components/molecules/SearchableSelect'
+import { SegmentedTabs } from '@/components/molecules/SegmentedTabs'
+import { Badge } from '@/components/atoms/Badge'
 import { oosService } from '@/api/services/mobile'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { ProcessGuide } from '@/components/organisms/ProcessGuide'
@@ -13,6 +23,13 @@ import { QueryState } from '@/components/organisms/QueryState'
 import { notifyApiError, toast } from '@/features/toast'
 import { useAuthStore } from '@/stores/appStore'
 import { serializeAttachments, type AttachmentMeta } from '@/utils/attachments'
+import {
+  formatRequestPeriod,
+  pickField,
+  pickString,
+  requestStatus,
+  statusTone,
+} from '@/utils/requestRow'
 import { mt } from '@/utils/mt'
 
 const OOS_STEPS = [
@@ -40,12 +57,15 @@ const OOS_STEPS = [
   },
 ]
 
+type OosTab = 'apply' | 'history' | 'approvals'
+
 export function OutOfStationPage() {
   const { hasPermission, staffId } = useAuthStore()
   const queryClient = useQueryClient()
   const canCreate = hasPermission('oos.requests.create')
   const canApprove = hasPermission('oos.requests.approve')
 
+  const [tab, setTab] = useState<OosTab>(canCreate ? 'apply' : 'history')
   const [form, setForm] = useState({
     reason_id: '',
     start_date: '',
@@ -60,6 +80,8 @@ export function OutOfStationPage() {
   })
   const [attachments, setAttachments] = useState<AttachmentMeta[]>([])
   const [approvalComment, setApprovalComment] = useState('')
+  const [detailRow, setDetailRow] = useState<Record<string, unknown> | null>(null)
+  const [actionId, setActionId] = useState<number | null>(null)
 
   const reasonsQuery = useQuery({
     queryKey: ['oos', 'reasons'],
@@ -113,6 +135,7 @@ export function OutOfStationPage() {
       queryClient.invalidateQueries({ queryKey: ['oos'] })
       resetForm()
       toast.success('Out-of-station request submitted.', 'Travel')
+      setTab('history')
     },
     onError: (error: unknown) => notifyApiError(error, 'Could not submit travel request'),
   })
@@ -129,6 +152,34 @@ export function OutOfStationPage() {
       )
     },
     onError: (error: unknown) => notifyApiError(error, 'Could not process travel approval'),
+  })
+
+  const recallMutation = useMutation({
+    mutationFn: (id: number) => oosService.recallRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['oos'] })
+      setDetailRow(null)
+      setActionId(null)
+      toast.success('Request recalled to draft.', 'Travel')
+    },
+    onError: (error: unknown) => {
+      setActionId(null)
+      notifyApiError(error, 'Could not recall request')
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => oosService.deleteRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['oos'] })
+      setDetailRow(null)
+      setActionId(null)
+      toast.success('Request deleted.', 'Travel')
+    },
+    onError: (error: unknown) => {
+      setActionId(null)
+      notifyApiError(error, 'Could not delete request')
+    },
   })
 
   const handlePlaceSelect = (place: PlaceSelection) => {
@@ -184,8 +235,60 @@ export function OutOfStationPage() {
       label: String(row.reason ?? row.Reason ?? ''),
     }),
   )
+
+  const reasonById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const option of reasonOptions) {
+      if (option.value) map.set(option.value, option.label)
+    }
+    return map
+  }, [reasonOptions])
+
+  const requestRows = useMemo(
+    () => (Array.isArray(requestsQuery.data) ? (requestsQuery.data as Record<string, unknown>[]) : []),
+    [requestsQuery.data],
+  )
+
+  const pendingCount = Array.isArray(pendingQuery.data) ? pendingQuery.data.length : 0
   const startDateValue = form.start_date ? parseISO(form.start_date) : undefined
   const minTravelDate = startOfDay(new Date())
+
+  const tabs = [
+    ...(canCreate
+      ? [{ value: 'apply' as const, label: 'New application' }]
+      : []),
+    {
+      value: 'history' as const,
+      label: 'My requests',
+      count: requestRows.length,
+    },
+    ...(canApprove
+      ? [{ value: 'approvals' as const, label: 'Approvals', count: pendingCount }]
+      : []),
+  ]
+
+  const resolveReason = (row: Record<string, unknown>) => {
+    const reasonId = String(pickField(row, 'reason_id', 'ReasonID') ?? '')
+    return (
+      pickString(row, 'reason_name', 'ReasonName', 'reason') ||
+      reasonById.get(reasonId) ||
+      '—'
+    )
+  }
+
+  const rowId = (row: Record<string, unknown>) => Number(row.id ?? row.ID ?? 0)
+
+  const confirmRecall = (id: number) => {
+    if (!window.confirm('Recall this request from approval? It will return to draft.')) return
+    setActionId(id)
+    recallMutation.mutate(id)
+  }
+
+  const confirmDelete = (id: number) => {
+    if (!window.confirm('Delete this request permanently? This cannot be undone.')) return
+    setActionId(id)
+    deleteMutation.mutate(id)
+  }
 
   return (
     <div>
@@ -197,14 +300,23 @@ export function OutOfStationPage() {
       <ProcessGuide title="How out-of-station application works" steps={OOS_STEPS} />
 
       {!staffId ? (
-        <Card {...mt} className="rounded-sm border border-moh-warning/40 p-4">
+        <Card {...mt} className="rounded-sm border border-moh-warning/40 bg-ui-surface p-4">
           <Typography {...mt} className="text-sm text-moh-warning">
             Link your account to an iHRIS staff record to submit out-of-station requests.
           </Typography>
         </Card>
       ) : null}
 
-      {canApprove && staffId ? (
+      {staffId ? (
+        <SegmentedTabs
+          className="mb-6"
+          tabs={tabs}
+          value={tab}
+          onChange={(value) => setTab(value)}
+        />
+      ) : null}
+
+      {staffId && tab === 'approvals' && canApprove ? (
         <QueryState
           isLoading={pendingQuery.isLoading}
           isError={pendingQuery.isError}
@@ -213,7 +325,7 @@ export function OutOfStationPage() {
           variant="cards"
           onRetry={() => pendingQuery.refetch()}
         >
-          <Card {...mt} className="mb-6 rounded-sm border border-uganda-yellow/50 bg-uganda-yellow/5 p-4">
+          <Card {...mt} className="rounded-sm border border-uganda-yellow/50 bg-uganda-yellow/5 p-4">
             <Typography {...mt} className="mb-3 text-sm font-bold uppercase">
               Pending approvals — action required
             </Typography>
@@ -230,7 +342,7 @@ export function OutOfStationPage() {
                   }) => (
                     <div
                       key={row.approval_id}
-                      className="rounded-sm border border-ui-border bg-white p-3"
+                      className="rounded-sm border border-ui-border bg-ui-surface p-3"
                     >
                       <p className="font-semibold">{row.staff_name}</p>
                       <p className="text-sm text-ui-muted">
@@ -275,8 +387,8 @@ export function OutOfStationPage() {
         </QueryState>
       ) : null}
 
-      {canCreate && staffId ? (
-        <Card {...mt} className="mt-6 rounded-sm border border-moh-green/15 p-4">
+      {staffId && tab === 'apply' && canCreate ? (
+        <Card {...mt} className="rounded-sm border border-moh-green/15 p-4">
           <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
             New out-of-station application
           </Typography>
@@ -372,56 +484,150 @@ export function OutOfStationPage() {
         </Card>
       ) : null}
 
-      <QueryState
-        isLoading={requestsQuery.isLoading}
-        isError={requestsQuery.isError}
-        error={requestsQuery.error}
-        label="out-of-station requests"
-        variant="table"
-        onRetry={() => requestsQuery.refetch()}
-      >
-        <Card {...mt} className="mt-6 rounded-sm border border-moh-green/15 p-4">
-          <Typography {...mt} className="mb-3 text-sm font-bold uppercase text-moh-green">
-            Request history
-          </Typography>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
-                  <th className="py-2 pr-4">Reason</th>
-                  <th className="py-2 pr-4">Period</th>
-                  <th className="py-2 pr-4">Destination</th>
-                  <th className="py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(Array.isArray(requestsQuery.data) ? requestsQuery.data : []).map(
-                  (row: Record<string, unknown>) => (
-                    <tr key={String(row.id)} className="border-b border-gray-100">
-                      <td className="py-2 pr-4">
-                        {(Array.isArray(reasonsQuery.data)
-                          ? reasonsQuery.data.find(
-                              (r: { id: number }) => r.id === row.reason_id,
-                            )?.reason
-                          : null) ?? '—'}
-                      </td>
-                      <td className="py-2 pr-4">
-                        {String(row.start_date).slice(0, 10)} – {String(row.end_date).slice(0, 10)}
-                      </td>
-                      <td className="py-2 pr-4 text-xs text-gray-600">
-                        {String(row.destination_name ?? row.destination_address ?? '—')}
-                      </td>
-                      <td className="py-2 font-medium capitalize text-moh-green">
-                        {String(row.status ?? 'pending')}
-                      </td>
-                    </tr>
-                  ),
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </QueryState>
+      {staffId && tab === 'history' ? (
+        <QueryState
+          isLoading={requestsQuery.isLoading}
+          isError={requestsQuery.isError}
+          error={requestsQuery.error}
+          label="out-of-station requests"
+          variant="table"
+          onRetry={() => requestsQuery.refetch()}
+        >
+          <RequestHistoryPanel
+            title="My out-of-station requests"
+            rows={requestRows}
+            exportFilename="out-of-station-requests"
+            searchPlaceholder="Search by reason, destination, or status…"
+            emptyLabel="No out-of-station requests match your filters."
+            getStatus={(row) => requestStatus(row)}
+            getSearchText={(row) =>
+              [
+                resolveReason(row),
+                formatRequestPeriod(row),
+                pickString(row, 'destination_name', 'DestinationName', 'destination_address', 'DestinationAddress'),
+                requestStatus(row),
+                pickString(row, 'remarks', 'Remarks'),
+              ].join(' ')
+            }
+            columns={[
+              {
+                key: 'reason',
+                label: 'Reason',
+                render: (row) => <span className="font-medium text-ui-text">{resolveReason(row)}</span>,
+                exportValue: (row) => resolveReason(row),
+              },
+              {
+                key: 'period',
+                label: 'Period',
+                render: (row) => formatRequestPeriod(row),
+                exportValue: (row) => formatRequestPeriod(row),
+              },
+              {
+                key: 'destination',
+                label: 'Destination',
+                render: (row) => {
+                  const name = pickString(row, 'destination_name', 'DestinationName')
+                  const address = pickString(row, 'destination_address', 'DestinationAddress')
+                  return (
+                    <div className="max-w-xs">
+                      <p className="font-medium text-ui-text">{name || '—'}</p>
+                      {address && address !== name ? (
+                        <p className="mt-0.5 text-xs text-ui-muted">{address}</p>
+                      ) : null}
+                    </div>
+                  )
+                },
+                exportValue: (row) => {
+                  const name = pickString(row, 'destination_name', 'DestinationName')
+                  const address = pickString(row, 'destination_address', 'DestinationAddress')
+                  if (name && address && address !== name) return `${name} — ${address}`
+                  return name || address || '—'
+                },
+              },
+              {
+                key: 'status',
+                label: 'Status',
+                render: (row) => {
+                  const status = requestStatus(row)
+                  return <Badge label={status.replace(/_/g, ' ')} tone={statusTone(status)} />
+                },
+                exportValue: (row) => requestStatus(row).replace(/_/g, ' '),
+              },
+              {
+                key: 'actions',
+                label: 'Actions',
+                className: 'w-[220px]',
+                render: (row) => {
+                  const id = rowId(row)
+                  const status = requestStatus(row)
+                  return (
+                    <RequestRowActions
+                      status={status}
+                      onPreview={() => setDetailRow(row)}
+                      onRecall={canRecallRequest(status) ? () => confirmRecall(id) : undefined}
+                      onDelete={canDeleteRequest(status) ? () => confirmDelete(id) : undefined}
+                      recalling={recallMutation.isPending && actionId === id}
+                      deleting={deleteMutation.isPending && actionId === id}
+                    />
+                  )
+                },
+                exportValue: () => '',
+              },
+            ]}
+          />
+        </QueryState>
+      ) : null}
+
+      <RequestDetailDialog
+        open={Boolean(detailRow)}
+        title="Out-of-station request"
+        status={detailRow ? requestStatus(detailRow) : ''}
+        onClose={() => setDetailRow(null)}
+        canPrint={detailRow ? canPreviewPrintRequest(requestStatus(detailRow)) : false}
+        canRecall={detailRow ? canRecallRequest(requestStatus(detailRow)) : false}
+        canDelete={detailRow ? canDeleteRequest(requestStatus(detailRow)) : false}
+        recalling={Boolean(detailRow) && recallMutation.isPending && actionId === rowId(detailRow!)}
+        deleting={Boolean(detailRow) && deleteMutation.isPending && actionId === rowId(detailRow!)}
+        onRecall={
+          detailRow && canRecallRequest(requestStatus(detailRow))
+            ? () => confirmRecall(rowId(detailRow))
+            : undefined
+        }
+        onDelete={
+          detailRow && canDeleteRequest(requestStatus(detailRow))
+            ? () => confirmDelete(rowId(detailRow))
+            : undefined
+        }
+        fields={
+          detailRow
+            ? [
+                { label: 'Reason', value: resolveReason(detailRow) },
+                { label: 'Period', value: formatRequestPeriod(detailRow) },
+                {
+                  label: 'Destination',
+                  value: pickString(detailRow, 'destination_name', 'DestinationName') || '—',
+                },
+                {
+                  label: 'Address',
+                  value: pickString(detailRow, 'destination_address', 'DestinationAddress') || '—',
+                },
+                {
+                  label: 'Expected deliverables',
+                  value:
+                    pickString(detailRow, 'expected_deliverables', 'ExpectedDeliverables') || '—',
+                },
+                {
+                  label: 'Remarks',
+                  value: pickString(detailRow, 'remarks', 'Remarks') || '—',
+                },
+                {
+                  label: 'Coordinates',
+                  value: `${pickField(detailRow, 'destination_latitude', 'DestinationLatitude') ?? '—'}, ${pickField(detailRow, 'destination_longitude', 'DestinationLongitude') ?? '—'}`,
+                },
+              ]
+            : []
+        }
+      />
     </div>
   )
 }

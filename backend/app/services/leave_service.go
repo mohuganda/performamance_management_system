@@ -27,11 +27,22 @@ type CreateLeaveInput struct {
 	EndDate          time.Time
 	Reason           string
 	MedicalReportURL string
+	OicStaffID       uint
 }
 
 func (s *LeaveService) CreateDraft(input CreateLeaveInput) (models.LeaveRequest, error) {
 	if input.EndDate.Before(input.StartDate) {
 		return models.LeaveRequest{}, fmt.Errorf("end date must be on or after start date")
+	}
+	if input.OicStaffID == 0 {
+		return models.LeaveRequest{}, fmt.Errorf("officer in charge (OIC) is required")
+	}
+	if input.OicStaffID == input.StaffID {
+		return models.LeaveRequest{}, fmt.Errorf("OIC cannot be the same as the leave applicant")
+	}
+	var oic models.Staff
+	if err := facades.Orm().Query().Where("id", input.OicStaffID).First(&oic); err != nil || oic.ID == 0 {
+		return models.LeaveRequest{}, fmt.Errorf("OIC staff record not found")
 	}
 
 	leaveType, err := s.config.GetTypeByID(input.LeaveTypeID)
@@ -53,6 +64,7 @@ func (s *LeaveService) CreateDraft(input CreateLeaveInput) (models.LeaveRequest,
 		firstStage = stages[0].Code
 	}
 
+	oicID := input.OicStaffID
 	req := models.LeaveRequest{
 		StaffID:          input.StaffID,
 		LeaveTypeID:      input.LeaveTypeID,
@@ -63,6 +75,7 @@ func (s *LeaveService) CreateDraft(input CreateLeaveInput) (models.LeaveRequest,
 		Status:           "draft",
 		AdvanceNoticeMet: advanceNotice,
 		ApprovalStage:    firstStage,
+		OicStaffID:       &oicID,
 	}
 	if input.MedicalReportURL != "" {
 		req.MedicalReportURL = &input.MedicalReportURL
@@ -112,6 +125,121 @@ func (s *LeaveService) ListForStaff(staffID uint) ([]models.LeaveRequest, error)
 	var rows []models.LeaveRequest
 	err := facades.Orm().Query().Where("staff_id", staffID).Order("created_at desc").Get(&rows)
 	return rows, err
+}
+
+func (s *LeaveService) GetOwned(staffID, id uint) (*models.LeaveRequest, error) {
+	var req models.LeaveRequest
+	if err := facades.Orm().Query().Where("id", id).Where("staff_id", staffID).First(&req); err != nil || req.ID == 0 {
+		return nil, fmt.Errorf("leave request not found")
+	}
+	return &req, nil
+}
+
+// Recall withdraws a pending leave request back to draft. Approved requests cannot be recalled.
+func (s *LeaveService) Recall(staffID, id uint) error {
+	req, err := s.GetOwned(staffID, id)
+	if err != nil {
+		return err
+	}
+	if req.Status != "pending" {
+		return fmt.Errorf("only pending requests under approval can be recalled")
+	}
+	firstStage := "supervisor"
+	stages, _ := s.config.ListActiveApprovalStages()
+	if len(stages) > 0 {
+		firstStage = stages[0].Code
+	}
+	req.Status = "draft"
+	req.SubmittedAt = nil
+	req.CurrentApprovalSequence = 1
+	req.ApprovalStage = firstStage
+	if err := facades.Orm().Query().Save(req); err != nil {
+		return err
+	}
+	_, _ = facades.Orm().Query().Model(&models.LeaveApproval{}).
+		Where("leave_request_id", id).
+		Delete()
+	return nil
+}
+
+// Delete removes draft leave requests, or cancels then removes pending ones.
+func (s *LeaveService) Delete(staffID, id uint) error {
+	req, err := s.GetOwned(staffID, id)
+	if err != nil {
+		return err
+	}
+	switch req.Status {
+	case "draft", "pending":
+		_, _ = facades.Orm().Query().Model(&models.LeaveApproval{}).
+			Where("leave_request_id", id).
+			Delete()
+		_, err = facades.Orm().Query().Delete(req)
+		return err
+	default:
+		return fmt.Errorf("approved or closed requests cannot be deleted")
+	}
+}
+
+// Cancel marks draft/pending leave as cancelled without deleting the row.
+func (s *LeaveService) Cancel(staffID, id uint) error {
+	req, err := s.GetOwned(staffID, id)
+	if err != nil {
+		return err
+	}
+	switch req.Status {
+	case "draft", "pending":
+		// ok
+	default:
+		return fmt.Errorf("only draft or pending requests can be cancelled")
+	}
+	prev := req.Status
+	req.Status = "cancelled"
+	if err := facades.Orm().Query().Save(req); err != nil {
+		return err
+	}
+	if prev == "pending" {
+		_, _ = facades.Orm().Query().Model(&models.LeaveApproval{}).
+			Where("leave_request_id", id).
+			Where("status", "pending").
+			Update("status", "cancelled")
+	}
+	return nil
+}
+
+type LeaveRequestRow struct {
+	models.LeaveRequest
+	OicName string `json:"oic_name,omitempty"`
+}
+
+func (s *LeaveService) ListRowsForStaff(staffID uint) ([]LeaveRequestRow, error) {
+	rows, err := s.ListForStaff(staffID)
+	if err != nil {
+		return nil, err
+	}
+	return enrichLeaveRequestRows(rows), nil
+}
+
+func enrichLeaveRequestRows(rows []models.LeaveRequest) []LeaveRequestRow {
+	oicIDs := make([]uint, 0)
+	seen := map[uint]bool{}
+	for _, row := range rows {
+		if row.OicStaffID != nil && *row.OicStaffID > 0 && !seen[*row.OicStaffID] {
+			seen[*row.OicStaffID] = true
+			oicIDs = append(oicIDs, *row.OicStaffID)
+		}
+	}
+	staffMap := loadStaffByIDs(oicIDs)
+	out := make([]LeaveRequestRow, 0, len(rows))
+	for _, row := range rows {
+		item := LeaveRequestRow{LeaveRequest: row}
+		if row.OicStaffID != nil {
+			if st, ok := staffMap[*row.OicStaffID]; ok {
+				item.OicName = staffDisplayName(st)
+			}
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 func (s *LeaveService) Balances(staffID uint, year int) ([]models.LeaveBalance, error) {

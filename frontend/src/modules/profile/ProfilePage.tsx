@@ -3,9 +3,17 @@ import { useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Card, Chip, Typography, Button, Alert } from '@material-tailwind/react'
 import { Briefcase, Camera, Contact, PenLine, Shield, UserCircle } from 'lucide-react'
+import { getApiErrorMessage } from '@/api/client'
 import { authService } from '@/api/services/auth'
 import { leaveService } from '@/api/services/mobile'
+import { Badge } from '@/components/atoms/Badge'
 import { AuthenticatorSetupCard } from '@/components/molecules/AuthenticatorSetupCard'
+import { EmployeeBiodataSummary } from '@/components/molecules/EmployeeBiodataSummary'
+import { OosAttendanceMap } from '@/components/molecules/OosAttendanceMap'
+import {
+  PlaceAutocompleteField,
+  type PlaceSelection,
+} from '@/components/molecules/PlaceAutocompleteField'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { QueryState } from '@/components/organisms/QueryState'
 import { UserAvatar } from '@/components/atoms/UserAvatar'
@@ -14,6 +22,9 @@ import { useAuthStore } from '@/stores/appStore'
 import { mt } from '@/utils/mt'
 import { notifyApiError, toast } from '@/features/toast'
 
+const MAX_PHOTO_BYTES = 1_200_000
+const MAX_PHOTO_EDGE = 640
+
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -21,6 +32,40 @@ function readFileAsDataUrl(file: File): Promise<string> {
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
+}
+
+/** Resize/compress so profile photos fit DB + API limits reliably. */
+async function compressImageForProfile(file: File): Promise<string> {
+  const sourceUrl = await readFileAsDataUrl(file)
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('Could not read image file'))
+    img.src = sourceUrl
+  })
+
+  const scale = Math.min(1, MAX_PHOTO_EDGE / Math.max(image.width, image.height, 1))
+  const width = Math.max(1, Math.round(image.width * scale))
+  const height = Math.max(1, Math.round(image.height * scale))
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    return sourceUrl
+  }
+  ctx.drawImage(image, 0, 0, width, height)
+
+  let quality = 0.85
+  let dataUrl = canvas.toDataURL('image/jpeg', quality)
+  while (dataUrl.length > MAX_PHOTO_BYTES && quality > 0.45) {
+    quality -= 0.1
+    dataUrl = canvas.toDataURL('image/jpeg', quality)
+  }
+  if (dataUrl.length > MAX_PHOTO_BYTES) {
+    throw new Error('Photo is still too large after compression. Try a smaller image.')
+  }
+  return dataUrl
 }
 
 function formatDateTime(value?: string | null) {
@@ -78,6 +123,7 @@ export function ProfilePage() {
   const photoInputRef = useRef<HTMLInputElement>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [signatureDraft, setSignatureDraft] = useState<string | null>(null)
+  const [dutyPlaceQuery, setDutyPlaceQuery] = useState('')
 
   const meQuery = useQuery({
     queryKey: ['auth', 'me'],
@@ -105,8 +151,9 @@ export function ProfilePage() {
       setStatusMessage('Profile updated successfully.')
       toast.success('Profile updated successfully.')
     },
-    onError: (err: Error) => {
-      setStatusMessage(err.message || 'Failed to update profile.')
+    onError: (err: unknown) => {
+      const message = getApiErrorMessage(err, 'Failed to update profile.')
+      setStatusMessage(message)
       notifyApiError(err, 'Failed to update profile.')
     },
   })
@@ -118,12 +165,14 @@ export function ProfilePage() {
       setStatusMessage('Please select a valid image file.')
       return
     }
-    if (file.size > 500_000) {
-      setStatusMessage('Photo must be under 500 KB.')
-      return
+    try {
+      const dataUrl = await compressImageForProfile(file)
+      await updateMutation.mutateAsync({ profile_photo: dataUrl })
+    } catch (err) {
+      const message = getApiErrorMessage(err, err instanceof Error ? err.message : 'Failed to update photo.')
+      setStatusMessage(message)
+      notifyApiError(err, 'Failed to update photo.')
     }
-    const dataUrl = await readFileAsDataUrl(file)
-    await updateMutation.mutateAsync({ profile_photo: dataUrl })
     e.target.value = ''
   }
 
@@ -132,7 +181,27 @@ export function ProfilePage() {
     setSignatureDraft(null)
   }
 
+  const handleDutyStationSelect = async (place: PlaceSelection) => {
+    setDutyPlaceQuery(place.name || place.address)
+    await updateMutation.mutateAsync({
+      duty_station_latitude: place.latitude,
+      duty_station_longitude: place.longitude,
+      duty_station_label: place.name || place.address,
+    })
+  }
+
   const leaveBalances = Array.isArray(balancesQuery.data) ? balancesQuery.data : []
+  const effective = staff?.effective_duty_station
+  const hasPersonalPin =
+    staff?.duty_station_latitude != null &&
+    staff?.duty_station_longitude != null &&
+    (Number(staff.duty_station_latitude) !== 0 || Number(staff.duty_station_longitude) !== 0)
+  const sourceLabel =
+    effective?.source === 'personal'
+      ? 'Personal'
+      : effective?.source === 'facility'
+        ? 'Facility'
+        : 'Not set'
 
   return (
     <div>
@@ -167,6 +236,8 @@ export function ProfilePage() {
         variant="profile"
         onRetry={() => meQuery.refetch()}
       >
+        <EmployeeBiodataSummary staff={staff} className="mb-6" />
+
         <div className="grid gap-6 lg:grid-cols-3">
           <Card {...mt} className="rounded-sm border border-moh-green/15 p-4 lg:col-span-1">
             <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
@@ -214,7 +285,7 @@ export function ProfilePage() {
                 </Button>
               ) : null}
               <Typography {...mt} className="text-center text-xs text-gray-400">
-                Used on approvals and your dashboard header. Max 500 KB.
+                Used on approvals and your dashboard header. Images are resized automatically.
               </Typography>
             </div>
           </Card>
@@ -271,9 +342,93 @@ export function ProfilePage() {
                 <ProfileField label="Salary grade" value={staff.salary_grade} />
                 <ProfileField label="Cadre" value={staff.cadre} />
                 <ProfileField label="Region" value={staff.region} />
-                <ProfileField label="Supervisor" value={staff.supervisor_name} />
                 <ProfileField label="iHRIS last sync" value={formatDateTime(staff.ihris_last_sync_at)} />
               </ProfileFieldGrid>
+
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Duty station
+                  </p>
+                  <Badge
+                    label={sourceLabel}
+                    tone={
+                      effective?.source === 'personal'
+                        ? 'success'
+                        : effective?.source === 'facility'
+                          ? 'neutral'
+                          : 'warning'
+                    }
+                  />
+                </div>
+                <Typography {...mt} className="mb-3 text-xs text-ui-muted">
+                  Clocks at duty station are scored against this pin (default pass mark 90%). Personal
+                  pin overrides the facility location.
+                </Typography>
+                {effective && effective.source !== 'none' ? (
+                  <OosAttendanceMap
+                    className="mb-4"
+                    destination={{
+                      lat: effective.latitude,
+                      lng: effective.longitude,
+                      name: effective.label || staff.facility_name || 'Duty station',
+                    }}
+                    radiusMeters={effective.radius_meters || 500}
+                  />
+                ) : (
+                  <Typography {...mt} className="mb-3 text-sm text-amber-800">
+                    No duty-station location yet. Set a personal pin below, or ask HR to map the
+                    facility.
+                  </Typography>
+                )}
+                <PlaceAutocompleteField
+                  label="Set personal duty-station pin"
+                  value={dutyPlaceQuery || staff.duty_station_label || ''}
+                  onChange={setDutyPlaceQuery}
+                  onPlaceSelect={(place) => void handleDutyStationSelect(place)}
+                  placeholder="Search building, address, or landmark"
+                />
+                {hasPersonalPin ? (
+                  <Button
+                    {...mt}
+                    size="sm"
+                    variant="outlined"
+                    className="mt-3 rounded-sm border-moh-green/30 normal-case text-moh-green"
+                    disabled={updateMutation.isPending}
+                    onClick={() => updateMutation.mutate({ clear_duty_station: true })}
+                  >
+                    Clear personal pin
+                  </Button>
+                ) : null}
+              </div>
+
+              {(staff.supervisors?.length ?? 0) > 0 || staff.supervisor_name ? (
+                <div className="mt-4 border-t border-gray-100 pt-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Supervisors
+                  </p>
+                  <ul className="space-y-2 text-sm">
+                    {(staff.supervisors?.length
+                      ? [...staff.supervisors].sort((a, b) => a.sequence - b.sequence)
+                      : [{ sequence: 1, supervisor_staff_id: 0, supervisor_name: staff.supervisor_name }]
+                    ).map((sup) => (
+                      <li key={`${sup.sequence}-${sup.supervisor_staff_id}`} className="flex flex-col">
+                        <span className="font-medium text-gray-900">
+                          {sup.sequence === 1 ? 'Primary' : `Supervisor ${sup.sequence}`}:{' '}
+                          {formatLabel(sup.supervisor_name)}
+                        </span>
+                        {sup.supervisor_job_title ? (
+                          <span className="text-xs text-gray-500">{sup.supervisor_job_title}</span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="mt-4 border-t border-gray-100 pt-3 text-sm text-amber-800">
+                  No supervisors assigned yet. Contact HR if this looks wrong.
+                </p>
+              )}
             </ProfileSection>
 
             <ProfileSection title="Personal & Contact" icon={Contact}>

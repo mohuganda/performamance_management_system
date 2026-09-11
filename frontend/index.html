@@ -5,7 +5,29 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>MoH Uganda - Performance Management System</title>
+    <script>
+      ;(function () {
+        try {
+          var raw = localStorage.getItem('moh-pms-theme')
+          var preference = 'system'
+          if (raw) {
+            var parsed = JSON.parse(raw)
+            if (parsed && parsed.state && parsed.state.preference) {
+              preference = parsed.state.preference
+            }
+          }
+          var dark =
+            preference === 'dark' ||
+            (preference === 'system' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.toggle('dark', dark)
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+        } catch (_) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

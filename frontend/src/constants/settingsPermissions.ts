@@ -7,6 +7,7 @@ export const SETTINGS_PERMISSIONS = {
   notifications: 'settings.notifications.manage',
   performance: 'settings.performance.manage',
   kpi: 'settings.kpi.manage',
+  backups: 'settings.backups.manage',
   /** Legacy umbrella — grants all settings tabs */
   all: 'settings.manage',
 } as const
@@ -19,6 +20,7 @@ export type SettingsTabId =
   | 'email'
   | 'notifications'
   | 'performance'
+  | 'backups'
 
 const TAB_PERMISSION_MAP: Record<Exclude<SettingsTabId, 'preferences'>, string[]> = {
   lists: [SETTINGS_PERMISSIONS.lists, SETTINGS_PERMISSIONS.all],
@@ -27,6 +29,7 @@ const TAB_PERMISSION_MAP: Record<Exclude<SettingsTabId, 'preferences'>, string[]
   email: [SETTINGS_PERMISSIONS.email, SETTINGS_PERMISSIONS.all],
   notifications: [SETTINGS_PERMISSIONS.notifications, SETTINGS_PERMISSIONS.all],
   performance: [SETTINGS_PERMISSIONS.performance, SETTINGS_PERMISSIONS.all],
+  backups: [SETTINGS_PERMISSIONS.backups, SETTINGS_PERMISSIONS.all],
 }
 
 export function canAccessSettingsTab(
@@ -55,5 +58,6 @@ export function hasAnyAdminSettingsPermission(
     SETTINGS_PERMISSIONS.notifications,
     SETTINGS_PERMISSIONS.performance,
     SETTINGS_PERMISSIONS.kpi,
+    SETTINGS_PERMISSIONS.backups,
   ])
 }

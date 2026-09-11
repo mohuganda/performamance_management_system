@@ -40,6 +40,7 @@ type ListTab =
   | 'departments'
   | 'job-titles'
   | 'oos-reasons'
+  | 'cached-places'
 
 function apiErrorMessage(error: unknown, fallback: string) {
   if (
@@ -169,6 +170,26 @@ export function ListsAdminPanel() {
     queryFn: () =>
       listsAdminService.listOosReasons({ search: debouncedSearch || undefined, page, per_page: pageSize }),
     enabled: tab === 'oos-reasons',
+  })
+
+  const cachedPlacesQuery = useQuery({
+    queryKey: ['admin', 'lists', 'cached-places', debouncedSearch, page, pageSize],
+    queryFn: () =>
+      listsAdminService.listCachedPlaces({
+        search: debouncedSearch || undefined,
+        page,
+        per_page: pageSize,
+      }),
+    enabled: tab === 'cached-places',
+  })
+
+  const seedPlacesMutation = useMutation({
+    mutationFn: () => listsAdminService.seedCachedPlaces(),
+    onSuccess: (result) => {
+      toast.success(`Seeded places: ${result.inserted} inserted, ${result.skipped} already present.`)
+      queryClient.invalidateQueries({ queryKey: ['admin', 'lists', 'cached-places'] })
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not seed places from facilities'),
   })
 
   const invalidate = () => {
@@ -319,7 +340,9 @@ export function ListsAdminPanel() {
                 ? departmentsQuery
                 : tab === 'job-titles'
                   ? jobTitlesQuery
-                  : oosReasonsQuery
+                  : tab === 'cached-places'
+                    ? cachedPlacesQuery
+                    : oosReasonsQuery
 
   const toolbar = (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -475,6 +498,9 @@ export function ListsAdminPanel() {
           </Tab>
           <Tab {...mt} value="oos-reasons" onClick={() => setTab('oos-reasons')}>
             Travel reasons
+          </Tab>
+          <Tab {...mt} value="cached-places" onClick={() => setTab('cached-places')}>
+            Cached places
           </Tab>
         </TabsHeader>
       </Tabs>
@@ -780,6 +806,51 @@ export function ListsAdminPanel() {
                     Edit
                   </Button>
                 </td>
+              </>
+            )}
+          />
+        ) : null}
+
+        {tab === 'cached-places' && cachedPlacesQuery.data ? (
+          <ServerPaginatedTable
+            title="Cached places"
+            description="Immutable location snapshots used for OOS and duty-station search (view-only). Google is queried only on cache miss."
+            columns={[
+              { key: 'name', label: 'Name' },
+              { key: 'address', label: 'Address' },
+              { key: 'coords', label: 'Coordinates' },
+              { key: 'country', label: 'Country' },
+              { key: 'source', label: 'Source' },
+              { key: 'hits', label: 'Hits' },
+            ]}
+            rows={cachedPlacesQuery.data.data}
+            pagination={cachedPlacesQuery.data}
+            onPageChange={setPage}
+            rowKey={(row) => row.id}
+            toolbar={
+              <div className="flex flex-wrap items-end gap-3">
+                {toolbar}
+                <Button
+                  {...mt}
+                  size="sm"
+                  className="rounded-sm bg-moh-green normal-case"
+                  loading={seedPlacesMutation.isPending}
+                  onClick={() => seedPlacesMutation.mutate()}
+                >
+                  Seed from facilities
+                </Button>
+              </div>
+            }
+            renderRow={(row) => (
+              <>
+                <td className="px-3 py-2 font-medium">{row.name}</td>
+                <td className="px-3 py-2 text-xs text-gray-600">{row.address || '—'}</td>
+                <td className="px-3 py-2 text-xs">
+                  {row.latitude.toFixed(5)}, {row.longitude.toFixed(5)}
+                </td>
+                <td className="px-3 py-2 uppercase">{row.country_code}</td>
+                <td className="px-3 py-2 text-xs">{row.source}</td>
+                <td className="px-3 py-2">{row.hit_count}</td>
               </>
             )}
           />

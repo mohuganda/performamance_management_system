@@ -91,6 +91,10 @@ func (s *NotificationService) SendAllReminders() (map[string]ReminderSendResult,
 		res, _ := s.SendSupervisorApprovalReminders()
 		out["supervisor_approval_reminder"] = res
 	}
+	leaveOut, _ := NewLeaveReminderService().SendAll()
+	for k, v := range leaveOut {
+		out[k] = v
+	}
 	return out, nil
 }
 

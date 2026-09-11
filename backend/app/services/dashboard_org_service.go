@@ -219,7 +219,6 @@ func (s *DashboardOrgService) ListFacilityPerformance(limit int) []FacilityPerfo
 	}
 
 	rows := make([]FacilityPerformanceRow, 0, len(aggs))
-	idx := 0
 	for _, agg := range aggs {
 		staffCount := len(agg.staff)
 		if staffCount == 0 {
@@ -233,16 +232,13 @@ func (s *DashboardOrgService) ListFacilityPerformance(limit int) []FacilityPerfo
 		if agg.facility.DistrictName != nil {
 			district = *agg.facility.DistrictName
 		}
-		// Performance metrics remain illustrative until KPI rollups are wired.
-		taskPct := 55 + (staffCount % 35)
-		attendance := 76 + (staffCount % 20)
-		pips := staffCount % 16
+		// Staff/department counts are real. Task/attendance scores stay at 0 until
+		// facility KPI rollups are wired — do not invent percentages from staff size.
+		taskPct := 0
+		attendance := 0
+		pips := 0
+		// Without scored KPI rollups, keep status neutral rather than inventing risk flags.
 		status := "on_track"
-		if taskPct < 60 {
-			status = "off_track"
-		} else if taskPct < 80 {
-			status = "at_risk"
-		}
 		rows = append(rows, FacilityPerformanceRow{
 			Facility:        agg.facility.Name,
 			InstitutionType: instType,
@@ -254,7 +250,6 @@ func (s *DashboardOrgService) ListFacilityPerformance(limit int) []FacilityPerfo
 			ActivePips:      pips,
 			Status:          status,
 		})
-		idx++
 	}
 
 	for i := 0; i < len(rows); i++ {
@@ -266,9 +261,6 @@ func (s *DashboardOrgService) ListFacilityPerformance(limit int) []FacilityPerfo
 	}
 	if !unlimited && len(rows) > limit {
 		rows = rows[:limit]
-	}
-	if len(rows) == 0 {
-		return s.demoFacilityPerformance()
 	}
 	return rows
 }

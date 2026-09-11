@@ -378,8 +378,26 @@ func (s *KpiAdminService) DeactivateKpi(id uint) error {
 	return facades.Orm().Query().Save(&kpi)
 }
 
+type KpiAssignmentListFilter struct {
+	AssignableType    string
+	KpiID             uint
+	Search            string
+	FacilityTypeRefID uint
+	FacilityID        uint
+	DepartmentID      uint
+	JobID             uint
+	StaffID           uint
+	Page              int
+	PerPage           int
+}
+
 func (s *KpiAdminService) ListAssignments(assignableType string, kpiID uint) ([]KpiAssignmentRow, error) {
-	result, err := s.ListAssignmentsPaginated(assignableType, kpiID, "", 1, 200)
+	result, err := s.ListAssignmentsPaginated(KpiAssignmentListFilter{
+		AssignableType: assignableType,
+		KpiID:          kpiID,
+		Page:           1,
+		PerPage:        200,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -387,18 +405,30 @@ func (s *KpiAdminService) ListAssignments(assignableType string, kpiID uint) ([]
 }
 
 func (s *KpiAdminService) ListAssignmentsPaginated(
-	assignableType string,
-	kpiID uint,
-	search string,
-	page, perPage int,
+	filter KpiAssignmentListFilter,
 ) (PaginatedResult[KpiAssignmentRow], error) {
-	page, perPage = ResolvePage(page, perPage)
+	page, perPage := ResolvePage(filter.Page, filter.PerPage)
 	query := facades.Orm().Query().Order("id desc")
-	if assignableType != "" {
-		query = query.Where("assignable_type", assignableType)
+	if filter.AssignableType != "" {
+		query = query.Where("assignable_type", filter.AssignableType)
 	}
-	if kpiID > 0 {
-		query = query.Where("kpi_id", kpiID)
+	if filter.KpiID > 0 {
+		query = query.Where("kpi_id", filter.KpiID)
+	}
+	if filter.FacilityTypeRefID > 0 {
+		query = query.Where("facility_type_ref_id", filter.FacilityTypeRefID)
+	}
+	if filter.FacilityID > 0 {
+		query = query.Where("facility_id", filter.FacilityID)
+	}
+	if filter.DepartmentID > 0 {
+		query = query.Where("department_id", filter.DepartmentID)
+	}
+	if filter.JobID > 0 {
+		query = query.Where("job_id", filter.JobID)
+	}
+	if filter.StaffID > 0 {
+		query = query.Where("staff_id", filter.StaffID)
 	}
 
 	var assignments []models.KpiAssignment
@@ -459,9 +489,13 @@ func (s *KpiAdminService) ListAssignmentsPaginated(
 			}
 		}
 
-		if search != "" {
-			needle := strings.ToLower(strings.TrimSpace(search))
-			haystack := strings.ToLower(row.KpiCode + " " + row.KpiName + " " + row.JobTitle + " " + row.DepartmentName + " " + row.StaffName)
+		if filter.Search != "" {
+			needle := strings.ToLower(strings.TrimSpace(filter.Search))
+			haystack := strings.ToLower(
+				row.KpiCode + " " + row.KpiName + " " + row.JobTitle + " " +
+					row.DepartmentName + " " + row.StaffName + " " +
+					row.FacilityTypeName + " " + row.FacilityName + " " + row.AssignableType,
+			)
 			if !strings.Contains(haystack, needle) {
 				continue
 			}
@@ -620,6 +654,30 @@ func (s *KpiAdminService) DeactivateAssignment(id uint) error {
 	}
 	s.cache.Invalidate()
 	return nil
+}
+
+func (s *KpiAdminService) DeactivateAssignmentsBulk(ids []uint) (removed int, err error) {
+	unique := map[uint]struct{}{}
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		unique[id] = struct{}{}
+	}
+	if len(unique) == 0 {
+		return 0, fmt.Errorf("select at least one assignment to remove")
+	}
+
+	for id := range unique {
+		if deactivateErr := s.DeactivateAssignment(id); deactivateErr != nil {
+			continue
+		}
+		removed++
+	}
+	if removed == 0 {
+		return 0, fmt.Errorf("could not remove the selected assignments")
+	}
+	return removed, nil
 }
 
 func (s *KpiAdminService) ListJobs() ([]models.JobTitle, error) {

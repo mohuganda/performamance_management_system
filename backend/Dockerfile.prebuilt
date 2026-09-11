@@ -1,0 +1,23 @@
+# Runtime-only image for a host-cross-compiled binary (used by scripts/build-fast.sh).
+# Build context: backend/
+
+FROM alpine:3.21
+
+WORKDIR /app
+RUN apk add --no-cache ca-certificates tzdata curl gzip postgresql-client mysql-client docker-cli
+
+COPY .tmp/moh-pms-api /app/moh-pms-api
+COPY config /app/config
+COPY database /app/database
+COPY bootstrap /app/bootstrap
+COPY routes /app/routes
+COPY app /app/app
+COPY resources /app/resources
+COPY public /app/public
+COPY scripts /app/scripts
+
+RUN chmod +x /app/scripts/docker-entrypoint.sh /app/scripts/docker-dev-entrypoint.sh \
+	&& chmod +x /app/moh-pms-api
+
+EXPOSE 3030
+CMD ["/app/scripts/docker-entrypoint.sh"]

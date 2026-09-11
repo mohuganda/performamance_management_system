@@ -72,31 +72,8 @@ func (r *M20260719000001GeographyHierarchy) Up() error {
 		}
 	}
 
-	// Seed Uganda macro-regions (no FK constraints — logical hierarchy only).
-	regions := []struct {
-		code, name, extID, iso string
-	}{
-		{"CENTRAL", "Central", "UG-REGION-CENTRAL", "UG-C"},
-		{"EASTERN", "Eastern", "UG-REGION-EASTERN", "UG-E"},
-		{"NORTHERN", "Northern", "UG-REGION-NORTHERN", "UG-N"},
-		{"WESTERN", "Western", "UG-REGION-WESTERN", "UG-W"},
-	}
-	for _, reg := range regions {
-		_, _ = facades.Orm().Query().Exec(
-			`INSERT INTO regions (code, name, external_system_id, iso_code, is_active, created_at, updated_at)
-			 SELECT ?, ?, ?, ?, 1, NOW(), NOW()
-			 WHERE NOT EXISTS (SELECT 1 FROM regions WHERE code = ?)`,
-			reg.code, reg.name, reg.extID, reg.iso, reg.code,
-		)
-	}
-
-	// Link seeded districts to regions by name (flexible string match).
-	_, _ = facades.Orm().Query().Exec(`
-		UPDATE districts d
-		JOIN regions r ON UPPER(TRIM(d.region)) = UPPER(TRIM(r.name))
-		SET d.region_id = r.id
-		WHERE d.region_id IS NULL OR d.region_id = 0`)
-
+	// Region seed + district linking runs in 20260719000002 after this migration
+	// commits — mixing Schema DDL and Exec on another pool connection deadlocks on Postgres.
 	return nil
 }
 

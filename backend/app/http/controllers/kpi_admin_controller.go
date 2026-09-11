@@ -142,13 +142,18 @@ func (c *KpiAdminController) DeactivateKpi(ctx http.Context) http.Response {
 }
 
 func (c *KpiAdminController) ListAssignments(ctx http.Context) http.Response {
-	assignableType := ctx.Request().Query("assignable_type", "")
-	kpiID := uint(ctx.Request().QueryInt("kpi_id", 0))
-	search := ctx.Request().Query("search", "")
-	page := ctx.Request().QueryInt("page", 1)
-	perPage := ctx.Request().QueryInt("per_page", 0)
-
-	result, err := c.kpi.ListAssignmentsPaginated(assignableType, kpiID, search, page, perPage)
+	result, err := c.kpi.ListAssignmentsPaginated(services.KpiAssignmentListFilter{
+		AssignableType:    ctx.Request().Query("assignable_type", ""),
+		KpiID:             uint(ctx.Request().QueryInt("kpi_id", 0)),
+		Search:            ctx.Request().Query("search", ""),
+		FacilityTypeRefID: uint(ctx.Request().QueryInt("facility_type_ref_id", 0)),
+		FacilityID:        uint(ctx.Request().QueryInt("facility_id", 0)),
+		DepartmentID:      uint(ctx.Request().QueryInt("department_id", 0)),
+		JobID:             uint(ctx.Request().QueryInt("job_id", 0)),
+		StaffID:           uint(ctx.Request().QueryInt("staff_id", 0)),
+		Page:              ctx.Request().QueryInt("page", 1),
+		PerPage:           ctx.Request().QueryInt("per_page", 0),
+	})
 	if err != nil {
 		return ctx.Response().Status(http.StatusInternalServerError).Json(http.Json{"message": err.Error()})
 	}
@@ -221,6 +226,25 @@ func (c *KpiAdminController) DeactivateAssignment(ctx http.Context) http.Respons
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 	}
 	return ctx.Response().Success().Json(http.Json{"message": "assignment removed"})
+}
+
+type bulkDeactivateAssignmentsBody struct {
+	IDs []uint `json:"ids"`
+}
+
+func (c *KpiAdminController) DeactivateAssignmentsBulk(ctx http.Context) http.Response {
+	var body bulkDeactivateAssignmentsBody
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	removed, err := c.kpi.DeactivateAssignmentsBulk(body.IDs)
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{
+		"message": "assignments removed",
+		"removed": removed,
+	})
 }
 
 func (c *KpiAdminController) ListJobs(ctx http.Context) http.Response {

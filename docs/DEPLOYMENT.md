@@ -75,6 +75,8 @@ sudo apt update && sudo apt install -y nginx
   (React build)          (Goravel API)          moh-pms-redis
 ```
 
+Swagger UI is served at `/swagger/index.html`. Mobile places / OOS / approvals curl examples: [docs/api/mobile-oos-approvals.md](api/mobile-oos-approvals.md).
+
 ### File layout
 
 ```text
@@ -184,10 +186,11 @@ Auto-generated on first deploy if omitted. Stored in `deploy/.env`.
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--db postgres\|mysql` | prompt / `postgres` | Primary OLTP engine |
 | `--admin-email` | `admin@moh.go.ug` | Seeded administrator email |
 | `--admin-password` | `Demo@Moh2026!` | Seeded admin password (min 10 chars) |
-| `--db-password` | random | MySQL `pms` user password |
-| `--mysql-root-password` | random | MySQL root password |
+| `--db-password` | random | Application DB user password |
+| `--mysql-root-password` | random | MySQL root password (mysql mode) |
 | `--app-key` | random | Goravel `APP_KEY` |
 | `--jwt-secret` | random | JWT signing secret |
 
@@ -195,6 +198,7 @@ Auto-generated on first deploy if omitted. Stored in `deploy/.env`.
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--expose-postgres` | off | Publish Postgres on host port 5433 |
 | `--expose-mysql` | off | Publish MySQL on host port 3307 |
 | `--expose-redis` | off | Publish Redis on host port 6379 |
 | `--install-host-nginx` | off | Install system nginx site proxying to Docker |
@@ -309,6 +313,19 @@ To change settings after first deploy, edit `deploy/.env` and run:
 
 Reference template: [deploy/env.deploy.example](../deploy/env.deploy.example)
 
+### Apache Doris analytics (enabled by default)
+
+Dashboard and attendance aggregates can read from **Apache Doris**. The API enables analytics by default (`ANALYTICS_DB_ENABLED=true`). The primary OLTP database remains the write path; dashboards fall back to OLTP if Doris is down.
+
+```bash
+# On the same host as the API / after setup.sh
+docker compose -f docker-compose.analytics.yml up -d
+```
+
+Then in the UI: **Settings → Data sources → Apache Doris analytics → Sync OLTP data to Doris**.
+
+Details: [ANALYTICS.md](./ANALYTICS.md)
+
 ---
 
 ## 7. Operations
@@ -323,10 +340,73 @@ docker logs moh-pms-api --tail 100
 
 ### Database backups
 
+Managed from **Settings → Backups** (permission `settings.backups.manage`). The API dumps **only the primary engine** from `DB_CONNECTION` (`postgres` or `mysql`) into a host directory outside the app tree.
+
+| Env | Purpose |
+|-----|---------|
+| `DB_BACKUP_DIR` | Host path (default `/home/moh-pms/db-backups`), mounted into the API container |
+| `DB_BACKUP_USE_DOCKER_EXEC` | `true` (prod default): run `pg_dump`/`mysqldump` via `docker exec` into the DB container |
+
+Retention: keep all dumps for the **current calendar month**; for each **past month**, keep only the latest file. Filenames: `moh_pms_{postgres\|mysql}_YYYY-MM-DD.sql.gz`.
+
+Daily schedule is registered at `02:15` (Goravel). Ensure it fires with either:
+
 ```bash
-docker exec moh-pms-mysql mysqldump -u pms -p moh_pms > backup-$(date +%F).sql
-# Password is in deploy/.env → MYSQL_PASSWORD
+# every minute (runs due DailyAt / Cron jobs: backups, iHRIS, HRM sync/export)
+* * * * * docker exec moh-pms-api ./moh-pms-api artisan schedule:run
+
+# or once daily
+15 2 * * * docker exec moh-pms-api ./moh-pms-api artisan backup:database
 ```
+
+Same `schedule:run` cron also drives:
+
+| Job | When |
+|-----|------|
+| `ihris:sync` | Daily 03:00 |
+| `hrm-attend:sync` | 1st of month 00:15 (previous month summaries) |
+| `hrm-attend:export-push` | Daily 03:30 (OOS clocks → HRM) |
+
+See [docs/api/hrm-attend-export.md](../api/hrm-attend-export.md).
+
+Restore flow in the UI: **Test** (throwaway DB `moh_pms_restore_test`) → then **Restore** (type `RESTORE`). Cross-engine files (wrong primary) can be deleted but not restored.
+
+Manual CLI dump (still valid):
+
+```bash
+# Postgres primary
+docker exec moh-pms-postgres pg_dump -U pms moh_pms | gzip > /home/moh-pms/db-backups/moh_pms_postgres-$(date +%F).sql.gz
+
+# MySQL primary
+docker exec moh-pms-mysql mysqldump -u pms -p"$DB_PASSWORD" moh_pms | gzip > /home/moh-pms/db-backups/moh_pms_mysql-$(date +%F).sql.gz
+```
+
+### MySQL → PostgreSQL cutover
+
+For an existing MySQL deployment, use the offline one-shot tool (stops the app briefly; keeps the MySQL data directory for rollback):
+
+```bash
+./scripts/migrate-mysql-to-postgres.sh           # or --dry-run first
+# Verify login and data, then keep DATA_DIR/mysql until confirmed
+```
+
+See `docs/superpowers/specs/2026-09-10-postgres-primary-dual-db-design.md` for the approved design.
+
+### Fast image rebuilds
+
+Dockerfiles use BuildKit cache mounts (Go module/build cache, npm cache) and no longer install a C compiler for the API image (`CGO_ENABLED=0`).
+
+`./scripts/build-fast.sh` **cross-compiles the API on the host** (typically ~20–40s on Apple Silicon) and packs a slim Alpine runtime image. Use `--docker-go` only when you need a full in-container Go build (much slower under Colima).
+
+```bash
+export DOCKER_BUILDKIT=1
+./scripts/build-fast.sh            # host Go compile + frontend
+./scripts/build-fast.sh backend    # API only (host compile)
+./scripts/build-fast.sh backend --docker-go
+./scripts/smoke-postgres-migrate.sh  # throwaway Postgres — full migrate smoke test
+```
+
+`setup.sh` enables BuildKit automatically and builds backend/frontend as separate steps so a frontend-only change does not always rebuild the Go image from scratch.
 
 ### Update application
 
@@ -392,6 +472,7 @@ Before go-live:
 - [ ] Schedule MySQL backups
 - [ ] Create real user accounts via **Access Control** (`/admin/rbac`)
 - [ ] Configure iHRIS sync (`IHRIS_USE_DEMO_DATA=false`, set API credentials in backend env)
+- [ ] Start Doris analytics (`docker compose -f docker-compose.analytics.yml up -d`) and run an OLTP sync (or accept MySQL fallback)
 - [ ] Test sign-in, leave request, and performance report flows
 
 ---
@@ -408,8 +489,9 @@ Before go-live:
 | **502 Bad Gateway** on login/API | Backend still seeding or crashed | `docker logs moh-pms-api --tail 100`; wait 2–3 min on first boot; `./setup.sh --rebuild` |
 | `setup.sh` stuck on health check | First migrate + demo seed is slow | Wait up to 5 min; check backend logs; ensure `DATA_DIR` is writable |
 | `setup.sh` permission denied | Not executable | `chmod +x setup.sh` |
-| Database connection error | MySQL still starting | Wait 30s; `./setup.sh --logs mysql` |
+| Database connection error | Database still starting | Wait 30s; `./setup.sh --logs postgres` or `--logs mysql` |
 | Need fresh database | Old volume data | `./setup.sh --down-volumes` then redeploy |
+| Cannot open Doris / analytics “unreachable” | Doris not running or wrong host | `docker compose -f docker-compose.analytics.yml up -d`; see [ANALYTICS.md](./ANALYTICS.md) |
 
 ### Health checks
 

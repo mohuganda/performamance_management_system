@@ -3,7 +3,8 @@
 # Start MoH PMS in development mode with automatic reload.
 #
 #   ./scripts/dev.sh              # Docker: Vite HMR + Air hot reload (recommended)
-#   ./scripts/dev.sh --local      # Native: Air + Vite on host (MySQL/Redis in Docker)
+#   ./scripts/dev.sh --local      # Native: Air + Vite on host (Postgres/Redis in Docker)
+#   ./scripts/dev.sh --db mysql   # Use MySQL instead of Postgres
 #   ./scripts/dev.sh --build      # Force rebuild dev images
 #   ./scripts/dev.sh --down       # Stop dev stack
 #
@@ -15,17 +16,22 @@ COMPOSE="docker compose -f ${ROOT_DIR}/docker-compose.yml -f ${ROOT_DIR}/docker-
 MODE="docker"
 BUILD=""
 ACTION="up"
+DB_CONNECTION="${DB_CONNECTION:-postgres}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --local) MODE="local"; shift ;;
     --build) BUILD="--build"; shift ;;
+    --db)
+      DB_CONNECTION="$2"
+      shift 2
+      ;;
     --down)
       ACTION="down"
       shift
       ;;
     -h|--help)
-      sed -n '2,12p' "$0"
+      sed -n '2,14p' "$0"
       exit 0
       ;;
     *)
@@ -35,17 +41,35 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+case "${DB_CONNECTION}" in
+  postgres|postgresql|pgsql) DB_CONNECTION="postgres" ;;
+  mysql) DB_CONNECTION="mysql" ;;
+  *)
+    echo "Invalid --db value: ${DB_CONNECTION} (use postgres or mysql)" >&2
+    exit 1
+    ;;
+esac
+
+export DB_CONNECTION
+if [[ "${DB_CONNECTION}" == "postgres" ]]; then
+  export DB_HOST=postgres
+  export DB_PORT=5432
+else
+  export DB_HOST=mysql
+  export DB_PORT=3306
+fi
+
 log() { printf '\033[1;36m[dev]\033[0m %s\n' "$*"; }
 
 if [[ "${ACTION}" == "down" ]]; then
   log "Stopping development stack..."
-  ${COMPOSE} down
+  ${COMPOSE} --profile postgres --profile mysql down
   exit 0
 fi
 
 if [[ "${MODE}" == "local" ]]; then
-  log "Starting MySQL + Redis in Docker..."
-  docker compose -f "${ROOT_DIR}/docker-compose.yml" up -d mysql redis
+  log "Starting ${DB_CONNECTION} + Redis in Docker..."
+  docker compose -f "${ROOT_DIR}/docker-compose.yml" --profile "${DB_CONNECTION}" up -d "${DB_CONNECTION}" redis
 
   log "Backend: Air hot reload on http://127.0.0.1:3030"
   log "Frontend: Vite HMR on http://127.0.0.1:5173"
@@ -80,8 +104,8 @@ if [[ "${MODE}" == "local" ]]; then
   exit 0
 fi
 
-log "Starting Docker dev stack (auto-reload enabled)..."
+log "Starting Docker dev stack (auto-reload enabled) with ${DB_CONNECTION}..."
 log "  Frontend → http://localhost:5173"
 log "  API      → http://localhost:3030/api/v1"
 log "  Swagger  → http://localhost:3030/swagger/index.html"
-${COMPOSE} up ${BUILD} --remove-orphans
+${COMPOSE} --profile "${DB_CONNECTION}" up ${BUILD} --remove-orphans

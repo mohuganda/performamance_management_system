@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -300,32 +301,72 @@ func (s *AuthService) CreateUser(input models.User, roleCodes []string, plainPas
 	return input, nil
 }
 
-func (s *AuthService) UpdateProfile(userID uint, profilePhoto, signatureImage *string) (models.User, error) {
+func (s *AuthService) UpdateProfile(userID uint, profilePhoto, signatureImage *string, duty *DutyStationUpdate) (models.User, error) {
 	var user models.User
 	if err := facades.Orm().Query().Where("id", userID).First(&user); err != nil {
 		return models.User{}, fmt.Errorf("user not found")
 	}
 
+	uploads := NewUploadService()
+
 	if profilePhoto != nil {
 		if *profilePhoto == "" {
+			uploads.DeleteByURLOrPath(derefStr(user.ProfilePhoto))
 			user.ProfilePhoto = nil
-		} else if err := validateDataURLImage(*profilePhoto, 600_000); err != nil {
-			return models.User{}, err
+		} else if strings.HasPrefix(*profilePhoto, "data:image/") {
+			if err := validateDataURLImage(*profilePhoto, 1_500_000); err != nil {
+				return models.User{}, err
+			}
+			stored, err := uploads.StoreProfilePhoto(*profilePhoto, userID)
+			if err != nil {
+				return models.User{}, err
+			}
+			uploads.DeleteByURLOrPath(derefStr(user.ProfilePhoto))
+			url := stored.URL
+			user.ProfilePhoto = &url
+		} else if isStoredMediaURL(*profilePhoto) {
+			url := strings.TrimSpace(*profilePhoto)
+			user.ProfilePhoto = &url
 		} else {
-			user.ProfilePhoto = profilePhoto
+			return models.User{}, fmt.Errorf("unsupported profile photo payload")
 		}
 	}
 
 	if signatureImage != nil {
 		if *signatureImage == "" {
+			uploads.DeleteByURLOrPath(derefStr(user.SignatureImage))
 			user.SignatureImage = nil
 			user.SignatureUpdatedAt = nil
-		} else if err := validateDataURLImage(*signatureImage, 300_000); err != nil {
-			return models.User{}, err
-		} else {
+		} else if strings.HasPrefix(*signatureImage, "data:image/") {
+			if err := validateDataURLImage(*signatureImage, 300_000); err != nil {
+				return models.User{}, err
+			}
+			stored, err := uploads.StoreSignature(*signatureImage, userID)
+			if err != nil {
+				return models.User{}, err
+			}
+			uploads.DeleteByURLOrPath(derefStr(user.SignatureImage))
 			now := time.Now()
-			user.SignatureImage = signatureImage
+			url := stored.URL
+			user.SignatureImage = &url
 			user.SignatureUpdatedAt = &now
+		} else if isStoredMediaURL(*signatureImage) {
+			url := strings.TrimSpace(*signatureImage)
+			user.SignatureImage = &url
+			now := time.Now()
+			user.SignatureUpdatedAt = &now
+		} else {
+			return models.User{}, fmt.Errorf("unsupported signature payload")
+		}
+	}
+
+	if duty != nil && (duty.Clear || duty.Latitude != nil || duty.Longitude != nil) {
+		if user.StaffID == nil || *user.StaffID == 0 {
+			return models.User{}, fmt.Errorf("staff linkage required to set duty station")
+		}
+		uid := userID
+		if err := UpsertStaffDutyStation(*user.StaffID, &uid, *duty); err != nil {
+			return models.User{}, err
 		}
 	}
 
@@ -336,16 +377,44 @@ func (s *AuthService) UpdateProfile(userID uint, profilePhoto, signatureImage *s
 	return user, nil
 }
 
+func isStoredMediaURL(value string) bool {
+	value = strings.TrimSpace(value)
+	return strings.HasPrefix(value, "/api/v1/files?") ||
+		strings.HasPrefix(value, "profiles/") ||
+		strings.HasPrefix(value, "signatures/") ||
+		strings.HasPrefix(value, "attachments/") ||
+		strings.HasPrefix(value, "uploads/")
+}
+
 func validateDataURLImage(dataURL string, maxBytes int) error {
 	if !strings.HasPrefix(dataURL, "data:image/") {
 		return fmt.Errorf("image must be a valid data URL")
 	}
 	parts := strings.SplitN(dataURL, ",", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
 		return fmt.Errorf("invalid image data")
 	}
-	if len(parts[1]) > maxBytes {
-		return fmt.Errorf("image is too large")
+	payload := parts[1]
+	// Strip whitespace that some browsers insert into large data URLs.
+	payload = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == ' ' || r == '\t' {
+			return -1
+		}
+		return r
+	}, payload)
+
+	decoded, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		decoded, err = base64.RawStdEncoding.DecodeString(payload)
+		if err != nil {
+			return fmt.Errorf("invalid image encoding")
+		}
+	}
+	if len(decoded) == 0 {
+		return fmt.Errorf("image is empty")
+	}
+	if len(decoded) > maxBytes {
+		return fmt.Errorf("image is too large (max %d KB)", maxBytes/1024)
 	}
 	return nil
 }

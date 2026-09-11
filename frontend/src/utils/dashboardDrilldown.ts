@@ -208,6 +208,7 @@ export function buildSupervisorDrilldowns(
         Details: row.details,
         Date: row.date,
         Action: row.action,
+        action_url: row.action_url ?? '/approvals',
       })),
     },
     pip_candidates: {
@@ -219,6 +220,7 @@ export function buildSupervisorDrilldowns(
         'Staff name': row.staff_name,
         Reason: row.reason,
         Action: row.action,
+        action_url: row.action_url ?? '/approvals',
       })),
     },
     task_completion: {
@@ -369,6 +371,7 @@ export function buildHealthWorkerDrilldowns(
         'Due date': task.due_date,
         Status: task.status,
         Action: task.action,
+        action_url: task.action_url ?? '',
       })),
     },
     tasks_due: {

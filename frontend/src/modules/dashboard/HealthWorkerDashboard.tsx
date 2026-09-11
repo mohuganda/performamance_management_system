@@ -8,6 +8,7 @@ import { AttendanceIntegrationBanner } from '@/components/dashboard/AttendanceIn
 import { DashboardDrilldownPanel, useDashboardDrilldown } from '@/components/dashboard/DashboardDrilldownPanel'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { DashboardHeader } from '@/components/organisms/DashboardHeader'
+import { EmployeeBiodataSummaryCard } from '@/components/molecules/EmployeeBiodataSummary'
 import { ModuleQuickLinks } from '@/components/organisms/ModuleQuickLinks'
 import { QueryState } from '@/components/organisms/QueryState'
 import { useAuthStore } from '@/stores/appStore'
@@ -34,7 +35,6 @@ export function HealthWorkerDashboard() {
     upcoming_deadlines?: Array<{ task: string; days_remaining: number }>
   }
   const quarterlyTasks = (data?.quarterly_tasks ?? []) as Array<Record<string, string>>
-  const notifications = (data?.notifications ?? []) as Array<{ type: string; message: string }>
   const overallPerf = (data?.overall_performance ?? {}) as {
     normalized_score?: number
     raw_score?: number
@@ -58,7 +58,7 @@ export function HealthWorkerDashboard() {
     credits: { enabled: false },
     title: { text: undefined },
     xAxis: { categories: attendanceRows.map((r) => r.month) },
-    yAxis: { min: 70, max: 100, title: { text: '%' } },
+    yAxis: { min: 0, max: 100, title: { text: '%' } },
     tooltip: { shared: true, valueSuffix: '%' },
     series: [
       { type: 'column', name: 'HRM duty summary', data: attendanceRows.map((r) => r.hrm_summary_percent), color: '#1565C0' },
@@ -86,6 +86,7 @@ export function HealthWorkerDashboard() {
             context="Your personal performance workspace"
             quarter={quarter}
           />
+          <EmployeeBiodataSummaryCard />
 
           {integration ? <AttendanceIntegrationBanner data={integration} /> : null}
 
@@ -162,7 +163,7 @@ export function HealthWorkerDashboard() {
             </div>
           )}
 
-          <Card>
+          <Card className="dashboard-flat-card">
             <ProgressBar
               value={taskCompletion.percent ?? 0}
               label="Task Completion"
@@ -224,26 +225,6 @@ export function HealthWorkerDashboard() {
             onClose={closeDrilldown}
             panelRef={panelRef}
           />
-
-          <Card>
-            <h2 className="mb-3 text-sm font-bold uppercase text-moh-green">Notifications & Alerts</h2>
-            <ul className="space-y-2 text-sm">
-              {notifications.map((item) => (
-                <li
-                  key={item.message}
-                  className={
-                    item.type === 'error'
-                      ? 'text-moh-error'
-                      : item.type === 'warning'
-                        ? 'text-moh-warning'
-                        : 'text-moh-success'
-                  }
-                >
-                  {item.message}
-                </li>
-              ))}
-            </ul>
-          </Card>
         </div>
       ) : (
         <Card className="m-4 md:m-6">

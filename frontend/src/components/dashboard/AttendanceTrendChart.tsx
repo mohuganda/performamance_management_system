@@ -17,7 +17,7 @@ export function AttendanceTrendChart({ trends, title = 'Attendance performance t
       credits: { enabled: false },
       xAxis: { categories: trends.labels, crosshair: true },
       yAxis: {
-        min: 60,
+        min: 0,
         max: 100,
         title: { text: 'Attendance %' },
         plotLines: [

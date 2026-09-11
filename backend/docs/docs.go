@@ -15,6 +15,170 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/admin/analytics/doris/sync": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "Sync analytics warehouse",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/analytics/status": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "Analytics (Doris) connection status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/kpi/assignment-targets": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Facility types, facilities, departments (with facility type context), and job titles.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-kpi"
+                ],
+                "summary": "Assignable targets for KPI mapping",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/kpi/assignments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-kpi"
+                ],
+                "summary": "List KPI assignments",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Assign one or more KPIs to facility_type, facility, department, job, or staff.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-kpi"
+                ],
+                "summary": "Create KPI assignment(s)",
+                "parameters": [
+                    {
+                        "description": "kpi_ids, assignable_type, target ids",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/kpi/kpis": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-kpi"
+                ],
+                "summary": "List KPI catalog",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/leave/approval-stages": {
             "get": {
                 "produces": [
@@ -97,6 +261,31 @@ const docTemplate = `{
                         }
                     }
                 ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/leave/balances": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-leave"
+                ],
+                "summary": "List staff leave balances",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -212,6 +401,91 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "Entitlement ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/leave/overview": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-leave"
+                ],
+                "summary": "Leave admin overview metrics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/leave/requests": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-leave"
+                ],
+                "summary": "List leave requests (admin)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/leave/requests/{id}/finalize": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Moves a fully approved request to finalized status. Requires leave.config.manage.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-leave"
+                ],
+                "summary": "HR finalize approved leave request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Leave request ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -400,6 +674,212 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/admin/lists/cached-places": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-lists"
+                ],
+                "summary": "Admin list cached places (view-only)",
+                "responses": {}
+            }
+        },
+        "/api/v1/admin/lists/cached-places/seed": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-lists"
+                ],
+                "summary": "Seed cached places from facilities (immutable snapshots)",
+                "responses": {}
+            }
+        },
+        "/api/v1/admin/lists/departments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-lists"
+                ],
+                "summary": "List departments",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/lists/facilities": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-lists"
+                ],
+                "summary": "List facilities (paginated)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/lists/refresh-catalog": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-lists"
+                ],
+                "summary": "Refresh facility/institution type catalog from facilities",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/lists/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-lists"
+                ],
+                "summary": "Org catalog summary counts",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/notifications/send-reminders": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-settings"
+                ],
+                "summary": "Send configured notification reminders",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/performance/settings": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-performance"
+                ],
+                "summary": "Performance reporting settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/rbac/audit-logs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "List RBAC audit logs",
+                "responses": {}
+            }
+        },
+        "/api/v1/admin/rbac/audit-logs/{id}/recover": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "Recover a dangerous RBAC action",
+                "responses": {}
+            }
+        },
         "/api/v1/admin/rbac/grant-permission": {
             "post": {
                 "security": [
@@ -428,6 +908,20 @@ const docTemplate = `{
                 "responses": {}
             }
         },
+        "/api/v1/admin/rbac/revoke-permission": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "Revoke permission from role",
+                "responses": {}
+            }
+        },
         "/api/v1/admin/rbac/roles": {
             "get": {
                 "security": [
@@ -439,6 +933,20 @@ const docTemplate = `{
                     "admin-rbac"
                 ],
                 "summary": "List roles",
+                "responses": {}
+            }
+        },
+        "/api/v1/admin/rbac/roles/{code}/permissions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "List permissions granted to a role",
                 "responses": {}
             }
         },
@@ -456,7 +964,33 @@ const docTemplate = `{
                 "responses": {}
             }
         },
+        "/api/v1/admin/rbac/scope-options": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "District and facility options for user data scope",
+                "responses": {}
+            }
+        },
         "/api/v1/admin/rbac/users": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "List application users",
+                "responses": {}
+            },
             "post": {
                 "security": [
                     {
@@ -467,6 +1001,86 @@ const docTemplate = `{
                     "admin-rbac"
                 ],
                 "summary": "Create application user (database admin)",
+                "responses": {}
+            }
+        },
+        "/api/v1/admin/rbac/users/{id}": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "Update application user",
+                "responses": {}
+            }
+        },
+        "/api/v1/admin/rbac/users/{id}/link-staff-by-email": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "Link user to staff record by matching email",
+                "responses": {}
+            }
+        },
+        "/api/v1/admin/rbac/users/{id}/permissions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "List direct permissions granted to a user",
+                "responses": {}
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "Grant permission directly to user",
+                "responses": {}
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "Revoke direct permission from user",
+                "responses": {}
+            }
+        },
+        "/api/v1/admin/rbac/users/{id}/reset-authenticator": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "Admin override — reset user authenticator",
                 "responses": {}
             }
         },
@@ -493,6 +1107,218 @@ const docTemplate = `{
                     "admin-rbac"
                 ],
                 "summary": "Revoke role from user",
+                "responses": {}
+            }
+        },
+        "/api/v1/admin/rbac/users/{id}/send-activation": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "admin-rbac"
+                ],
+                "summary": "Send account activation email for linked staff",
+                "responses": {}
+            }
+        },
+        "/api/v1/admin/settings": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-settings"
+                ],
+                "summary": "Get system settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-settings"
+                ],
+                "summary": "Update system settings group",
+                "parameters": [
+                    {
+                        "description": "group + payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/staff": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-staff"
+                ],
+                "summary": "Staff directory (paginated)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/staff/{id}/hr-profile": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "HR department override, contact fields, leave management flag (is_leave_manager).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-staff"
+                ],
+                "summary": "Update staff HR profile",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Staff ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "hr_department_id, hr_email, is_leave_manager, etc.",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/staff/{id}/supervisors": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-staff"
+                ],
+                "summary": "Set supervisor chain (up to 3)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Staff ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "supervisors: [{sequence, supervisor_staff_id}]",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/activation/complete": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Complete account activation",
+                "responses": {}
+            }
+        },
+        "/api/v1/auth/activation/{token}": {
+            "get": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Preview activation token",
                 "responses": {}
             }
         },
@@ -547,6 +1373,15 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/auth/login/totp": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Complete login with authenticator code",
+                "responses": {}
+            }
+        },
         "/api/v1/auth/logout": {
             "post": {
                 "security": [
@@ -594,6 +1429,23 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/auth/profile": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Update profile photo, signature, and/or duty-station pin",
+                "responses": {}
+            }
+        },
         "/api/v1/auth/refresh": {
             "post": {
                 "security": [
@@ -605,6 +1457,404 @@ const docTemplate = `{
                     "auth"
                 ],
                 "summary": "Refresh JWT",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/request-activation": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Request account activation email for staff",
+                "responses": {}
+            }
+        },
+        "/api/v1/auth/request-password-reset": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Request password reset email",
+                "responses": {}
+            }
+        },
+        "/api/v1/auth/totp/confirm": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Confirm authenticator enrollment",
+                "responses": {}
+            }
+        },
+        "/api/v1/auth/totp/disable": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Disable authenticator",
+                "responses": {}
+            }
+        },
+        "/api/v1/auth/totp/enroll": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Start authenticator enrollment",
+                "responses": {}
+            }
+        },
+        "/api/v1/auth/totp/status": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Authenticator status",
+                "responses": {}
+            }
+        },
+        "/api/v1/config": {
+            "get": {
+                "description": "Branding and client-safe settings for the web app.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "system"
+                ],
+                "summary": "Public client configuration",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/dashboard/department-head": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "dashboard"
+                ],
+                "summary": "Department head dashboard",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/dashboard/health-worker": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "dashboard"
+                ],
+                "summary": "Staff dashboard",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/dashboard/hr-manager": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "dashboard"
+                ],
+                "summary": "HR / director / executive dashboard",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/dashboard/supervisor": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "dashboard"
+                ],
+                "summary": "Supervisor dashboard",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/files": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "uploads"
+                ],
+                "summary": "Download an uploaded attachment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Relative path under uploads/",
+                        "name": "path",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
+        "/api/v1/health": {
+            "get": {
+                "description": "Returns service status. No authentication required.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "system"
+                ],
+                "summary": "API health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/hrm-attend/sync": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "Sync HRM attendance feed",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ihris/sync": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "Trigger iHRIS staff sync",
+                "parameters": [
+                    {
+                        "description": "Optional batch options (run_id, start_page, pages_per_batch)",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ihris/sync/status": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "iHRIS sync run status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/approvals/detail": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "module = leave | out_of_station | ppa | report (etc.); id = request/report id",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-approvals"
+                ],
+                "summary": "Approval detail with trail",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Module key",
+                        "name": "module",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Record id",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/approvals/inbox": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Pending and recent approval items across leave, OOS, and performance",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-approvals"
+                ],
+                "summary": "Unified approvals inbox",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -784,6 +2034,31 @@ const docTemplate = `{
                     "mobile-leave"
                 ],
                 "summary": "Full dynamic leave configuration",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/leave/oic-candidates": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-leave"
+                ],
+                "summary": "List staff candidates for Officer in Charge",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -975,7 +2250,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Mirrors attend/requests/newRequest with map-picked destination coordinates for GPS verification",
+                "description": "Mirrors attend/requests/newRequest with map-picked destination coordinates for GPS verification. Optional cached_place_id copies snapshot destination fields.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1008,8 +2283,495 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/mobile/out-of-station/requests/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Owner or assigned approver",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-out-of-station"
+                ],
+                "summary": "Get out-of-station request by id",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-out-of-station"
+                ],
+                "summary": "Update draft out-of-station request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Draft fields",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.oosRequestBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/out-of-station/requests/{id}/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-out-of-station"
+                ],
+                "summary": "Cancel draft or pending out-of-station request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/out-of-station/requests/{id}/submit": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-out-of-station"
+                ],
+                "summary": "Submit draft out-of-station request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/performance/kpis/grouped": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-performance"
+                ],
+                "summary": "Assigned KPIs grouped by function",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/performance/overall-rating": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-performance"
+                ],
+                "summary": "Overall performance rating for the authenticated staff member",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/performance/ppa/review": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-performance"
+                ],
+                "summary": "Review submitted PPA",
+                "parameters": [
+                    {
+                        "description": "ppa_id, approve, comments",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/performance/status-report": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-performance"
+                ],
+                "summary": "Scoped PPA + quarterly submission/approval status with scores",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/performance/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-performance"
+                ],
+                "summary": "PPA and KPI summary for current staff",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/performance/windows": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-performance"
+                ],
+                "summary": "Current performance reporting windows",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/notifications": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "List in-app notifications",
+                "responses": {}
+            }
+        },
+        "/api/v1/notifications/read-all": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Mark all notifications as read",
+                "responses": {}
+            }
+        },
+        "/api/v1/notifications/unread-count": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Unread in-app notification count",
+                "responses": {}
+            }
+        },
+        "/api/v1/notifications/{id}/read": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Mark notification as read",
+                "responses": {}
+            }
+        },
+        "/api/v1/places/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "places"
+                ],
+                "summary": "Search cached places (local-first, Google fallback)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search text",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ISO country override (e.g. ug)",
+                        "name": "country",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": true
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/places/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "places"
+                ],
+                "summary": "Get cached place by id",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Place ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/uploads": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "uploads"
+                ],
+                "summary": "Upload a leave/travel attachment",
+                "parameters": [
+                    {
+                        "description": "Base64 data URL",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.uploadBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/services.UploadedFile"
+                        }
+                    }
+                }
+            }
+        },
         "/swagger/{any}": {
             "get": {
+                "description": "Interactive OpenAPI documentation for the MoH Uganda Performance Management System.",
+                "tags": [
+                    "documentation"
+                ],
                 "summary": "Swagger API documentation",
                 "responses": {}
             }
@@ -1044,6 +2806,9 @@ const docTemplate = `{
                 },
                 "longitude": {
                     "type": "number"
+                },
+                "out_of_station_request_id": {
+                    "type": "integer"
                 }
             }
         },
@@ -1058,6 +2823,9 @@ const docTemplate = `{
                 },
                 "medical_report_url": {
                     "type": "string"
+                },
+                "oic_staff_id": {
+                    "type": "integer"
                 },
                 "reason": {
                     "type": "string"
@@ -1079,11 +2847,20 @@ const docTemplate = `{
                 "allow_carry_over": {
                     "type": "boolean"
                 },
+                "block_past_dates": {
+                    "type": "boolean"
+                },
                 "carry_over_deadline": {
                     "type": "string"
                 },
                 "clock_window_morning": {
                     "type": "string"
+                },
+                "enforce_advance_notice": {
+                    "type": "boolean"
+                },
+                "exempt_sick_leave_advance_notice": {
+                    "type": "boolean"
                 },
                 "vesting_day": {
                     "type": "integer"
@@ -1116,6 +2893,9 @@ const docTemplate = `{
                 "attachment_url": {
                     "type": "string"
                 },
+                "cached_place_id": {
+                    "type": "integer"
+                },
                 "destination_address": {
                     "type": "string"
                 },
@@ -1129,6 +2909,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "end_date": {
+                    "type": "string"
+                },
+                "expected_deliverables": {
                     "type": "string"
                 },
                 "geofence_radius_meters": {
@@ -1148,6 +2931,17 @@ const docTemplate = `{
                 }
             }
         },
+        "controllers.uploadBody": {
+            "type": "object",
+            "properties": {
+                "data_url": {
+                    "type": "string"
+                },
+                "file_name": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_goravel_framework_support_carbon.DateTime": {
             "type": "object",
             "properties": {
@@ -1157,7 +2951,7 @@ const docTemplate = `{
         "models.LeaveApprovalStage": {
             "type": "object",
             "properties": {
-                "approverRole": {
+                "approver_role": {
                     "type": "string"
                 },
                 "code": {
@@ -1172,18 +2966,41 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
-                "isActive": {
+                "is_active": {
                     "type": "boolean"
+                },
+                "is_required": {
+                    "type": "boolean"
+                },
+                "job_title_id": {
+                    "type": "integer"
+                },
+                "job_title_match": {
+                    "type": "string"
                 },
                 "name": {
                     "type": "string"
                 },
+                "scope": {
+                    "type": "string"
+                },
                 "sequence": {
-                    "type": "integer",
-                    "format": "int32"
+                    "type": "integer"
+                },
+                "skip_if_unresolved": {
+                    "type": "boolean"
+                },
+                "stage_type": {
+                    "type": "string"
+                },
+                "supervisor_sequence": {
+                    "type": "integer"
                 },
                 "updated_at": {
                     "$ref": "#/definitions/github_com_goravel_framework_support_carbon.DateTime"
+                },
+                "workflow_profile_code": {
+                    "type": "string"
                 }
             }
         },
@@ -1219,7 +3036,7 @@ const docTemplate = `{
         "models.LeaveType": {
             "type": "object",
             "properties": {
-                "advanceNoticeDays": {
+                "advance_notice_days": {
                     "type": "integer"
                 },
                 "code": {
@@ -1231,38 +3048,61 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
-                "eligibilityNotes": {
+                "eligibility_notes": {
                     "type": "string"
                 },
                 "id": {
                     "type": "integer"
                 },
-                "isActive": {
+                "is_active": {
                     "type": "boolean"
                 },
-                "maxDaysPerRequest": {
+                "max_days_per_request": {
                     "type": "integer"
                 },
-                "maxDaysPerYear": {
+                "max_days_per_year": {
                     "type": "integer"
                 },
-                "medicalReportAfterDays": {
+                "medical_report_after_days": {
                     "type": "integer"
                 },
                 "name": {
                     "type": "string"
                 },
-                "requiresHrApproval": {
+                "requires_hr_approval": {
                     "type": "boolean"
                 },
-                "requiresSupervisorApproval": {
+                "requires_supervisor_approval": {
                     "type": "boolean"
                 },
-                "sortOrder": {
+                "sort_order": {
                     "type": "integer"
                 },
                 "updated_at": {
                     "$ref": "#/definitions/github_com_goravel_framework_support_carbon.DateTime"
+                },
+                "workflow_profile_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.UploadedFile": {
+            "type": "object",
+            "properties": {
+                "mime_type": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
                 }
             }
         }
@@ -1274,17 +3114,91 @@ const docTemplate = `{
             "name": "Authorization",
             "in": "header"
         }
-    }
+    },
+    "tags": [
+        {
+            "description": "Authentication, session, profile, and two-factor (TOTP)",
+            "name": "auth"
+        },
+        {
+            "description": "Unified inbox for pending leave, out-of-station, and performance approvals",
+            "name": "approvals"
+        },
+        {
+            "description": "Staff leave balances, types, and request submission",
+            "name": "mobile-leave"
+        },
+        {
+            "description": "Supervisor leave and out-of-station approval actions",
+            "name": "mobile-supervisor"
+        },
+        {
+            "description": "Out-of-station travel requests",
+            "name": "mobile-oos"
+        },
+        {
+            "description": "Attendance clock events with optional GPS coordinates",
+            "name": "mobile-attendance"
+        },
+        {
+            "description": "Performance planning (PPA), quarterly reports, and appraisals",
+            "name": "mobile-performance"
+        },
+        {
+            "description": "Role-scoped dashboard metrics and drill-down data",
+            "name": "dashboard"
+        },
+        {
+            "description": "Leave administration — balances, requests, workflow stages, HR finalize",
+            "name": "admin-leave"
+        },
+        {
+            "description": "KPI catalog, assignments by facility type / facility / department / job / staff",
+            "name": "admin-kpi"
+        },
+        {
+            "description": "Staff management — HR enrichment, supervisors, activation",
+            "name": "admin-staff"
+        },
+        {
+            "description": "Organisation reference lists and catalog maintenance",
+            "name": "admin-lists"
+        },
+        {
+            "description": "Access control — users, roles, permissions, data scopes, audit log",
+            "name": "admin-rbac"
+        },
+        {
+            "description": "System settings — integrations, email, notifications, performance windows",
+            "name": "admin-settings"
+        },
+        {
+            "description": "Performance reporting configuration",
+            "name": "admin-performance"
+        },
+        {
+            "description": "iHRIS sync, HRM attendance, analytics (Doris)",
+            "name": "integrations"
+        },
+        {
+            "description": "In-app notifications for the signed-in user",
+            "name": "notifications"
+        },
+        {
+            "description": "Health check and public configuration",
+            "name": "system"
+        }
+    ]
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
-	Host:             "localhost:3030",
+	Host:             "",
 	BasePath:         "/",
-	Schemes:          []string{},
+	Schemes:          []string{"http", "https"},
 	Title:            "MoH Uganda PMS API",
-	Description:      "Performance Management System API for Ministry of Health Uganda. Mobile self-service endpoints for leave, out-of-station, and GPS attendance clocking.",
+	Description:      "Ministry of Health Uganda — Performance Management System (iHRIS-integrated).",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

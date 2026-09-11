@@ -1,8 +1,13 @@
-# Optional Apache Doris OLAP layer for dashboard / attendance / leave analytics.
-# MySQL remains the system of record; enable in the API with ANALYTICS_DB_ENABLED=true.
+# Apache Doris OLAP for dashboard / attendance / leave analytics.
+# Enabled by default in the API (ANALYTICS_DB_ENABLED=true). MySQL remains the system of record.
+# When Doris is down or unreachable, dashboards automatically fall back to MySQL.
 #
-# Start: docker compose -f docker-compose.analytics.yml up -d
+# Start:  docker compose -f docker-compose.analytics.yml up -d
+# Stop:   docker compose -f docker-compose.analytics.yml down
 # MySQL protocol: localhost:9030  |  FE HTTP: localhost:8030
+#
+# From the API container, set ANALYTICS_DB_HOST=host.docker.internal (Docker Desktop)
+# or the host gateway IP so the FE port published on the host is reachable.
 services:
   doris-fe:
     image: apache/doris:2.1.7-fe-x86_64

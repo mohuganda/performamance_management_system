@@ -15,12 +15,7 @@ func NewDorisAnalyticsService() *DorisAnalyticsService {
 }
 
 func (s *DorisAnalyticsService) Available() bool {
-	if !AnalyticsEnabled() {
-		return false
-	}
-	status := s.store.Status()
-	connected, _ := status["connected"].(bool)
-	return connected
+	return s.store.Available()
 }
 
 // OosRatesByDistrict returns verified clock-in rates grouped by district (last N months).

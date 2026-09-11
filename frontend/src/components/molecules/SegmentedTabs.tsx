@@ -24,7 +24,7 @@ export function SegmentedTabs<T extends string>({
   return (
     <div
       className={cn(
-        'flex flex-wrap gap-1 rounded-sm border border-moh-green/15 bg-white p-1 shadow-sm',
+        'flex flex-wrap gap-1 rounded-sm border border-ui-border bg-ui-surface p-1 shadow-sm',
         className,
       )}
       role="tablist"
@@ -41,8 +41,8 @@ export function SegmentedTabs<T extends string>({
             className={cn(
               'inline-flex items-center gap-2 rounded-sm px-4 py-2.5 text-sm font-medium transition-all',
               active
-                ? 'bg-moh-green text-white shadow-sm'
-                : 'text-gray-600 hover:bg-moh-background hover:text-moh-green',
+                ? 'bg-ui-text text-ui-bg shadow-sm'
+                : 'text-ui-muted hover:bg-ui-subtle hover:text-ui-text',
             )}
           >
             {tab.icon}
@@ -52,8 +52,8 @@ export function SegmentedTabs<T extends string>({
                 className={cn(
                   'min-w-[1.25rem] rounded-full px-2 py-0.5 text-center text-[10px] font-bold leading-none',
                   active
-                    ? 'bg-white text-moh-green shadow-sm'
-                    : 'bg-moh-green text-white',
+                    ? 'bg-ui-bg text-ui-text shadow-sm'
+                    : 'bg-ui-subtle text-ui-text',
                 )}
               >
                 {tab.count}

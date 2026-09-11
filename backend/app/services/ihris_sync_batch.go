@@ -47,7 +47,7 @@ func (s *IhrisSyncService) SyncStatus() (map[string]any, error) {
 	if run.TotalPages != nil {
 		totalPages = *run.TotalPages
 	}
-	hasMore := run.Status == "running" || (totalPages > 0 && run.CurrentPage < totalPages)
+	hasMore := run.Status == "running" || (run.Status != "cancelled" && run.Status != "completed" && totalPages > 0 && run.CurrentPage < totalPages)
 
 	return map[string]any{
 		"run_id":            run.ID,
@@ -98,6 +98,29 @@ func (s *IhrisSyncService) SyncFromAPI(opts SyncBatchOptions) (SyncBatchResult, 
 		if err := facades.Orm().Query().Where("id", opts.RunID).First(&run); err != nil || run.ID == 0 {
 			return SyncBatchResult{}, fmt.Errorf("sync run not found")
 		}
+		if run.Status == "cancelled" {
+			return SyncBatchResult{
+				RunID:    run.ID,
+				Status:   "cancelled",
+				HasMore:  false,
+				StartedAt: run.StartedAt,
+				FinishedAt: run.FinishedAt,
+			}, nil
+		}
+		if run.Status == "completed" {
+			return SyncBatchResult{
+				RunID:    run.ID,
+				Status:   "completed",
+				HasMore:  false,
+				StartedAt: run.StartedAt,
+				FinishedAt: run.FinishedAt,
+			}, nil
+		}
+		if run.Status != "running" {
+			run.Status = "running"
+			run.FinishedAt = nil
+			_ = facades.Orm().Query().Save(&run)
+		}
 	} else {
 		run = models.IhrisSyncRun{
 			Status:    "running",
@@ -120,6 +143,20 @@ func (s *IhrisSyncService) SyncFromAPI(opts SyncBatchOptions) (SyncBatchResult, 
 
 	batchResult := SyncResult{}
 	for i := 0; i < opts.PagesPerBatch; i++ {
+		var cancelCheck models.IhrisSyncRun
+		_ = facades.Orm().Query().Where("id", run.ID).First(&cancelCheck)
+		if cancelCheck.Status == "cancelled" {
+			run.Status = "cancelled"
+			run.FinishedAt = cancelCheck.FinishedAt
+			return SyncBatchResult{
+				RunID:    run.ID,
+				Status:   "cancelled",
+				HasMore:  false,
+				StartedAt: run.StartedAt,
+				FinishedAt: run.FinishedAt,
+			}, nil
+		}
+
 		resp, err := client.FetchPage(apiURL, page)
 		if err != nil {
 			msg := err.Error()
@@ -215,15 +252,25 @@ func (s *IhrisSyncService) passesSyncFilters(rec IhrisAPIRecord, settings *Setti
 	if strings.TrimSpace(rec.IhrisPID) == "" {
 		return false
 	}
+	// Placement is required so Staff Management can show Facility / Job after sync.
+	if !rec.HasFacilityAndJob() {
+		return false
+	}
 	return true
 }
 
 func (s *IhrisSyncService) importAPIRecord(rec IhrisAPIRecord, result *SyncResult) error {
+	if !rec.HasFacilityAndJob() {
+		return fmt.Errorf("facility and job are required to sync staff")
+	}
 	row := rec.ToIhrisData()
 
 	facilityID, err := s.upsertFacility(row)
 	if err != nil {
 		return err
+	}
+	if facilityID == 0 {
+		return fmt.Errorf("could not resolve facility for staff sync")
 	}
 	result.FacilitiesUpserted++
 
@@ -239,9 +286,10 @@ func (s *IhrisSyncService) importAPIRecord(rec IhrisAPIRecord, result *SyncResul
 	if err != nil {
 		return err
 	}
-	if jobID > 0 {
-		result.JobsUpserted++
+	if jobID == 0 {
+		return fmt.Errorf("could not resolve job for staff sync")
 	}
+	result.JobsUpserted++
 
 	staffID, err := s.upsertStaffFromAPI(rec)
 	if err != nil {
@@ -474,32 +522,41 @@ func (s *StaffAdminService) buildStaffListRow(st models.Staff, supervisionMap ma
 }
 
 type StaffProfileDetail struct {
-	StaffID            uint   `json:"staff_id"`
-	IhrisPID           string `json:"ihris_pid"`
-	Name               string `json:"name"`
-	Firstname          string `json:"firstname"`
-	Surname            string `json:"surname"`
-	Othername          string `json:"othername,omitempty"`
-	Nin                string `json:"nin,omitempty"`
-	Gender             string `json:"gender,omitempty"`
-	Email              string `json:"email,omitempty"`
-	Mobile             string `json:"mobile,omitempty"`
-	Telephone          string `json:"telephone,omitempty"`
-	Cadre              string `json:"cadre,omitempty"`
-	Region             string `json:"region,omitempty"`
-	JobTitle           string `json:"job_title,omitempty"`
-	FacilityName       string `json:"facility_name,omitempty"`
-	InstitutionType    string `json:"institution_type,omitempty"`
-	DepartmentName     string `json:"department_name,omitempty"`
-	HrDepartmentName   string `json:"hr_department_name,omitempty"`
-	Division           string `json:"division,omitempty"`
-	Section            string `json:"section,omitempty"`
-	Unit               string `json:"unit,omitempty"`
-	DistrictName       string `json:"district_name,omitempty"`
-	EmploymentTerms    string `json:"employment_terms,omitempty"`
-	SalaryGrade        string `json:"salary_grade,omitempty"`
-	SupervisorName     string `json:"supervisor_name,omitempty"`
-	IhrisLastSyncAt    string `json:"ihris_last_sync_at,omitempty"`
+	StaffID                   uint                   `json:"staff_id"`
+	IhrisPID                  string                 `json:"ihris_pid"`
+	Name                      string                 `json:"name"`
+	Firstname                 string                 `json:"firstname"`
+	Surname                   string                 `json:"surname"`
+	Othername                 string                 `json:"othername,omitempty"`
+	Nin                       string                 `json:"nin,omitempty"`
+	Gender                    string                 `json:"gender,omitempty"`
+	Email                     string                 `json:"email,omitempty"`
+	Mobile                    string                 `json:"mobile,omitempty"`
+	Telephone                 string                 `json:"telephone,omitempty"`
+	Cadre                     string                 `json:"cadre,omitempty"`
+	Region                    string                 `json:"region,omitempty"`
+	JobTitle                  string                 `json:"job_title,omitempty"`
+	FacilityID                uint                   `json:"facility_id,omitempty"`
+	FacilityName              string                 `json:"facility_name,omitempty"`
+	FacilityLatitude          *float64               `json:"facility_latitude,omitempty"`
+	FacilityLongitude         *float64               `json:"facility_longitude,omitempty"`
+	InstitutionType           string                 `json:"institution_type,omitempty"`
+	DepartmentName            string                 `json:"department_name,omitempty"`
+	HrDepartmentName          string                 `json:"hr_department_name,omitempty"`
+	Division                  string                 `json:"division,omitempty"`
+	Section                   string                 `json:"section,omitempty"`
+	Unit                      string                 `json:"unit,omitempty"`
+	DistrictName              string                 `json:"district_name,omitempty"`
+	EmploymentTerms           string                 `json:"employment_terms,omitempty"`
+	SalaryGrade               string                 `json:"salary_grade,omitempty"`
+	SupervisorName            string                 `json:"supervisor_name,omitempty"`
+	Supervisors               []SupervisorAssignment `json:"supervisors,omitempty"`
+	IhrisLastSyncAt           string                 `json:"ihris_last_sync_at,omitempty"`
+	DutyStationLatitude       *float64               `json:"duty_station_latitude,omitempty"`
+	DutyStationLongitude      *float64               `json:"duty_station_longitude,omitempty"`
+	DutyStationLabel          *string                `json:"duty_station_label,omitempty"`
+	DutyStationRadiusMeters   *int                   `json:"duty_station_radius_meters,omitempty"`
+	EffectiveDutyStation      EffectiveDutyStation   `json:"effective_duty_station"`
 }
 
 func (s *StaffAdminService) GetStaffProfile(staffID uint) (*StaffProfileDetail, error) {
@@ -513,10 +570,8 @@ func (s *StaffAdminService) GetStaffProfile(staffID uint) (*StaffProfileDetail, 
 	}
 
 	supervisionMap := map[uint]StaffSupervisionRow{}
-	if supervision, err := s.supervisors.ListStaffSupervision(); err == nil {
-		for _, sup := range supervision {
-			supervisionMap[sup.StaffID] = sup
-		}
+	if supervision, err := s.supervisors.SupervisionMapForStaffIDs([]uint{staffID}); err == nil {
+		supervisionMap = supervision
 	}
 
 	row := s.buildStaffListRow(st, supervisionMap)
@@ -539,6 +594,7 @@ func (s *StaffAdminService) GetStaffProfile(staffID uint) (*StaffProfileDetail, 
 		DepartmentName:   row.DepartmentName,
 		HrDepartmentName: row.HrDepartment,
 		SupervisorName:   row.SupervisorName,
+		Supervisors:      row.Supervisors,
 		IhrisLastSyncAt:  row.IhrisLastSyncAt,
 	}
 
@@ -553,23 +609,41 @@ func (s *StaffAdminService) GetStaffProfile(staffID uint) (*StaffProfileDetail, 
 
 		var facility models.Facility
 		if err := facades.Orm().Query().Where("id", contract.FacilityID).First(&facility); err == nil && facility.ID > 0 {
+			detail.FacilityID = facility.ID
 			detail.FacilityName = facility.Name
 			detail.InstitutionType = deref(facility.InstitutionTypeName)
+			detail.FacilityLatitude = facility.Latitude
+			detail.FacilityLongitude = facility.Longitude
 		}
 	}
+
+	var hrProfile models.StaffHrProfile
+	if err := facades.Orm().Query().Where("staff_id", st.ID).First(&hrProfile); err == nil && hrProfile.ID > 0 {
+		detail.DutyStationLatitude = hrProfile.DutyStationLatitude
+		detail.DutyStationLongitude = hrProfile.DutyStationLongitude
+		detail.DutyStationLabel = hrProfile.DutyStationLabel
+		detail.DutyStationRadiusMeters = hrProfile.DutyStationRadiusMeters
+	}
+	detail.EffectiveDutyStation = NewDutyStationService().ResolveEffectiveDutyStation(st.ID)
 
 	return detail, nil
 }
 
 type StaffHrProfileInput struct {
-	HrDepartmentID *uint
-	HrEmail        string
-	HrMobile       string
-	Notes          string
-	IsLeaveManager *bool
-	LockEmail      bool
-	LockDepartment bool
-	LockMobile     bool
+	HrDepartmentID          *uint
+	HrEmail                 string
+	HrMobile                string
+	Notes                   string
+	IsLeaveManager          *bool
+	LockEmail               bool
+	LockDepartment          bool
+	LockMobile              bool
+	DutyStationLatitude     *float64
+	DutyStationLongitude    *float64
+	DutyStationLabel        *string
+	DutyStationRadiusMeters *int
+	ClearDutyStation        bool
+	UpdateDutyStation       bool
 }
 
 func (s *StaffAdminService) UpdateHrProfile(staffID uint, userID uint, input StaffHrProfileInput) error {
@@ -600,6 +674,16 @@ func (s *StaffAdminService) UpdateHrProfile(staffID uint, userID uint, input Sta
 	lockStr := string(encoded)
 	profile.LockedFields = &lockStr
 	profile.UpdatedByUserID = &userID
+
+	if input.ClearDutyStation || input.UpdateDutyStation {
+		ApplyDutyStationFields(&profile, DutyStationUpdate{
+			Latitude:     input.DutyStationLatitude,
+			Longitude:    input.DutyStationLongitude,
+			Label:        input.DutyStationLabel,
+			RadiusMeters: input.DutyStationRadiusMeters,
+			Clear:        input.ClearDutyStation,
+		})
+	}
 
 	if err := facades.Orm().Query().Save(&profile); err != nil {
 		return err

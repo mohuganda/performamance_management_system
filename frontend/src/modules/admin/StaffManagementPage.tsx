@@ -365,8 +365,8 @@ export function StaffManagementPage() {
               </td>
               <td className="px-3 py-2">{row.email || '—'}</td>
               <td className="px-3 py-2">
-                <div>{row.facility_name}</div>
-                <div className="text-xs text-gray-500">{row.job_title}</div>
+                <div className="font-medium text-ui-text">{row.facility_name || '—'}</div>
+                <div className="text-xs text-gray-500">{row.job_title || '—'}</div>
               </td>
               <td className="px-3 py-2">{row.department_name || '—'}</td>
               <td className="px-3 py-2">{row.hr_department_name || '—'}</td>
@@ -407,7 +407,7 @@ export function StaffManagementPage() {
         >
           <Card
             {...mt}
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-sm border border-moh-green/20 p-6 shadow-xl"
+            className="relative z-50 max-h-[90vh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-sm border border-moh-green/20 p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <Typography {...mt} className="text-lg font-bold text-moh-green">

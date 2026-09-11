@@ -108,6 +108,15 @@ func (s *SettingsService) PublicSettings() map[string]any {
 			"api_key":      s.GetString("google_maps.api_key", ""),
 			"country_code": s.GetString("google_maps.country_code", "ug"),
 		},
+		"oos_attendance": map[string]any{
+			"min_accuracy_percent":             s.GetInt("oos.attendance.min_accuracy_percent", 70),
+			"default_geofence_radius_meters": s.GetInt("oos.attendance.default_geofence_radius_meters", 500),
+		},
+		"duty_station_attendance": map[string]any{
+			"min_accuracy_percent":             s.GetInt("attendance.duty_station.min_accuracy_percent", 90),
+			"default_geofence_radius_meters": s.GetInt("attendance.duty_station.default_geofence_radius_meters", 500),
+		},
+		"ui": s.publicUiConfig(),
 	}
 }
 
@@ -133,10 +142,30 @@ func (s *SettingsService) dataSourcesConfig() map[string]any {
 			"host_configured":          !needsHost,
 			"last_sync_at":             s.GetString("hrm_attend.last_sync_at", ""),
 			"last_sync_status":         s.GetString("hrm_attend.last_sync_status", ""),
+			"export_push_enabled":      s.GetBool("hrm_attend.export_push_enabled", false),
+			"export_push_path":         s.GetString("hrm_attend.export_push_path", "/api/outoftstation_clockin"),
+			"basic_user":               s.GetString("hrm_attend.basic_user", ""),
+			"basic_password":           "", // never echo stored password
+			"jwt_token_set":            s.GetString("hrm_attend.jwt_token", "") != "",
+			"export_pull_token_set":    s.GetString("hrm_attend.export_pull_token", "") != "",
+			"export_last_push_at":      s.GetString("hrm_attend.export_last_push_at", ""),
+			"export_last_push_status":  s.GetString("hrm_attend.export_last_push_status", ""),
 		},
 		"google_maps": map[string]any{
 			"api_key":      s.GetString("google_maps.api_key", ""),
 			"country_code": s.GetString("google_maps.country_code", "ug"),
+		},
+		"oos": map[string]any{
+			"attendance": map[string]any{
+				"min_accuracy_percent":             s.GetInt("oos.attendance.min_accuracy_percent", 70),
+				"default_geofence_radius_meters": s.GetInt("oos.attendance.default_geofence_radius_meters", 500),
+			},
+		},
+		"attendance": map[string]any{
+			"duty_station": map[string]any{
+				"min_accuracy_percent":             s.GetInt("attendance.duty_station.min_accuracy_percent", 90),
+				"default_geofence_radius_meters": s.GetInt("attendance.duty_station.default_geofence_radius_meters", 500),
+			},
 		},
 		"analytics": NewAnalyticsStore().Status(),
 	}
@@ -163,10 +192,49 @@ func (s *SettingsService) emailConfig() map[string]any {
 	}
 }
 
-func (s *SettingsService) uiConfig() map[string]any {
-	return map[string]any{
-		"admin_page_size": s.GetInt("ui.admin_page_size", 20),
+func (s *SettingsService) defaultNavCustom() map[string]string {
+	return map[string]string{
+		"bg":     "#0b4f4a",
+		"fg":     "#ffffff",
+		"active": "#fcdc04",
 	}
+}
+
+func (s *SettingsService) navCustomConfig() map[string]string {
+	raw := s.GetString("ui.nav_custom", "")
+	if raw == "" {
+		return s.defaultNavCustom()
+	}
+	var parsed map[string]string
+	if json.Unmarshal([]byte(raw), &parsed) == nil && len(parsed) > 0 {
+		defaults := s.defaultNavCustom()
+		if parsed["bg"] == "" {
+			parsed["bg"] = defaults["bg"]
+		}
+		if parsed["fg"] == "" {
+			parsed["fg"] = defaults["fg"]
+		}
+		if parsed["active"] == "" {
+			parsed["active"] = defaults["active"]
+		}
+		return parsed
+	}
+	return s.defaultNavCustom()
+}
+
+func (s *SettingsService) publicUiConfig() map[string]any {
+	return map[string]any{
+		"nav_preset_id":   s.GetString("ui.nav_preset_id", "teal"),
+		"nav_custom":      s.navCustomConfig(),
+		"header_chrome":   s.GetString("ui.header_chrome", "inherit"),
+		"floating_labels": s.GetBool("ui.floating_labels", true),
+	}
+}
+
+func (s *SettingsService) uiConfig() map[string]any {
+	out := s.publicUiConfig()
+	out["admin_page_size"] = s.GetInt("ui.admin_page_size", 20)
+	return out
 }
 
 func (s *SettingsService) notificationsConfig() map[string]any {
@@ -191,6 +259,16 @@ func (s *SettingsService) notificationsConfig() map[string]any {
 			"days_before": s.GetString("notifications.supervisor_approval.days_before", "3,1"),
 			"description": "Remind supervisors to approve leave, travel, and performance plans",
 		},
+		"leave_plan_reminder": map[string]any{
+			"enabled":     s.GetBool("notifications.leave_plan_reminder.enabled", true),
+			"days_before": s.GetString("notifications.leave_reminder.days_before", "7,1"),
+			"description": "Remind employees and primary supervisors before planned annual leave starts",
+		},
+		"leave_start_reminder": map[string]any{
+			"enabled":     s.GetBool("notifications.leave_start_reminder.enabled", true),
+			"days_before": s.GetString("notifications.leave_reminder.days_before", "7,1"),
+			"description": "Remind employees and primary supervisors before approved leave starts",
+		},
 		"in_app_email_copy": map[string]any{
 			"enabled":     s.GetBool("notifications.in_app.email_copy", true),
 			"description": "Send an email copy when in-app notifications are created for a user",
@@ -213,12 +291,14 @@ func (s *SettingsService) UpdateGroup(group string, payload map[string]any) erro
 	}
 	flat := flattenMap("", payload)
 	for key, value := range flat {
-		if strings.Contains(key, "password") && fmt.Sprint(value) == "" {
+		if (strings.Contains(key, "password") || strings.Contains(key, "token")) && fmt.Sprint(value) == "" {
 			continue
 		}
 		isPublic := strings.HasPrefix(key, "ihris.") ||
 			strings.HasPrefix(key, "notifications.") ||
-			strings.HasPrefix(key, "google_maps.")
+			strings.HasPrefix(key, "google_maps.") ||
+			strings.HasPrefix(key, "oos.attendance.") ||
+			strings.HasPrefix(key, "attendance.duty_station.")
 		if err := s.Set(key, group, value, isPublic); err != nil {
 			return err
 		}

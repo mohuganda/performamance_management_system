@@ -78,8 +78,9 @@ export const useAuthStore = create<AuthState>()(
         const permissions: string[] = me.permissions ?? []
         const photo =
           me.user?.ProfilePhoto ?? me.user?.profile_photo ?? null
+        const staffName = me.staff?.name?.trim()
         set({
-          displayName: me.user?.Name || get().displayName,
+          displayName: staffName || me.user?.Name || get().displayName,
           email: me.user?.Email || get().email,
           profilePhoto: photo,
           roles: me.roles ?? [],

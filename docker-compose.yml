@@ -19,6 +19,29 @@ services:
       timeout: 5s
       retries: 18
       start_period: 120s
+    profiles:
+      - mysql
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: moh-pms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: moh_pms
+      POSTGRES_USER: pms
+      POSTGRES_PASSWORD: pms_secret
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pms -d moh_pms"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    profiles:
+      - postgres
 
   redis:
     image: redis:7-alpine
@@ -43,6 +66,10 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+        required: false
+      postgres:
+        condition: service_healthy
+        required: false
       redis:
         condition: service_healthy
     environment:
@@ -51,16 +78,25 @@ services:
       APP_DEBUG: "false"
       APP_HOST: 0.0.0.0
       APP_PORT: 3030
-      DB_CONNECTION: mysql
-      DB_HOST: mysql
-      DB_PORT: 3306
+      DB_CONNECTION: ${DB_CONNECTION:-postgres}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: moh_pms
       DB_USERNAME: pms
       DB_PASSWORD: pms_secret
+      DB_SCHEMA: public
       REDIS_HOST: redis
       REDIS_PORT: 6379
       IHRIS_USE_DEMO_DATA: "true"
       LOAD_DEMO_DATA: "true"
+      ANALYTICS_DB_ENABLED: "true"
+      ANALYTICS_DB_HOST: host.docker.internal
+      ANALYTICS_DB_PORT: "9030"
+      ANALYTICS_DB_DATABASE: moh_pms_analytics
+      ANALYTICS_DB_USERNAME: root
+      ANALYTICS_DB_PASSWORD: ""
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "3030:3030"
 
@@ -79,4 +115,5 @@ services:
 
 volumes:
   mysql_data:
+  postgres_data:
   redis_data:

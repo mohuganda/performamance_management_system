@@ -149,15 +149,19 @@ type StaffContract struct {
 
 type StaffHrProfile struct {
 	orm.Model
-	StaffID          uint    `gorm:"uniqueIndex"`
-	HrDepartmentID   *uint   `gorm:"column:hr_department_id"`
-	HrEmail          *string `gorm:"column:hr_email"`
-	HrMobile         *string `gorm:"column:hr_mobile"`
-	LockedFields     *string `gorm:"column:locked_fields"`
-	Notes            *string
-	IsLeaveManager   bool    `gorm:"column:is_leave_manager;default:false"`
-	UpdatedByUserID  *uint   `gorm:"column:updated_by_user_id"`
-	Department       *Department `gorm:"foreignKey:HrDepartmentID"`
+	StaffID                 uint    `gorm:"uniqueIndex"`
+	HrDepartmentID          *uint   `gorm:"column:hr_department_id"`
+	HrEmail                 *string `gorm:"column:hr_email"`
+	HrMobile                *string `gorm:"column:hr_mobile"`
+	LockedFields            *string `gorm:"column:locked_fields"`
+	Notes                   *string
+	IsLeaveManager          bool     `gorm:"column:is_leave_manager;default:false"`
+	UpdatedByUserID         *uint    `gorm:"column:updated_by_user_id"`
+	DutyStationLatitude     *float64 `json:"duty_station_latitude,omitempty" gorm:"column:duty_station_latitude"`
+	DutyStationLongitude    *float64 `json:"duty_station_longitude,omitempty" gorm:"column:duty_station_longitude"`
+	DutyStationLabel        *string  `json:"duty_station_label,omitempty" gorm:"column:duty_station_label"`
+	DutyStationRadiusMeters *int     `json:"duty_station_radius_meters,omitempty" gorm:"column:duty_station_radius_meters"`
+	Department              *Department `gorm:"foreignKey:HrDepartmentID"`
 }
 
 type IhrisSyncRun struct {
@@ -363,20 +367,20 @@ func (LeaveWorkflowProfile) TableName() string {
 
 type LeaveApprovalStage struct {
 	orm.Model
-	Code                 string  `gorm:"uniqueIndex:idx_leave_stage_profile_code"`
-	Name                 string
-	Sequence             uint8
-	ApproverRole         string
-	Description          *string
-	IsActive             bool    `gorm:"default:true"`
-	WorkflowProfileCode  string  `gorm:"column:workflow_profile_code;default:default;uniqueIndex:idx_leave_stage_profile_code"`
-	StageType            string  `gorm:"column:stage_type;default:supervisor"`
-	Scope                string  `gorm:"default:none"`
-	JobTitleID           *uint   `gorm:"column:job_title_id"`
-	JobTitleMatch        *string `gorm:"column:job_title_match"`
-	SupervisorSequence   *uint8  `gorm:"column:supervisor_sequence"`
-	IsRequired           bool    `gorm:"default:true"`
-	SkipIfUnresolved     bool    `gorm:"column:skip_if_unresolved;default:true"`
+	Code                string  `json:"code" gorm:"uniqueIndex:idx_leave_stage_profile_code"`
+	Name                string  `json:"name"`
+	Sequence            uint8   `json:"sequence"`
+	ApproverRole        string  `json:"approver_role"`
+	Description         *string `json:"description,omitempty"`
+	IsActive            bool    `json:"is_active" gorm:"default:true"`
+	WorkflowProfileCode string  `json:"workflow_profile_code" gorm:"column:workflow_profile_code;default:default;uniqueIndex:idx_leave_stage_profile_code"`
+	StageType           string  `json:"stage_type" gorm:"column:stage_type;default:supervisor"`
+	Scope               string  `json:"scope" gorm:"default:none"`
+	JobTitleID          *uint   `json:"job_title_id,omitempty" gorm:"column:job_title_id"`
+	JobTitleMatch       *string `json:"job_title_match,omitempty" gorm:"column:job_title_match"`
+	SupervisorSequence  *uint8  `json:"supervisor_sequence,omitempty" gorm:"column:supervisor_sequence"`
+	IsRequired          bool    `json:"is_required" gorm:"default:true"`
+	SkipIfUnresolved    bool    `json:"skip_if_unresolved" gorm:"column:skip_if_unresolved;default:true"`
 }
 
 type LeaveRequest struct {
@@ -394,7 +398,20 @@ type LeaveRequest struct {
 	AdvanceNoticeMet        bool   `gorm:"default:false"`
 	ApprovalStage           string `gorm:"default:supervisor"`
 	CarryOverRequested      bool   `gorm:"default:false"`
+	OicStaffID              *uint  `gorm:"column:oic_staff_id"`
 }
+
+type LeavePlan struct {
+	orm.Model
+	StaffID      uint
+	CalendarYear int
+	StartDate    time.Time
+	EndDate      time.Time
+	DaysPlanned  int
+	Notes        *string
+}
+
+func (LeavePlan) TableName() string { return "leave_plans" }
 
 type LeaveApproval struct {
 	orm.Model
@@ -482,19 +499,71 @@ func (StaffAttendanceMonthlySummary) TableName() string {
 
 type AttendanceClock struct {
 	orm.Model
-	EntryID                     string `gorm:"uniqueIndex"`
-	StaffID                     uint
-	ClockType                   string
-	ClockDate                   time.Time `gorm:"type:date"`
-	ClockedAt                   time.Time
-	Latitude                    float64
-	Longitude                   float64
-	AccuracyMeters              *float64
-	Source                      string `gorm:"default:mobile"`
-	OutOfStationRequestID       *uint
-	VerificationStatus          string `gorm:"default:pending"`
-	DistanceFromDestinationMeters *float64
-	LocationLabel               *string
+	EntryID                       string     `json:"entry_id" gorm:"uniqueIndex"`
+	StaffID                       uint       `json:"staff_id"`
+	ClockType                     string     `json:"clock_type"`
+	ClockDate                     time.Time  `json:"clock_date" gorm:"type:date"`
+	ClockedAt                     time.Time  `json:"clocked_at"`
+	Latitude                      float64    `json:"latitude"`
+	Longitude                     float64    `json:"longitude"`
+	AccuracyMeters                *float64   `json:"accuracy_meters,omitempty"`
+	Source                        string     `json:"source" gorm:"default:mobile"`
+	OutOfStationRequestID         *uint      `json:"out_of_station_request_id,omitempty"`
+	VerificationStatus            string     `json:"verification_status" gorm:"default:pending"`
+	DistanceFromDestinationMeters *float64   `json:"distance_from_destination_meters,omitempty"`
+	LocationAccuracyPercent       *float64   `json:"location_accuracy_percent,omitempty" gorm:"column:location_accuracy_percent"`
+	LocationLabel                 *string    `json:"location_label,omitempty"`
+}
+
+type HrmAttendExportLog struct {
+	orm.Model
+	AttendanceClockID uint      `json:"attendance_clock_id" gorm:"column:attendance_clock_id;index"`
+	Direction         string    `json:"direction" gorm:"column:direction"` // push | pull
+	Status            string    `json:"status" gorm:"column:status"`       // success | failed
+	HTTPStatus        *int      `json:"http_status,omitempty" gorm:"column:http_status"`
+	ResponseSnippet   *string   `json:"response_snippet,omitempty" gorm:"column:response_snippet"`
+	ExportedAt        time.Time `json:"exported_at" gorm:"column:exported_at"`
+}
+
+func (HrmAttendExportLog) TableName() string {
+	return "hrm_attend_export_log"
+}
+
+type HrmAttendSyncRun struct {
+	orm.Model
+	Status          string     `json:"status" gorm:"column:status;default:running"`
+	YearMonth       string     `json:"year_month" gorm:"column:year_month"`
+	Imported        uint       `json:"imported" gorm:"column:imported;default:0"`
+	SkippedUnknown  uint       `json:"skipped_unknown" gorm:"column:skipped_unknown;default:0"`
+	SkippedInvalid  uint       `json:"skipped_invalid" gorm:"column:skipped_invalid;default:0"`
+	TotalFetched    uint       `json:"total_fetched" gorm:"column:total_fetched;default:0"`
+	LastError       *string    `json:"last_error,omitempty" gorm:"column:last_error"`
+	SummaryJSON     *string    `json:"summary_json,omitempty" gorm:"column:summary_json"`
+	StartedAt       time.Time  `json:"started_at" gorm:"column:started_at"`
+	FinishedAt      *time.Time `json:"finished_at,omitempty" gorm:"column:finished_at"`
+}
+
+func (HrmAttendSyncRun) TableName() string {
+	return "hrm_attend_sync_runs"
+}
+
+type CachedPlace struct {
+	orm.Model
+	Name             string     `json:"name" gorm:"column:name"`
+	Address          *string    `json:"address,omitempty" gorm:"column:address"`
+	Latitude         float64    `json:"latitude" gorm:"column:latitude"`
+	Longitude        float64    `json:"longitude" gorm:"column:longitude"`
+	CountryCode      string     `json:"country_code" gorm:"column:country_code"`
+	GooglePlaceID    *string    `json:"google_place_id,omitempty" gorm:"column:google_place_id;uniqueIndex"`
+	NormalizedName   string     `json:"normalized_name" gorm:"column:normalized_name"`
+	Source           string     `json:"source" gorm:"column:source"`
+	SourceRef        *string    `json:"source_ref,omitempty" gorm:"column:source_ref"`
+	HitCount         int        `json:"hit_count" gorm:"column:hit_count;default:0"`
+	LastHitAt        *time.Time `json:"last_hit_at,omitempty" gorm:"column:last_hit_at"`
+}
+
+func (CachedPlace) TableName() string {
+	return "cached_places"
 }
 
 type SystemConfig struct {
