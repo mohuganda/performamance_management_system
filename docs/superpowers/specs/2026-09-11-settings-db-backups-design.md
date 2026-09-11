@@ -14,7 +14,7 @@ Admins need a Settings UI to manage database backups: see daily dumps, delete se
 2. Retention: keep **all** dumps for the **current calendar month**; for each **past month**, keep only the **latest** dump of that month.
 3. Settings → **Backups** tab: list backups (date, size, engine, status), delete with confirmation, run backup now.
 4. Restore flow: **test restore into a throwaway database** → health checks → only then allow **production restore** with explicit confirmation.
-5. Dual-engine: same UX for Postgres and MySQL; tools and filenames reflect the active engine; refuse cross-engine restore.
+5. Dual-engine **capability**: same UX and adapters for Postgres and MySQL; **only the engine configured as primary in env (`DB_CONNECTION`) is dumped and restorable** — never back up both engines in parallel.
 
 ## Non-goals
 
@@ -31,7 +31,7 @@ Admins need a Settings UI to manage database backups: see daily dumps, delete se
 | Retention | Current month = all dailies; older months = keep one (latest of that month) |
 | Restore safety | Test on throwaway DB first; production restore gated on successful recent test |
 | Storage root | Outside app/repo; default `/home/moh-pms/db-backups`; override `DB_BACKUP_DIR` |
-| Engines | Active `DB_CONNECTION` = `postgres` \| `mysql` (same dual-db product support) |
+| Engines | **Only primary** from `DB_CONNECTION` (`postgres` \| `mysql`). Do not dump the inactive engine. Filenames and tools follow that primary. |
 | Compression | `.sql.gz` for both engines |
 
 ## Storage layout
@@ -59,10 +59,11 @@ Single `BackupService` with a small adapter interface:
 | Production restore | drop/recreate or truncate+reload live DB (maintenance) | same |
 | Health checks | connect; require core tables (`users`/`staff`/migrations as available); basic counts | same |
 
-- Detect engine from runtime config (`DB_CONNECTION`), not from UI toggle.
+- Detect engine **only** from runtime config `DB_CONNECTION` (the primary OLTP). Never invent a second dump for the other engine even if its container is running.
+- Daily/manual **Run backup** always targets that primary only.
 - Filenames include engine: `moh_pms_{postgres|mysql}_YYYY-MM-DD.sql.gz`.
-- If a listed file’s engine ≠ live engine, **Delete** allowed; **Test/Restore** blocked with a clear message.
-- API container (or a sidecar helper script invoked by the API) must have the matching client tools installed for the active engine; document both in deploy image or use `docker exec` into `moh-pms-postgres` / `moh-pms-mysql` for dump/restore commands (preferred for credentials and tool versions).
+- Listed files from the other engine (historical leftovers) may appear; **Delete** allowed; **Test/Restore** blocked with a clear message that they are not the current primary.
+- API container (or helper via `docker exec`) must have client tools for the **current** primary; document both images so switching `DB_CONNECTION` still works after redeploy.
 
 **Preferred dump transport:** run `pg_dump` / `mysqldump` via `docker exec` into the DB container when `DB_BACKUP_USE_DOCKER_EXEC=true` (prod default), writing the stream to the mounted backup dir on the API/host. Fallback: local client tools using `DB_*` env when not in Docker.
 
