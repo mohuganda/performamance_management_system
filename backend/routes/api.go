@@ -244,6 +244,9 @@ func Api() {
 				mobile.Middleware(middleware.Permission("leave.requests.view")).Get("/leave/requests", mobileController.ListLeaveRequests)
 				mobile.Middleware(middleware.Permission("leave.requests.create")).Get("/leave/oic-candidates", mobileController.ListOicCandidates)
 				mobile.Middleware(middleware.Permission("leave.requests.create")).Post("/leave/requests", mobileController.CreateLeaveRequest)
+				mobile.Middleware(middleware.Permission("leave.requests.create")).Post("/leave/requests/{id}/recall", mobileController.RecallLeaveRequest)
+				mobile.Middleware(middleware.Permission("leave.requests.create")).Post("/leave/requests/{id}/cancel", mobileController.CancelLeaveRequest)
+				mobile.Middleware(middleware.Permission("leave.requests.create")).Delete("/leave/requests/{id}", mobileController.DeleteLeaveRequest)
 
 				mobile.Middleware(middleware.Permission("oos.requests.view")).Get("/out-of-station/reasons", mobileController.ListOosReasons)
 				mobile.Middleware(middleware.Permission("oos.requests.view")).Get("/out-of-station/requests", mobileController.ListOosRequests)
@@ -252,6 +255,8 @@ func Api() {
 				mobile.Middleware(middleware.Permission("oos.requests.create")).Put("/out-of-station/requests/{id}", mobileController.UpdateOosRequest)
 				mobile.Middleware(middleware.Permission("oos.requests.create")).Post("/out-of-station/requests/{id}/submit", mobileController.SubmitOosRequest)
 				mobile.Middleware(middleware.Permission("oos.requests.create")).Post("/out-of-station/requests/{id}/cancel", mobileController.CancelOosRequest)
+				mobile.Middleware(middleware.Permission("oos.requests.create")).Post("/out-of-station/requests/{id}/recall", mobileController.RecallOosRequest)
+				mobile.Middleware(middleware.Permission("oos.requests.create")).Delete("/out-of-station/requests/{id}", mobileController.DeleteOosRequest)
 
 				mobile.Middleware(middleware.Permission("attendance.clock")).Post("/attendance/clock", mobileController.Clock)
 				mobile.Middleware(middleware.Permission("attendance.view")).Get("/attendance/clocks", mobileController.ListAttendance)

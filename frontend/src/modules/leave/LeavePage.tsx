@@ -8,6 +8,13 @@ import { Badge } from '@/components/atoms/Badge'
 import { FileAttachmentField } from '@/components/molecules/FileAttachmentField'
 import { FormStatusAlert, type FormStatusType } from '@/components/molecules/FormStatusAlert'
 import { RequestHistoryPanel } from '@/components/molecules/RequestHistoryPanel'
+import {
+  RequestDetailDialog,
+  RequestRowActions,
+  canDeleteRequest,
+  canPreviewPrintRequest,
+  canRecallRequest,
+} from '@/components/molecules/RequestDetailDialog'
 import { SearchableSelect } from '@/components/molecules/SearchableSelect'
 import { SegmentedTabs } from '@/components/molecules/SegmentedTabs'
 import { leaveService } from '@/api/services/mobile'
@@ -97,6 +104,8 @@ export function LeavePage() {
   const [attachments, setAttachments] = useState<AttachmentMeta[]>([])
   const [formAlert, setFormAlert] = useState<FormAlert | null>(null)
   const [approvalAlert, setApprovalAlert] = useState<FormAlert | null>(null)
+  const [detailRow, setDetailRow] = useState<Record<string, unknown> | null>(null)
+  const [actionId, setActionId] = useState<number | null>(null)
 
   const balancesQuery = useQuery({
     queryKey: ['leave', 'balances'],
@@ -189,6 +198,34 @@ export function LeavePage() {
       const message = getApiErrorMessage(error, 'Could not process leave approval')
       setApprovalAlert({ type: 'error', title: 'Action failed', message })
       notifyApiError(error, 'Could not process leave approval')
+    },
+  })
+
+  const recallMutation = useMutation({
+    mutationFn: (id: number) => leaveService.recallRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leave'] })
+      setDetailRow(null)
+      setActionId(null)
+      toast.success('Leave request recalled to draft.', 'Leave')
+    },
+    onError: (error: unknown) => {
+      setActionId(null)
+      notifyApiError(error, 'Could not recall leave request')
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => leaveService.deleteRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leave'] })
+      setDetailRow(null)
+      setActionId(null)
+      toast.success('Leave request deleted.', 'Leave')
+    },
+    onError: (error: unknown) => {
+      setActionId(null)
+      notifyApiError(error, 'Could not delete leave request')
     },
   })
 
@@ -599,10 +636,125 @@ export function LeavePage() {
                 },
                 exportValue: (row) => requestStatus(row).replace(/_/g, ' '),
               },
+              {
+                key: 'actions',
+                label: 'Actions',
+                className: 'w-[220px]',
+                render: (row) => {
+                  const id = Number(row.id ?? row.ID ?? 0)
+                  const status = requestStatus(row)
+                  return (
+                    <RequestRowActions
+                      status={status}
+                      onPreview={() => setDetailRow(row)}
+                      onRecall={
+                        canRecallRequest(status)
+                          ? () => {
+                              if (
+                                !window.confirm(
+                                  'Recall this leave request from approval? It will return to draft.',
+                                )
+                              ) {
+                                return
+                              }
+                              setActionId(id)
+                              recallMutation.mutate(id)
+                            }
+                          : undefined
+                      }
+                      onDelete={
+                        canDeleteRequest(status)
+                          ? () => {
+                              if (
+                                !window.confirm(
+                                  'Delete this leave request permanently? This cannot be undone.',
+                                )
+                              ) {
+                                return
+                              }
+                              setActionId(id)
+                              deleteMutation.mutate(id)
+                            }
+                          : undefined
+                      }
+                      recalling={recallMutation.isPending && actionId === id}
+                      deleting={deleteMutation.isPending && actionId === id}
+                    />
+                  )
+                },
+                exportValue: () => '',
+              },
             ]}
           />
         </QueryState>
       ) : null}
+
+      <RequestDetailDialog
+        open={Boolean(detailRow)}
+        title="Leave request"
+        status={detailRow ? requestStatus(detailRow) : ''}
+        onClose={() => setDetailRow(null)}
+        canPrint={detailRow ? canPreviewPrintRequest(requestStatus(detailRow)) : false}
+        canRecall={detailRow ? canRecallRequest(requestStatus(detailRow)) : false}
+        canDelete={detailRow ? canDeleteRequest(requestStatus(detailRow)) : false}
+        recalling={
+          Boolean(detailRow) &&
+          recallMutation.isPending &&
+          actionId === Number(detailRow!.id ?? detailRow!.ID ?? 0)
+        }
+        deleting={
+          Boolean(detailRow) &&
+          deleteMutation.isPending &&
+          actionId === Number(detailRow!.id ?? detailRow!.ID ?? 0)
+        }
+        onRecall={
+          detailRow && canRecallRequest(requestStatus(detailRow))
+            ? () => {
+                const id = Number(detailRow.id ?? detailRow.ID ?? 0)
+                if (
+                  !window.confirm(
+                    'Recall this leave request from approval? It will return to draft.',
+                  )
+                ) {
+                  return
+                }
+                setActionId(id)
+                recallMutation.mutate(id)
+              }
+            : undefined
+        }
+        onDelete={
+          detailRow && canDeleteRequest(requestStatus(detailRow))
+            ? () => {
+                const id = Number(detailRow.id ?? detailRow.ID ?? 0)
+                if (
+                  !window.confirm(
+                    'Delete this leave request permanently? This cannot be undone.',
+                  )
+                ) {
+                  return
+                }
+                setActionId(id)
+                deleteMutation.mutate(id)
+              }
+            : undefined
+        }
+        fields={
+          detailRow
+            ? [
+                { label: 'Type', value: resolveLeaveType(detailRow) },
+                { label: 'Period', value: formatRequestPeriod(detailRow) },
+                { label: 'Days', value: pickString(detailRow, 'days_requested', 'DaysRequested') || '—' },
+                { label: 'OIC', value: pickString(detailRow, 'oic_name', 'OicName') || '—' },
+                { label: 'Reason', value: pickString(detailRow, 'reason', 'Reason') || '—' },
+                {
+                  label: 'Approval stage',
+                  value: pickString(detailRow, 'approval_stage', 'ApprovalStage') || '—',
+                },
+              ]
+            : []
+        }
+      />
     </div>
   )
 }

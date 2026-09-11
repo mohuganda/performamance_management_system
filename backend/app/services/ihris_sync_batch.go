@@ -252,15 +252,25 @@ func (s *IhrisSyncService) passesSyncFilters(rec IhrisAPIRecord, settings *Setti
 	if strings.TrimSpace(rec.IhrisPID) == "" {
 		return false
 	}
+	// Placement is required so Staff Management can show Facility / Job after sync.
+	if !rec.HasFacilityAndJob() {
+		return false
+	}
 	return true
 }
 
 func (s *IhrisSyncService) importAPIRecord(rec IhrisAPIRecord, result *SyncResult) error {
+	if !rec.HasFacilityAndJob() {
+		return fmt.Errorf("facility and job are required to sync staff")
+	}
 	row := rec.ToIhrisData()
 
 	facilityID, err := s.upsertFacility(row)
 	if err != nil {
 		return err
+	}
+	if facilityID == 0 {
+		return fmt.Errorf("could not resolve facility for staff sync")
 	}
 	result.FacilitiesUpserted++
 
@@ -276,9 +286,10 @@ func (s *IhrisSyncService) importAPIRecord(rec IhrisAPIRecord, result *SyncResul
 	if err != nil {
 		return err
 	}
-	if jobID > 0 {
-		result.JobsUpserted++
+	if jobID == 0 {
+		return fmt.Errorf("could not resolve job for staff sync")
 	}
+	result.JobsUpserted++
 
 	staffID, err := s.upsertStaffFromAPI(rec)
 	if err != nil {

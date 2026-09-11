@@ -34,9 +34,15 @@ func (s *IhrisSyncService) SyncFromDemoTable() (SyncResult, error) {
 
 	result := SyncResult{}
 	for _, row := range rows {
+		if deref(row.FacilityID) == "" || deref(row.Facility) == "" || deref(row.JobID) == "" || deref(row.Job) == "" {
+			continue
+		}
 		facilityID, err := s.upsertFacility(row)
 		if err != nil {
 			return result, err
+		}
+		if facilityID == 0 {
+			continue
 		}
 		result.FacilitiesUpserted++
 
@@ -52,9 +58,10 @@ func (s *IhrisSyncService) SyncFromDemoTable() (SyncResult, error) {
 		if err != nil {
 			return result, err
 		}
-		if jobID > 0 {
-			result.JobsUpserted++
+		if jobID == 0 {
+			continue
 		}
+		result.JobsUpserted++
 
 		staffID, err := s.upsertStaff(row)
 		if err != nil {
@@ -125,15 +132,16 @@ func (s *IhrisSyncService) SyncStaffByIhrisPID(ihrisPID string) (uint, error) {
 func (s *IhrisSyncService) upsertFacility(row models.IhrisData) (uint, error) {
 	extID := deref(row.FacilityID)
 	if extID == "" {
-		extID = fmt.Sprintf("unknown-%d", row.ID)
+		return 0, fmt.Errorf("facility_id is required")
 	}
 
 	var facility models.Facility
 	err := facades.Orm().Query().Where("ihris_facility_id", extID).First(&facility)
 	name := deref(row.Facility)
 	if name == "" {
-		name = "Unknown Facility"
+		return 0, fmt.Errorf("facility name is required")
 	}
+	name = normalizeFacilityDisplayName(name)
 
 	geo := NewGeographyService().EnrichFacility(row)
 
@@ -177,7 +185,7 @@ func (s *IhrisSyncService) upsertFacility(row models.IhrisData) (uint, error) {
 		IsActive:             true,
 	}
 
-	if err != nil {
+	if err != nil || facility.ID == 0 {
 		if createErr := facades.Orm().Query().Create(&payload); createErr != nil {
 			return 0, createErr
 		}
@@ -190,6 +198,20 @@ func (s *IhrisSyncService) upsertFacility(row models.IhrisData) (uint, error) {
 	}
 
 	return facility.ID, nil
+}
+
+// normalizeFacilityDisplayName collapses duplicated trailing tokens like "HOSPITAL HOSPITAL".
+func normalizeFacilityDisplayName(name string) string {
+	parts := strings.Fields(strings.TrimSpace(name))
+	if len(parts) < 2 {
+		return strings.TrimSpace(name)
+	}
+	last := strings.ToUpper(parts[len(parts)-1])
+	prev := strings.ToUpper(parts[len(parts)-2])
+	if last == prev {
+		parts = parts[:len(parts)-1]
+	}
+	return strings.Join(parts, " ")
 }
 
 func (s *IhrisSyncService) upsertDepartment(row models.IhrisData, facilityID uint) (uint, error) {
@@ -315,14 +337,20 @@ func BackfillDepartmentFacilityLinks() (int, error) {
 func (s *IhrisSyncService) upsertJob(row models.IhrisData) (uint, error) {
 	extID := deref(row.JobID)
 	title := deref(row.Job)
-	if extID == "" || title == "" {
-		return 0, nil
+	if extID == "" && title == "" {
+		return 0, fmt.Errorf("job_id and job title are required")
+	}
+	if extID == "" {
+		extID = "job|" + strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	}
+	if title == "" {
+		title = extID
 	}
 
 	var job models.JobTitle
 	err := facades.Orm().Query().Where("external_job_id", extID).First(&job)
 	payload := models.JobTitle{ExternalJobID: extID, JobTitle: title}
-	if err != nil {
+	if err != nil || job.ID == 0 {
 		if createErr := facades.Orm().Query().Create(&payload); createErr != nil {
 			return 0, createErr
 		}
@@ -379,7 +407,48 @@ func (s *IhrisSyncService) syncContract(staffID, facilityID, jobID, deptID uint,
 		deptPtr = &deptID
 	}
 
-	if findErr != nil {
+	if findErr == nil && active.ID > 0 {
+		// Fill missing placement IDs in place (common after partial historical syncs).
+		patched := false
+		if facilityID > 0 && active.FacilityID == 0 {
+			active.FacilityID = facilityID
+			patched = true
+		}
+		if jobID > 0 && active.JobID == 0 {
+			active.JobID = jobID
+			patched = true
+		}
+		// Never wipe a known placement with a zero incoming ID.
+		if facilityID == 0 {
+			facilityID = active.FacilityID
+		}
+		if jobID == 0 {
+			jobID = active.JobID
+		}
+		if patched && active.FacilityID > 0 && active.JobID > 0 {
+			active.EmploymentTerms = row.EmploymentTerms
+			active.SalaryGrade = row.SalaryGrade
+			active.Division = row.Division
+			active.Section = row.Section
+			active.Unit = row.Unit
+			active.DistrictID = row.DistrictID
+			active.DistrictName = row.District
+			if deptPtr != nil {
+				active.DepartmentID = deptPtr
+			}
+			if saveErr := facades.Orm().Query().Save(&active); saveErr != nil {
+				return false, false, saveErr
+			}
+			// Continue to detect real facility/job moves below using resolved IDs.
+			_ = facades.Orm().Query().Where("id", active.ID).First(&active)
+		}
+	}
+
+	if facilityID == 0 || jobID == 0 {
+		return false, false, fmt.Errorf("facility and job are required on staff contracts")
+	}
+
+	if findErr != nil || active.ID == 0 {
 		contract := models.StaffContract{
 			StaffID:         staffID,
 			FacilityID:      facilityID,

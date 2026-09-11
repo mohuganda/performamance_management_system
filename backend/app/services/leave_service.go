@@ -127,6 +127,85 @@ func (s *LeaveService) ListForStaff(staffID uint) ([]models.LeaveRequest, error)
 	return rows, err
 }
 
+func (s *LeaveService) GetOwned(staffID, id uint) (*models.LeaveRequest, error) {
+	var req models.LeaveRequest
+	if err := facades.Orm().Query().Where("id", id).Where("staff_id", staffID).First(&req); err != nil || req.ID == 0 {
+		return nil, fmt.Errorf("leave request not found")
+	}
+	return &req, nil
+}
+
+// Recall withdraws a pending leave request back to draft. Approved requests cannot be recalled.
+func (s *LeaveService) Recall(staffID, id uint) error {
+	req, err := s.GetOwned(staffID, id)
+	if err != nil {
+		return err
+	}
+	if req.Status != "pending" {
+		return fmt.Errorf("only pending requests under approval can be recalled")
+	}
+	firstStage := "supervisor"
+	stages, _ := s.config.ListActiveApprovalStages()
+	if len(stages) > 0 {
+		firstStage = stages[0].Code
+	}
+	req.Status = "draft"
+	req.SubmittedAt = nil
+	req.CurrentApprovalSequence = 1
+	req.ApprovalStage = firstStage
+	if err := facades.Orm().Query().Save(req); err != nil {
+		return err
+	}
+	_, _ = facades.Orm().Query().Model(&models.LeaveApproval{}).
+		Where("leave_request_id", id).
+		Delete()
+	return nil
+}
+
+// Delete removes draft leave requests, or cancels then removes pending ones.
+func (s *LeaveService) Delete(staffID, id uint) error {
+	req, err := s.GetOwned(staffID, id)
+	if err != nil {
+		return err
+	}
+	switch req.Status {
+	case "draft", "pending":
+		_, _ = facades.Orm().Query().Model(&models.LeaveApproval{}).
+			Where("leave_request_id", id).
+			Delete()
+		_, err = facades.Orm().Query().Delete(req)
+		return err
+	default:
+		return fmt.Errorf("approved or closed requests cannot be deleted")
+	}
+}
+
+// Cancel marks draft/pending leave as cancelled without deleting the row.
+func (s *LeaveService) Cancel(staffID, id uint) error {
+	req, err := s.GetOwned(staffID, id)
+	if err != nil {
+		return err
+	}
+	switch req.Status {
+	case "draft", "pending":
+		// ok
+	default:
+		return fmt.Errorf("only draft or pending requests can be cancelled")
+	}
+	prev := req.Status
+	req.Status = "cancelled"
+	if err := facades.Orm().Query().Save(req); err != nil {
+		return err
+	}
+	if prev == "pending" {
+		_, _ = facades.Orm().Query().Model(&models.LeaveApproval{}).
+			Where("leave_request_id", id).
+			Where("status", "pending").
+			Update("status", "cancelled")
+	}
+	return nil
+}
+
 type LeaveRequestRow struct {
 	models.LeaveRequest
 	OicName string `json:"oic_name,omitempty"`

@@ -24,11 +24,12 @@ func (r *SwaggerController) Index(ctx http.Context) http.Response {
 		httpSwagger.DocExpansion("list"),
 		httpSwagger.DefaultModelsExpandDepth(-1),
 		httpSwagger.PersistAuthorization(true),
+		// UIConfig values are inserted as raw JS. Strings must include quotes or the
+		// page throws ReferenceError (e.g. docExpansion: list) and renders blank.
 		httpSwagger.UIConfig(map[string]string{
-			"defaultModelsExpandDepth": "-1",
-			"docExpansion":             "list",
-			"filter":                   "true",
-			"tryItOutEnabled":          "true",
+			"filter":          "true",
+			"tryItOutEnabled": "true",
+			"validatorUrl":    "null",
 		}),
 	)
 	handler(ctx.Response().Writer(), ctx.Request().Origin())

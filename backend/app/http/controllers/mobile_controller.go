@@ -427,6 +427,133 @@ func (c *MobileController) CancelOosRequest(ctx http.Context) http.Response {
 	return ctx.Response().Success().Json(req)
 }
 
+// RecallOosRequest godoc
+// @Summary      Recall pending out-of-station request to draft
+// @Tags         mobile-out-of-station
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path int true "Request ID"
+// @Success      200 {object} map[string]any
+// @Router       /api/v1/mobile/out-of-station/requests/{id}/recall [post]
+func (c *MobileController) RecallOosRequest(ctx http.Context) http.Response {
+	staffID, err := staffIDFromContext(ctx)
+	if err != nil || staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	id, _ := strconv.Atoi(ctx.Request().Route("id"))
+	if id <= 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request id"})
+	}
+	if err := c.oos.Recall(staffID, uint(id)); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	req, err := c.oos.GetOwned(staffID, uint(id))
+	if err != nil {
+		return ctx.Response().Success().Json(http.Json{"message": "recalled"})
+	}
+	return ctx.Response().Success().Json(req)
+}
+
+// DeleteOosRequest godoc
+// @Summary      Delete draft/pending out-of-station request
+// @Tags         mobile-out-of-station
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path int true "Request ID"
+// @Success      200 {object} map[string]any
+// @Router       /api/v1/mobile/out-of-station/requests/{id} [delete]
+func (c *MobileController) DeleteOosRequest(ctx http.Context) http.Response {
+	staffID, err := staffIDFromContext(ctx)
+	if err != nil || staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	id, _ := strconv.Atoi(ctx.Request().Route("id"))
+	if id <= 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request id"})
+	}
+	if err := c.oos.Delete(staffID, uint(id)); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{"message": "deleted"})
+}
+
+// RecallLeaveRequest godoc
+// @Summary      Recall pending leave request to draft
+// @Tags         mobile-leave
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path int true "Request ID"
+// @Success      200 {object} map[string]any
+// @Router       /api/v1/mobile/leave/requests/{id}/recall [post]
+func (c *MobileController) RecallLeaveRequest(ctx http.Context) http.Response {
+	staffID, err := staffIDFromContext(ctx)
+	if err != nil || staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	id, _ := strconv.Atoi(ctx.Request().Route("id"))
+	if id <= 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request id"})
+	}
+	if err := c.leave.Recall(staffID, uint(id)); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	req, err := c.leave.GetOwned(staffID, uint(id))
+	if err != nil {
+		return ctx.Response().Success().Json(http.Json{"message": "recalled"})
+	}
+	return ctx.Response().Success().Json(req)
+}
+
+// DeleteLeaveRequest godoc
+// @Summary      Delete draft/pending leave request
+// @Tags         mobile-leave
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path int true "Request ID"
+// @Success      200 {object} map[string]any
+// @Router       /api/v1/mobile/leave/requests/{id} [delete]
+func (c *MobileController) DeleteLeaveRequest(ctx http.Context) http.Response {
+	staffID, err := staffIDFromContext(ctx)
+	if err != nil || staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	id, _ := strconv.Atoi(ctx.Request().Route("id"))
+	if id <= 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request id"})
+	}
+	if err := c.leave.Delete(staffID, uint(id)); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{"message": "deleted"})
+}
+
+// CancelLeaveRequest godoc
+// @Summary      Cancel draft or pending leave request
+// @Tags         mobile-leave
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path int true "Request ID"
+// @Success      200 {object} map[string]any
+// @Router       /api/v1/mobile/leave/requests/{id}/cancel [post]
+func (c *MobileController) CancelLeaveRequest(ctx http.Context) http.Response {
+	staffID, err := staffIDFromContext(ctx)
+	if err != nil || staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	id, _ := strconv.Atoi(ctx.Request().Route("id"))
+	if id <= 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request id"})
+	}
+	if err := c.leave.Cancel(staffID, uint(id)); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	req, err := c.leave.GetOwned(staffID, uint(id))
+	if err != nil {
+		return ctx.Response().Success().Json(http.Json{"message": "cancelled"})
+	}
+	return ctx.Response().Success().Json(req)
+}
+
 type clockBody struct {
 	ClockType               string  `json:"clock_type"`
 	Latitude                float64 `json:"latitude"`

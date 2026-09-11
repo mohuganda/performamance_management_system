@@ -54,6 +54,18 @@ export const leaveService = {
     >('/mobile/leave/oic-candidates')
     return data
   },
+  recallRequest: async (id: number) => {
+    const { data } = await apiClient.post(`/mobile/leave/requests/${id}/recall`)
+    return data
+  },
+  cancelRequest: async (id: number) => {
+    const { data } = await apiClient.post(`/mobile/leave/requests/${id}/cancel`)
+    return data
+  },
+  deleteRequest: async (id: number) => {
+    const { data } = await apiClient.delete(`/mobile/leave/requests/${id}`)
+    return data
+  },
   approve: async (id: number, payload: { approve: boolean; comments?: string }) => {
     const { data } = await apiClient.post(`/mobile/leave/approvals/${id}`, payload)
     return data
@@ -195,6 +207,14 @@ export const oosService = {
   },
   cancelRequest: async (id: number) => {
     const { data } = await apiClient.post(`/mobile/out-of-station/requests/${id}/cancel`)
+    return data
+  },
+  recallRequest: async (id: number) => {
+    const { data } = await apiClient.post(`/mobile/out-of-station/requests/${id}/recall`)
+    return data
+  },
+  deleteRequest: async (id: number) => {
+    const { data } = await apiClient.delete(`/mobile/out-of-station/requests/${id}`)
     return data
   },
   approve: async (id: number, payload: { approve: boolean; comments?: string }) => {

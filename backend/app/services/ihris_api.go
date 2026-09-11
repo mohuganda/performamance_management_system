@@ -146,6 +146,21 @@ func (r IhrisAPIRecord) ToIhrisData() models.IhrisData {
 	}
 }
 
+// HasFacilityAndJob reports whether the iHRIS row has enough placement data to sync.
+func (r IhrisAPIRecord) HasFacilityAndJob() bool {
+	return strings.TrimSpace(ptrString(r.FacilityID)) != "" &&
+		strings.TrimSpace(ptrString(r.Facility)) != "" &&
+		strings.TrimSpace(ptrString(r.JobID)) != "" &&
+		strings.TrimSpace(ptrString(r.Job)) != ""
+}
+
+func ptrString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
 func normalizeIhrisDistrictID(id *string) *string {
 	if id == nil {
 		return nil

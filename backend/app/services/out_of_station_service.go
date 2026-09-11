@@ -247,6 +247,47 @@ func (s *OutOfStationService) Cancel(staffID, id uint) error {
 	return nil
 }
 
+// Recall withdraws a pending request back to draft so the owner can edit and resubmit.
+// Approved / rejected / cancelled requests cannot be recalled.
+func (s *OutOfStationService) Recall(staffID, id uint) error {
+	req, err := s.GetOwned(staffID, id)
+	if err != nil {
+		return err
+	}
+	if req.Status != "pending" {
+		return fmt.Errorf("only pending requests under approval can be recalled")
+	}
+	req.Status = "draft"
+	req.SubmittedAt = nil
+	req.CurrentApprovalSequence = 1
+	if err := facades.Orm().Query().Save(req); err != nil {
+		return err
+	}
+	_, _ = facades.Orm().Query().Model(&models.OutOfStationApproval{}).
+		Where("out_of_station_request_id", id).
+		Delete()
+	return nil
+}
+
+// Delete permanently removes a draft or pending request (and its approval rows).
+// Approved / rejected / cancelled requests cannot be deleted.
+func (s *OutOfStationService) Delete(staffID, id uint) error {
+	req, err := s.GetOwned(staffID, id)
+	if err != nil {
+		return err
+	}
+	switch req.Status {
+	case "draft", "pending":
+		_, _ = facades.Orm().Query().Model(&models.OutOfStationApproval{}).
+			Where("out_of_station_request_id", id).
+			Delete()
+		_, err = facades.Orm().Query().Delete(req)
+		return err
+	default:
+		return fmt.Errorf("approved or closed requests cannot be deleted")
+	}
+}
+
 func (s *OutOfStationService) ListForStaff(staffID uint) ([]models.OutOfStationRequest, error) {
 	var rows []models.OutOfStationRequest
 	err := facades.Orm().Query().Where("staff_id", staffID).Order("created_at desc").Get(&rows)

@@ -5,6 +5,13 @@ import { parseISO, startOfDay } from 'date-fns'
 import { FileAttachmentField } from '@/components/molecules/FileAttachmentField'
 import { DatePickerField } from '@/components/molecules/DatePickerField'
 import { PlaceAutocompleteField, type PlaceSelection } from '@/components/molecules/PlaceAutocompleteField'
+import {
+  RequestDetailDialog,
+  RequestRowActions,
+  canDeleteRequest,
+  canPreviewPrintRequest,
+  canRecallRequest,
+} from '@/components/molecules/RequestDetailDialog'
 import { RequestHistoryPanel } from '@/components/molecules/RequestHistoryPanel'
 import { SearchableSelect } from '@/components/molecules/SearchableSelect'
 import { SegmentedTabs } from '@/components/molecules/SegmentedTabs'
@@ -73,6 +80,8 @@ export function OutOfStationPage() {
   })
   const [attachments, setAttachments] = useState<AttachmentMeta[]>([])
   const [approvalComment, setApprovalComment] = useState('')
+  const [detailRow, setDetailRow] = useState<Record<string, unknown> | null>(null)
+  const [actionId, setActionId] = useState<number | null>(null)
 
   const reasonsQuery = useQuery({
     queryKey: ['oos', 'reasons'],
@@ -143,6 +152,34 @@ export function OutOfStationPage() {
       )
     },
     onError: (error: unknown) => notifyApiError(error, 'Could not process travel approval'),
+  })
+
+  const recallMutation = useMutation({
+    mutationFn: (id: number) => oosService.recallRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['oos'] })
+      setDetailRow(null)
+      setActionId(null)
+      toast.success('Request recalled to draft.', 'Travel')
+    },
+    onError: (error: unknown) => {
+      setActionId(null)
+      notifyApiError(error, 'Could not recall request')
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => oosService.deleteRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['oos'] })
+      setDetailRow(null)
+      setActionId(null)
+      toast.success('Request deleted.', 'Travel')
+    },
+    onError: (error: unknown) => {
+      setActionId(null)
+      notifyApiError(error, 'Could not delete request')
+    },
   })
 
   const handlePlaceSelect = (place: PlaceSelection) => {
@@ -237,6 +274,20 @@ export function OutOfStationPage() {
       reasonById.get(reasonId) ||
       '—'
     )
+  }
+
+  const rowId = (row: Record<string, unknown>) => Number(row.id ?? row.ID ?? 0)
+
+  const confirmRecall = (id: number) => {
+    if (!window.confirm('Recall this request from approval? It will return to draft.')) return
+    setActionId(id)
+    recallMutation.mutate(id)
+  }
+
+  const confirmDelete = (id: number) => {
+    if (!window.confirm('Delete this request permanently? This cannot be undone.')) return
+    setActionId(id)
+    deleteMutation.mutate(id)
   }
 
   return (
@@ -502,10 +553,81 @@ export function OutOfStationPage() {
                 },
                 exportValue: (row) => requestStatus(row).replace(/_/g, ' '),
               },
+              {
+                key: 'actions',
+                label: 'Actions',
+                className: 'w-[220px]',
+                render: (row) => {
+                  const id = rowId(row)
+                  const status = requestStatus(row)
+                  return (
+                    <RequestRowActions
+                      status={status}
+                      onPreview={() => setDetailRow(row)}
+                      onRecall={canRecallRequest(status) ? () => confirmRecall(id) : undefined}
+                      onDelete={canDeleteRequest(status) ? () => confirmDelete(id) : undefined}
+                      recalling={recallMutation.isPending && actionId === id}
+                      deleting={deleteMutation.isPending && actionId === id}
+                    />
+                  )
+                },
+                exportValue: () => '',
+              },
             ]}
           />
         </QueryState>
       ) : null}
+
+      <RequestDetailDialog
+        open={Boolean(detailRow)}
+        title="Out-of-station request"
+        status={detailRow ? requestStatus(detailRow) : ''}
+        onClose={() => setDetailRow(null)}
+        canPrint={detailRow ? canPreviewPrintRequest(requestStatus(detailRow)) : false}
+        canRecall={detailRow ? canRecallRequest(requestStatus(detailRow)) : false}
+        canDelete={detailRow ? canDeleteRequest(requestStatus(detailRow)) : false}
+        recalling={Boolean(detailRow) && recallMutation.isPending && actionId === rowId(detailRow!)}
+        deleting={Boolean(detailRow) && deleteMutation.isPending && actionId === rowId(detailRow!)}
+        onRecall={
+          detailRow && canRecallRequest(requestStatus(detailRow))
+            ? () => confirmRecall(rowId(detailRow))
+            : undefined
+        }
+        onDelete={
+          detailRow && canDeleteRequest(requestStatus(detailRow))
+            ? () => confirmDelete(rowId(detailRow))
+            : undefined
+        }
+        fields={
+          detailRow
+            ? [
+                { label: 'Reason', value: resolveReason(detailRow) },
+                { label: 'Period', value: formatRequestPeriod(detailRow) },
+                {
+                  label: 'Destination',
+                  value: pickString(detailRow, 'destination_name', 'DestinationName') || '—',
+                },
+                {
+                  label: 'Address',
+                  value: pickString(detailRow, 'destination_address', 'DestinationAddress') || '—',
+                },
+                {
+                  label: 'Expected deliverables',
+                  value:
+                    pickString(detailRow, 'expected_deliverables', 'ExpectedDeliverables') || '—',
+                },
+                {
+                  label: 'Remarks',
+                  value: pickString(detailRow, 'remarks', 'Remarks') || '—',
+                },
+                {
+                  label: 'Coordinates',
+                  value: `${pickField(detailRow, 'destination_latitude', 'DestinationLatitude') ?? '—'}, ${pickField(detailRow, 'destination_longitude', 'DestinationLongitude') ?? '—'}`,
+                },
+              ]
+            : []
+        }
+      />
     </div>
   )
 }
