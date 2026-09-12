@@ -41,10 +41,14 @@ func Api() {
 		router.Get("/auth/activation/{token}", authController.PreviewActivation)
 		router.Post("/auth/activation/complete", authController.CompleteActivation)
 
+		docVerifyController := controllers.NewDocumentVerificationController()
+		router.Get("/verify/documents/{token}", docVerifyController.PublicShow)
+
 		// HRM Attend pull API (shared token; not JWT)
 		router.Get("/integrations/hrm-attend/attendance-clocks", hrmAttendController.ListAttendanceClocks)
 
 		router.Middleware(authenticate).Group(func(auth route.Router) {
+			auth.Post("/documents/verification", docVerifyController.Ensure)
 			auth.Post("/auth/logout", authController.Logout)
 			auth.Get("/auth/me", authController.Me)
 			auth.Put("/auth/profile", authController.UpdateProfile)

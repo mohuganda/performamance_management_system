@@ -9,6 +9,7 @@ import {
   Layers,
   Mail,
   SlidersHorizontal,
+  Stamp,
   Target,
 } from 'lucide-react'
 import {
@@ -47,6 +48,7 @@ import { notifyApiError, toast } from '@/features/toast'
 import { cn } from '@/utils/cn'
 import { ListsAdminPanel } from '@/modules/settings/ListsAdminPanel'
 import { BackupsAdminPanel } from '@/modules/settings/BackupsAdminPanel'
+import { DEFAULT_LETTERHEAD, type LetterheadSettings } from '@/api/services/documents'
 
 /** Wrapper so Material Tailwind outlined labels don't collide with neighbours. */
 function Field({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -138,6 +140,7 @@ export function SettingsPage() {
   const { hasPermission } = useAuthStore()
   const [searchParams, setSearchParams] = useSearchParams()
   const canPrefsAdmin = canManagePreferencesAdmin(hasPermission)
+  const canLetterhead = canAccessSettingsTab(hasPermission, 'letterhead')
   const canLists = canAccessSettingsTab(hasPermission, 'lists')
   const canDataSources = canAccessSettingsTab(hasPermission, 'data-sources')
   const canEmail = canAccessSettingsTab(hasPermission, 'email')
@@ -156,6 +159,7 @@ export function SettingsPage() {
     headerChrome: 'inherit',
     floatingLabels: true,
   })
+  const [letterheadForm, setLetterheadForm] = useState<LetterheadSettings>({ ...DEFAULT_LETTERHEAD })
   const [ihrisForm, setIhrisForm] = useState({
     api_url: '',
     require_email: true,
@@ -272,6 +276,9 @@ export function SettingsPage() {
     })
     setPageSizeSetting(String(settingsQuery.data.ui?.admin_page_size ?? 20))
     setChromeForm(orgUiChromeFromAdminSettings(settingsQuery.data.ui))
+    if (settingsQuery.data.letterhead) {
+      setLetterheadForm({ ...DEFAULT_LETTERHEAD, ...settingsQuery.data.letterhead })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsQuery.data])
 
@@ -344,6 +351,16 @@ export function SettingsPage() {
       toast.success('Organisation UI settings saved.')
     },
     onError: (error: unknown) => notifyApiError(error, 'Could not save UI settings'),
+  })
+
+  const saveLetterhead = useMutation({
+    mutationFn: () => adminSettingsService.update('letterhead', { ...letterheadForm }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+      queryClient.invalidateQueries({ queryKey: ['public-config', 'letterhead'] })
+      toast.success('Letterhead settings saved.')
+    },
+    onError: (error: unknown) => notifyApiError(error, 'Could not save letterhead'),
   })
 
   const syncMutation = useMutation({
@@ -463,6 +480,7 @@ export function SettingsPage() {
     () =>
       [
         { id: 'preferences' as const, label: 'Preferences', icon: SlidersHorizontal, visible: true },
+        { id: 'letterhead' as const, label: 'Letterhead', icon: Stamp, visible: canLetterhead },
         { id: 'lists' as const, label: 'Lists', icon: Layers, visible: canLists },
         { id: 'kpi' as const, label: 'KPI', icon: Target, visible: canKpiSettings },
         { id: 'data-sources' as const, label: 'Data sources', icon: Database, visible: canDataSources },
@@ -471,7 +489,7 @@ export function SettingsPage() {
         { id: 'notifications' as const, label: 'Notifications', icon: Bell, visible: canNotifications },
         { id: 'performance' as const, label: 'Performance', icon: BarChart3, visible: canPerformance },
       ].filter((tab) => tab.visible),
-    [canLists, canKpiSettings, canDataSources, canBackups, canEmail, canNotifications, canPerformance],
+    [canLetterhead, canLists, canKpiSettings, canDataSources, canBackups, canEmail, canNotifications, canPerformance],
   )
 
   const selectTab = (tab: string) => {
@@ -658,6 +676,62 @@ export function SettingsPage() {
             </SettingsSection>
           ) : null}
         </div>
+      ) : null}
+
+      {activeTab === 'letterhead' && canLetterhead ? (
+        <SettingsSection
+          title="Official letterhead"
+          description="Address and contacts shown on approved performance, leave, and out-of-station printouts. The coat of arms and MINISTRY OF HEALTH title are fixed branding."
+          className="max-w-3xl"
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(
+              [
+                ['org_name', 'Organisation name'],
+                ['org_title_line', 'Title under logo'],
+                ['tagline', 'Tagline'],
+                ['address_line', 'Physical address'],
+                ['postal_address', 'Postal address'],
+                ['phone', 'Phone'],
+                ['toll_free', 'Toll-free'],
+                ['email', 'Email'],
+                ['website', 'Website'],
+              ] as const
+            ).map(([key, label]) => (
+              <Field key={key} className={key === 'tagline' || key === 'address_line' ? 'sm:col-span-2' : ''}>
+                <Input
+                  {...mt}
+                  label={label}
+                  value={letterheadForm[key]}
+                  onChange={(e) =>
+                    setLetterheadForm((f) => ({ ...f, [key]: e.target.value }))
+                  }
+                  crossOrigin={undefined}
+                />
+              </Field>
+            ))}
+            <Field className="sm:col-span-2">
+              <Input
+                {...mt}
+                label="Footer note (under QR)"
+                value={letterheadForm.footer_note}
+                onChange={(e) =>
+                  setLetterheadForm((f) => ({ ...f, footer_note: e.target.value }))
+                }
+                crossOrigin={undefined}
+              />
+            </Field>
+          </div>
+          <Button
+            {...mt}
+            size="sm"
+            className="mt-6 rounded-sm bg-moh-green normal-case"
+            onClick={() => saveLetterhead.mutate()}
+            loading={saveLetterhead.isPending}
+          >
+            Save letterhead
+          </Button>
+        </SettingsSection>
       ) : null}
 
       {activeTab === 'lists' && canLists ? <ListsAdminPanel /> : null}

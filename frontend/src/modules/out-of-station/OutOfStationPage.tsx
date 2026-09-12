@@ -9,7 +9,7 @@ import {
   RequestDetailDialog,
   RequestRowActions,
   canDeleteRequest,
-  canPreviewPrintRequest,
+  canOfficialPrintRequest,
   canRecallRequest,
 } from '@/components/molecules/RequestDetailDialog'
 import { RequestHistoryPanel } from '@/components/molecules/RequestHistoryPanel'
@@ -583,7 +583,9 @@ export function OutOfStationPage() {
         title="Out-of-station request"
         status={detailRow ? requestStatus(detailRow) : ''}
         onClose={() => setDetailRow(null)}
-        canPrint={detailRow ? canPreviewPrintRequest(requestStatus(detailRow)) : false}
+        canPrint={detailRow ? canOfficialPrintRequest(requestStatus(detailRow)) : false}
+        documentType="oos_request"
+        documentRefId={detailRow ? rowId(detailRow) : undefined}
         canRecall={detailRow ? canRecallRequest(requestStatus(detailRow)) : false}
         canDelete={detailRow ? canDeleteRequest(requestStatus(detailRow)) : false}
         recalling={Boolean(detailRow) && recallMutation.isPending && actionId === rowId(detailRow!)}

@@ -33,6 +33,7 @@ type PerformanceSummary struct {
 }
 
 type PpaSummary struct {
+	ID           uint    `json:"id,omitempty"`
 	Status       string  `json:"status"`
 	TotalWeight  float64 `json:"total_weight"`
 	Progress     int     `json:"progress_percent"`
@@ -148,6 +149,7 @@ type ReportFormGroup struct {
 }
 
 type ReportForm struct {
+	ReportID        uint                   `json:"report_id,omitempty"`
 	ReportType      string                 `json:"report_type"`
 	FinancialYear   string                 `json:"financial_year"`
 	PpaStatus       string                 `json:"ppa_status"`
@@ -216,6 +218,7 @@ func (s *PerformanceService) SummaryForStaff(staffID uint) (PerformanceSummary, 
 	}
 
 	summary.PPA = PpaSummary{
+		ID:           ppa.ID,
 		Status:       ppa.Status,
 		TotalWeight:  ppa.TotalWeight,
 		Progress:     progress,
@@ -620,6 +623,7 @@ func (s *PerformanceService) GetReportForm(staffID uint, reportType string) (Rep
 		ReportingWindow: windowStatus,
 	}
 	if report.ID > 0 {
+		form.ReportID = report.ID
 		form.ReportStatus = report.Status
 		if reportType == "endterm" {
 			bundle, err := s.loadAppraisalBundle(report, staffID)

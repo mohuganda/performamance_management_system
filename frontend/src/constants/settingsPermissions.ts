@@ -14,6 +14,7 @@ export const SETTINGS_PERMISSIONS = {
 
 export type SettingsTabId =
   | 'preferences'
+  | 'letterhead'
   | 'lists'
   | 'kpi'
   | 'data-sources'
@@ -23,6 +24,7 @@ export type SettingsTabId =
   | 'backups'
 
 const TAB_PERMISSION_MAP: Record<Exclude<SettingsTabId, 'preferences'>, string[]> = {
+  letterhead: [SETTINGS_PERMISSIONS.preferences, SETTINGS_PERMISSIONS.all],
   lists: [SETTINGS_PERMISSIONS.lists, SETTINGS_PERMISSIONS.all],
   kpi: [SETTINGS_PERMISSIONS.kpi, SETTINGS_PERMISSIONS.all],
   'data-sources': [SETTINGS_PERMISSIONS.dataSources, SETTINGS_PERMISSIONS.all],

@@ -575,6 +575,26 @@ type SystemConfig struct {
 	IsPublic    bool `gorm:"default:false"`
 }
 
+// DocumentVerification backs public QR checks for official printed documents.
+type DocumentVerification struct {
+	orm.Model
+	Token        string     `gorm:"column:token;uniqueIndex;size:64"`
+	DocumentType string     `gorm:"column:document_type;index"`
+	RefID        uint       `gorm:"column:ref_id;index"`
+	StaffID      *uint      `gorm:"column:staff_id"`
+	StaffName    string     `gorm:"column:staff_name"`
+	Title        string     `gorm:"column:title"`
+	PeriodLabel  string     `gorm:"column:period_label"`
+	Status       string     `gorm:"column:status"`
+	IssuedAt     time.Time  `gorm:"column:issued_at"`
+	IssuedBy     *uint      `gorm:"column:issued_by"`
+	RevokedAt    *time.Time `gorm:"column:revoked_at"`
+}
+
+func (DocumentVerification) TableName() string {
+	return "document_verifications"
+}
+
 type User struct {
 	orm.Model
 	StaffID              *uint

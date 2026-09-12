@@ -453,3 +453,44 @@ html.dark .to-moh-background\/40 {
 .app-chrome .hover\:bg-ui-subtle:hover {
   background-color: var(--nav-hover) !important;
 }
+
+/* Official MoH letterhead printouts */
+.official-print-host {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  width: 210mm;
+  pointer-events: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .official-print-host,
+  .official-print-host *,
+  .official-print-sheet,
+  .official-print-sheet * {
+    visibility: visible !important;
+  }
+  .official-print-host {
+    position: static !important;
+    left: auto !important;
+    width: 100% !important;
+    pointer-events: auto !important;
+  }
+  .official-print-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 12mm 14mm;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+}

@@ -90,6 +90,7 @@ func (s *SettingsService) AdminSettings() map[string]any {
 		"email":         s.emailConfig(),
 		"notifications": s.notificationsConfig(),
 		"ui":            s.uiConfig(),
+		"letterhead":    s.letterheadConfig(),
 	}
 }
 
@@ -97,9 +98,9 @@ func (s *SettingsService) PublicSettings() map[string]any {
 	return map[string]any{
 		"data_sources": map[string]any{
 			"ihris": map[string]any{
-				"sync_enabled":    s.GetBool("ihris.sync_enabled", true),
-				"require_email":   s.GetBool("ihris.require_email", true),
-				"last_sync_at":    s.GetString("ihris.last_sync_at", ""),
+				"sync_enabled":     s.GetBool("ihris.sync_enabled", true),
+				"require_email":    s.GetBool("ihris.require_email", true),
+				"last_sync_at":     s.GetString("ihris.last_sync_at", ""),
 				"last_sync_status": s.GetString("ihris.last_sync_status", ""),
 			},
 		},
@@ -109,14 +110,15 @@ func (s *SettingsService) PublicSettings() map[string]any {
 			"country_code": s.GetString("google_maps.country_code", "ug"),
 		},
 		"oos_attendance": map[string]any{
-			"min_accuracy_percent":             s.GetInt("oos.attendance.min_accuracy_percent", 70),
+			"min_accuracy_percent":           s.GetInt("oos.attendance.min_accuracy_percent", 70),
 			"default_geofence_radius_meters": s.GetInt("oos.attendance.default_geofence_radius_meters", 500),
 		},
 		"duty_station_attendance": map[string]any{
-			"min_accuracy_percent":             s.GetInt("attendance.duty_station.min_accuracy_percent", 90),
+			"min_accuracy_percent":           s.GetInt("attendance.duty_station.min_accuracy_percent", 90),
 			"default_geofence_radius_meters": s.GetInt("attendance.duty_station.default_geofence_radius_meters", 500),
 		},
-		"ui": s.publicUiConfig(),
+		"ui":         s.publicUiConfig(),
+		"letterhead": s.letterheadConfig(),
 	}
 }
 
@@ -237,6 +239,21 @@ func (s *SettingsService) uiConfig() map[string]any {
 	return out
 }
 
+func (s *SettingsService) letterheadConfig() map[string]any {
+	return map[string]any{
+		"org_name":       s.GetString("letterhead.org_name", "Ministry of Health"),
+		"org_title_line": s.GetString("letterhead.org_title_line", "MINISTRY OF HEALTH"),
+		"tagline":        s.GetString("letterhead.tagline", "Republic of Uganda · Performance Management System"),
+		"address_line":   s.GetString("letterhead.address_line", "Plot 6, Lourdel Road, Nakasero, Kampala"),
+		"postal_address": s.GetString("letterhead.postal_address", "P.O. Box 7272, Kampala, Uganda"),
+		"phone":          s.GetString("letterhead.phone", "+256 417 712260"),
+		"toll_free":      s.GetString("letterhead.toll_free", "0800-100-066"),
+		"email":          s.GetString("letterhead.email", "info@health.go.ug"),
+		"website":        s.GetString("letterhead.website", "https://www.health.go.ug"),
+		"footer_note":    s.GetString("letterhead.footer_note", "Scan the QR code to verify this document on the MoH PMS."),
+	}
+}
+
 func (s *SettingsService) notificationsConfig() map[string]any {
 	return map[string]any{
 		"ppa_reminder": map[string]any{
@@ -289,6 +306,18 @@ func (s *SettingsService) UpdateGroup(group string, payload map[string]any) erro
 		}
 		return nil
 	}
+	if group == "letterhead" {
+		for key, value := range payload {
+			storeKey := key
+			if !strings.HasPrefix(key, "letterhead.") {
+				storeKey = "letterhead." + key
+			}
+			if err := s.Set(storeKey, group, value, true); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	flat := flattenMap("", payload)
 	for key, value := range flat {
 		if (strings.Contains(key, "password") || strings.Contains(key, "token")) && fmt.Sprint(value) == "" {
@@ -298,7 +327,9 @@ func (s *SettingsService) UpdateGroup(group string, payload map[string]any) erro
 			strings.HasPrefix(key, "notifications.") ||
 			strings.HasPrefix(key, "google_maps.") ||
 			strings.HasPrefix(key, "oos.attendance.") ||
-			strings.HasPrefix(key, "attendance.duty_station.")
+			strings.HasPrefix(key, "attendance.duty_station.") ||
+			strings.HasPrefix(key, "letterhead.") ||
+			strings.HasPrefix(key, "app.")
 		if err := s.Set(key, group, value, isPublic); err != nil {
 			return err
 		}

@@ -103,6 +103,18 @@ export type AdminSettings = {
     header_chrome?: 'inherit' | 'light'
     floating_labels?: boolean
   }
+  letterhead?: {
+    org_name: string
+    org_title_line: string
+    tagline: string
+    address_line: string
+    postal_address: string
+    phone: string
+    toll_free: string
+    email: string
+    website: string
+    footer_note: string
+  }
 }
 
 export type Department = { id: number; name: string }

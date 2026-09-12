@@ -12,7 +12,7 @@ import {
   RequestDetailDialog,
   RequestRowActions,
   canDeleteRequest,
-  canPreviewPrintRequest,
+  canOfficialPrintRequest,
   canRecallRequest,
 } from '@/components/molecules/RequestDetailDialog'
 import { SearchableSelect } from '@/components/molecules/SearchableSelect'
@@ -694,7 +694,9 @@ export function LeavePage() {
         title="Leave request"
         status={detailRow ? requestStatus(detailRow) : ''}
         onClose={() => setDetailRow(null)}
-        canPrint={detailRow ? canPreviewPrintRequest(requestStatus(detailRow)) : false}
+        canPrint={detailRow ? canOfficialPrintRequest(requestStatus(detailRow)) : false}
+        documentType="leave_request"
+        documentRefId={detailRow ? Number(detailRow.id ?? detailRow.ID ?? 0) : undefined}
         canRecall={detailRow ? canRecallRequest(requestStatus(detailRow)) : false}
         canDelete={detailRow ? canDeleteRequest(requestStatus(detailRow)) : false}
         recalling={

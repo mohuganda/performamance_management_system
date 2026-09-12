@@ -13,6 +13,7 @@ import { DepartmentHeadDashboard } from '@/modules/dashboard/DepartmentHeadDashb
 import { HRManagerDashboard } from '@/modules/dashboard/HRManagerDashboard'
 import { LoginPage } from '@/modules/auth/LoginPage'
 import { ActivateAccountPage } from '@/modules/auth/ActivateAccountPage'
+import { DocumentVerifyPage } from '@/modules/verify/DocumentVerifyPage'
 import { ApprovalsPage } from '@/modules/approvals/ApprovalsPage'
 import { ApprovalDetailPage } from '@/modules/approvals/ApprovalDetailPage'
 import { LeavePage } from '@/modules/leave/LeavePage'
@@ -237,6 +238,7 @@ export function AppRoutes() {
         path="/activate"
         element={signedIn ? <Navigate to="/profile" replace /> : <ActivateAccountPage />}
       />
+      <Route path="/verify/:token" element={<DocumentVerifyPage />} />
       <Route
         path="/*"
         element={signedIn ? <AuthenticatedApp /> : <Navigate to="/login" replace />}
