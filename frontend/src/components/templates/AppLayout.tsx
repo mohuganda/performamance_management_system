@@ -1,18 +1,12 @@
 import { useEffect, useState } from 'react'
-import {
-  Navbar,
-  Button,
-  Menu,
-  MenuHandler,
-  MenuList,
-  MenuItem,
-} from '@material-tailwind/react'
+import { Button, Menu, MenuHandler, MenuList, MenuItem } from '@material-tailwind/react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ChevronDown, LogOut, Menu as MenuIcon, X } from 'lucide-react'
 import { BrandLogo } from '@/components/atoms/BrandLogo'
 import { UserAccountMenu } from '@/components/molecules/UserAccountMenu'
 import { useAuthStore } from '@/stores/appStore'
 import { useOrgUiChrome } from '@/hooks/useOrgUiChrome'
+import { DESKTOP_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { redirectToLogin } from '@/utils/authRedirect'
 import {
   collectNavPaths,
@@ -78,7 +72,7 @@ function NavGroupMenu({
       </MenuHandler>
       <MenuList
         {...mt}
-        className="min-w-[240px] rounded-sm border border-ui-border bg-ui-surface p-1.5 text-ui-text shadow-lg"
+        className="absolute z-[999] min-w-[240px] rounded-sm border border-ui-border bg-ui-surface p-1.5 text-ui-text shadow-lg"
       >
         {group.items.map((item) => (
           <NavGroupMenuItem key={item.id} item={item} pathname={pathname} navPaths={navPaths} />
@@ -114,13 +108,99 @@ function NavGroupMenuItem({
           className={cn('mt-0.5 h-4 w-4 shrink-0', active ? 'text-uganda-yellow' : 'text-ui-muted')}
         />
         <div>
-          <p className={cn('text-sm font-medium', active ? 'text-ui-text' : 'text-ui-text')}>
-            {item.label}
-          </p>
+          <p className="text-sm font-medium text-ui-text">{item.label}</p>
           {item.description ? <p className="text-xs text-ui-muted">{item.description}</p> : null}
         </div>
       </MenuItem>
     </NavLink>
+  )
+}
+
+function MobileNavSection({
+  group,
+  pathname,
+  navPaths,
+  onNavigate,
+}: {
+  group: NavGroup
+  pathname: string
+  navPaths: string[]
+  onNavigate: () => void
+}) {
+  const active = isGroupActive(group, pathname, navPaths)
+  const [expanded, setExpanded] = useState(active || group.items.length === 1)
+  const GroupIcon = group.icon
+
+  useEffect(() => {
+    if (active) setExpanded(true)
+  }, [active])
+
+  if (group.items.length === 1) {
+    const item = group.items[0]
+    const Icon = item.icon
+    const itemActive = isNavPathActive(pathname, item.path, navPaths)
+    return (
+      <NavLink
+        to={item.path}
+        onClick={onNavigate}
+        aria-current={itemActive ? 'page' : undefined}
+        className={cn(
+          'mb-1 flex min-h-11 items-center gap-3 rounded-sm px-3 py-2.5 text-sm transition-colors',
+          itemActive
+            ? 'app-nav-chip-active font-semibold'
+            : 'app-nav-outline border border-transparent',
+        )}
+      >
+        <Icon className="h-4 w-4 shrink-0 opacity-90" />
+        <span className="leading-snug">{group.label}</span>
+      </NavLink>
+    )
+  }
+
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        className={cn(
+          'app-nav-outline flex min-h-11 w-full items-center gap-3 rounded-sm border px-3 py-2.5 text-left text-sm',
+          active ? 'border-[color:var(--nav-active)]' : 'border-transparent',
+        )}
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <GroupIcon className="h-4 w-4 shrink-0 opacity-90" />
+        <span className="flex-1 font-medium leading-snug">{group.label}</span>
+        <ChevronDown
+          className={cn('h-4 w-4 shrink-0 opacity-70 transition-transform', expanded && 'rotate-180')}
+        />
+      </button>
+      {expanded ? (
+        <ul className="mt-1 flex flex-col gap-1 border-l border-[color:var(--nav-border)] pl-3 ml-4">
+          {group.items.map((item) => {
+            const Icon = item.icon
+            const itemActive = isNavPathActive(pathname, item.path, navPaths)
+            return (
+              <li key={item.id}>
+                <NavLink
+                  to={item.path}
+                  onClick={onNavigate}
+                  aria-current={itemActive ? 'page' : undefined}
+                  className={cn(
+                    'flex min-h-11 items-center gap-3 rounded-sm px-3 py-2.5 text-sm transition-colors',
+                    itemActive
+                      ? 'app-nav-chip-active font-semibold'
+                      : 'app-nav-outline border border-transparent',
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0 opacity-90" />
+                  <span className="leading-snug">{item.label}</span>
+                </NavLink>
+              </li>
+            )
+          })}
+        </ul>
+      ) : null}
+    </div>
   )
 }
 
@@ -158,7 +238,7 @@ function MobileNavDrawer({
   if (!open) return null
 
   return (
-    <div className="lg:hidden" role="dialog" aria-modal="true" aria-label="Main menu">
+    <div className="app-shell-drawer" role="dialog" aria-modal="true" aria-label="Main menu">
       <button
         type="button"
         className="fixed inset-0 z-[60] bg-black/45"
@@ -168,7 +248,7 @@ function MobileNavDrawer({
       <aside
         id="mobile-main-nav"
         className={cn(
-          'app-chrome fixed inset-y-0 left-0 z-[70] flex w-[min(100vw-3rem,20rem)] flex-col',
+          'app-chrome fixed inset-y-0 left-0 z-[70] flex w-[min(100vw-3rem,20rem)] max-w-full flex-col',
           'border-r border-[color:var(--nav-border)] bg-[color:var(--nav-bg)] text-[color:var(--nav-fg)] shadow-xl',
         )}
       >
@@ -179,7 +259,7 @@ function MobileNavDrawer({
           </div>
           <button
             type="button"
-            className="app-nav-outline inline-flex h-10 w-10 items-center justify-center rounded-sm border"
+            className="app-nav-outline inline-flex h-11 w-11 items-center justify-center rounded-sm border"
             aria-label="Close menu"
             onClick={onClose}
           >
@@ -189,35 +269,13 @@ function MobileNavDrawer({
 
         <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-3">
           {groups.map((group) => (
-            <div key={group.id} className="mb-4">
-              <p className="app-nav-muted mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wide">
-                {group.label}
-              </p>
-              <ul className="flex flex-col gap-1">
-                {group.items.map((item) => {
-                  const Icon = item.icon
-                  const active = isNavPathActive(pathname, item.path, navPaths)
-                  return (
-                    <li key={item.id}>
-                      <NavLink
-                        to={item.path}
-                        onClick={onClose}
-                        aria-current={active ? 'page' : undefined}
-                        className={cn(
-                          'flex min-h-11 items-center gap-3 rounded-sm px-3 py-2.5 text-sm transition-colors',
-                          active
-                            ? 'app-nav-chip-active font-semibold'
-                            : 'app-nav-outline border border-transparent hover:border-[color:var(--nav-border)]',
-                        )}
-                      >
-                        <Icon className="h-4 w-4 shrink-0 opacity-90" />
-                        <span className="leading-snug">{item.label}</span>
-                      </NavLink>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
+            <MobileNavSection
+              key={group.id}
+              group={group}
+              pathname={pathname}
+              navPaths={navPaths}
+              onNavigate={onClose}
+            />
           ))}
         </nav>
 
@@ -225,7 +283,7 @@ function MobileNavDrawer({
           <Button
             {...mt}
             variant="outlined"
-            className="app-nav-outline flex w-full items-center justify-center gap-2 rounded-sm normal-case"
+            className="app-nav-outline flex min-h-11 w-full items-center justify-center gap-2 rounded-sm normal-case"
             onClick={onSignOut}
           >
             <LogOut className="h-4 w-4" />
@@ -241,6 +299,7 @@ export function AppLayout() {
   const { displayName, permissions, logout, quarter, roles, profilePhoto } = useAuthStore()
   const { chrome } = useOrgUiChrome()
   const location = useLocation()
+  const isDesktop = useMediaQuery(DESKTOP_MEDIA_QUERY)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   const groups = visibleNavGroups(permissions)
@@ -251,6 +310,10 @@ export function AppLayout() {
   useEffect(() => {
     setMobileNavOpen(false)
   }, [location.pathname])
+
+  useEffect(() => {
+    if (isDesktop) setMobileNavOpen(false)
+  }, [isDesktop])
 
   const handleSignOut = async () => {
     setMobileNavOpen(false)
@@ -268,9 +331,9 @@ export function AppLayout() {
             : 'border-ui-border bg-ui-surface text-ui-text',
         )}
       >
-        <div className="mx-auto flex max-w-[90rem] items-center justify-between gap-4 px-4 py-3">
+        <div className="mx-auto flex max-w-[90rem] items-center justify-between gap-3 px-4 py-3">
           <BrandLogo size="md" tone={headerInherits ? 'nav' : 'default'} />
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <UserAccountMenu
               displayName={displayName}
               roleLabel={roleLabel}
@@ -281,31 +344,34 @@ export function AppLayout() {
         </div>
       </header>
 
-      <Navbar
-        {...mt}
-        className="app-chrome sticky top-0 z-40 rounded-none border-b border-[color:var(--nav-border)] bg-[color:var(--nav-bg)] px-4 py-0 text-[color:var(--nav-fg)] shadow-sm"
-        fullWidth
+      <div
+        className={cn(
+          'app-chrome sticky top-0 z-40 border-b border-[color:var(--nav-border)]',
+          'bg-[color:var(--nav-bg)] text-[color:var(--nav-fg)] shadow-sm',
+        )}
       >
-        <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-2 py-2">
-          {/* Desktop nav */}
-          <nav className="hidden items-center gap-0.5 lg:flex">
-            {groups.map((group) => (
-              <NavGroupMenu
-                key={group.id}
-                group={group}
-                pathname={location.pathname}
-                navPaths={navPaths}
-              />
-            ))}
-          </nav>
+        <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-2 px-4 py-2">
+          {/* Desktop: horizontal menus — mounted only at ≥1024px */}
+          {isDesktop ? (
+            <nav className="app-shell-desktop-nav items-center gap-0.5" aria-label="Main">
+              {groups.map((group) => (
+                <NavGroupMenu
+                  key={group.id}
+                  group={group}
+                  pathname={location.pathname}
+                  navPaths={navPaths}
+                />
+              ))}
+            </nav>
+          ) : null}
 
-          {/* Mobile: hamburger only */}
-          <div className="flex flex-1 items-center gap-2 lg:hidden">
+          {/* Mobile / tablet: hamburger */}
+          <div className="app-shell-mobile-nav flex-1 items-center gap-2">
             <Button
               {...mt}
               variant="outlined"
               size="sm"
-              className="app-nav-outline flex min-h-10 items-center gap-2 rounded-sm normal-case"
+              className="app-nav-outline flex min-h-11 items-center gap-2 rounded-sm normal-case"
               aria-expanded={mobileNavOpen}
               aria-controls="mobile-main-nav"
               onClick={() => setMobileNavOpen(true)}
@@ -316,31 +382,35 @@ export function AppLayout() {
             <span className="app-nav-muted truncate text-xs">{quarter}</span>
           </div>
 
-          <div className="hidden items-center gap-2 lg:flex">
-            <span className="app-nav-muted text-xs">{quarter}</span>
-            <Button
-              {...mt}
-              variant="outlined"
-              size="sm"
-              className="app-nav-outline flex items-center gap-1 rounded-sm"
-              onClick={handleSignOut}
-            >
-              <LogOut className="h-4 w-4" />
-              Sign out
-            </Button>
-          </div>
+          {isDesktop ? (
+            <div className="app-shell-desktop-nav items-center gap-2">
+              <span className="app-nav-muted text-xs">{quarter}</span>
+              <Button
+                {...mt}
+                variant="outlined"
+                size="sm"
+                className="app-nav-outline flex items-center gap-1 rounded-sm"
+                onClick={handleSignOut}
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </Button>
+            </div>
+          ) : null}
         </div>
-      </Navbar>
+      </div>
 
-      <MobileNavDrawer
-        open={mobileNavOpen}
-        onClose={() => setMobileNavOpen(false)}
-        groups={groups}
-        pathname={location.pathname}
-        navPaths={navPaths}
-        quarter={quarter}
-        onSignOut={handleSignOut}
-      />
+      {!isDesktop ? (
+        <MobileNavDrawer
+          open={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
+          groups={groups}
+          pathname={location.pathname}
+          navPaths={navPaths}
+          quarter={quarter}
+          onSignOut={handleSignOut}
+        />
+      ) : null}
 
       <main className="mx-auto w-full max-w-[90rem] flex-1 p-4 md:p-6">
         <Outlet />

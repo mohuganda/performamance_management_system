@@ -5,6 +5,15 @@ module.exports = withMT({
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   darkMode: 'class',
   theme: {
+    // Override Material Tailwind's non-standard screens (540/720/960)
+    // so responsive nav matches common mobile / tablet / desktop breakpoints.
+    screens: {
+      sm: '640px',
+      md: '768px',
+      lg: '1024px',
+      xl: '1280px',
+      '2xl': '1536px',
+    },
     extend: {
       colors: {
         ui: {

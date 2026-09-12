@@ -35,6 +35,13 @@
   --radius-sm: 0.125rem;
   --radius-md: 0.25rem;
   --radius-lg: 0.375rem;
+
+  /* Standard breakpoints (override Material Tailwind / ensure mobile-first nav) */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
 }
 
 html {
@@ -452,6 +459,38 @@ html.dark .to-moh-background\/40 {
 
 .app-chrome .hover\:bg-ui-subtle:hover {
   background-color: var(--nav-hover) !important;
+}
+
+/*
+ * App shell navigation — belt-and-suspenders visibility.
+ * Desktop horizontal menus must never paint on phone/tablet viewports.
+ */
+.app-shell-desktop-nav {
+  display: none !important;
+}
+
+.app-shell-mobile-nav {
+  display: flex !important;
+}
+
+@media (min-width: 1024px) {
+  .app-shell-desktop-nav {
+    display: flex !important;
+  }
+
+  .app-shell-mobile-nav {
+    display: none !important;
+  }
+}
+
+.app-shell-drawer {
+  display: block;
+}
+
+@media (min-width: 1024px) {
+  .app-shell-drawer {
+    display: none !important;
+  }
 }
 
 /* Official MoH letterhead printouts */
