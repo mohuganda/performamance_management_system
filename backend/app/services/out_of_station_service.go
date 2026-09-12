@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"goravel/app/facades"
@@ -32,6 +33,16 @@ type CreateOutOfStationInput struct {
 	DestinationLongitude float64
 	GeofenceRadiusMeters int
 	CachedPlaceID        uint // optional; copies immutable snapshot into destination fields
+	Clarification        string
+}
+
+func oosEditableStatus(status string) bool {
+	switch status {
+	case "draft", "rejected":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *OutOfStationService) applyCachedPlace(input *CreateOutOfStationInput) error {
@@ -104,6 +115,7 @@ func (s *OutOfStationService) CreateDraft(input CreateOutOfStationInput) (models
 		EndDate:                 input.EndDate,
 		Remarks:                 strPtrIf(input.Remarks),
 		ExpectedDeliverables:    strPtrIf(input.ExpectedDeliverables),
+		Clarification:           strPtrIf(input.Clarification),
 		DestinationName:         input.DestinationName,
 		DestinationAddress:      strPtrIf(input.DestinationAddress),
 		DestinationLatitude:     input.DestinationLatitude,
@@ -128,8 +140,17 @@ func (s *OutOfStationService) Submit(requestID uint, staffID uint) error {
 	if err := facades.Orm().Query().Where("id", requestID).Where("staff_id", staffID).First(&req); err != nil {
 		return fmt.Errorf("out-of-station request not found")
 	}
-	if req.Status != "draft" {
-		return fmt.Errorf("only draft requests can be submitted")
+	if !oosEditableStatus(req.Status) {
+		return fmt.Errorf("only draft or rejected requests can be submitted")
+	}
+	if req.Status == "rejected" && (req.Clarification == nil || strings.TrimSpace(*req.Clarification) == "") {
+		return fmt.Errorf("add a clarification explaining the revision before resubmitting")
+	}
+
+	if req.Status == "rejected" {
+		_, _ = facades.Orm().Query().Model(&models.OutOfStationApproval{}).
+			Where("out_of_station_request_id", requestID).
+			Delete()
 	}
 
 	now := time.Now()
@@ -176,8 +197,8 @@ func (s *OutOfStationService) UpdateDraft(staffID, id uint, input CreateOutOfSta
 	if err != nil {
 		return models.OutOfStationRequest{}, err
 	}
-	if req.Status != "draft" {
-		return models.OutOfStationRequest{}, fmt.Errorf("only draft requests can be updated")
+	if !oosEditableStatus(req.Status) {
+		return models.OutOfStationRequest{}, fmt.Errorf("only draft or rejected requests can be updated")
 	}
 
 	input.StaffID = staffID
@@ -187,6 +208,8 @@ func (s *OutOfStationService) UpdateDraft(staffID, id uint, input CreateOutOfSta
 	if err := s.validateDraftInput(input); err != nil {
 		return models.OutOfStationRequest{}, err
 	}
+
+	wasRejected := req.Status == "rejected"
 
 	radius := input.GeofenceRadiusMeters
 	if radius <= 0 {
@@ -203,6 +226,7 @@ func (s *OutOfStationService) UpdateDraft(staffID, id uint, input CreateOutOfSta
 	req.EndDate = input.EndDate
 	req.Remarks = strPtrIf(input.Remarks)
 	req.ExpectedDeliverables = strPtrIf(input.ExpectedDeliverables)
+	req.Clarification = strPtrIf(input.Clarification)
 	req.DestinationName = input.DestinationName
 	req.DestinationAddress = strPtrIf(input.DestinationAddress)
 	req.DestinationLatitude = input.DestinationLatitude
@@ -212,6 +236,10 @@ func (s *OutOfStationService) UpdateDraft(staffID, id uint, input CreateOutOfSta
 		req.AttachmentURL = &input.AttachmentURL
 	} else {
 		req.AttachmentURL = nil
+	}
+	// Keep rejected until Submit so drafts of a revision stay revisable with the rejection note visible.
+	if wasRejected {
+		req.SubmittedAt = nil
 	}
 
 	if err := facades.Orm().Query().Save(req); err != nil {
@@ -277,7 +305,7 @@ func (s *OutOfStationService) Delete(staffID, id uint) error {
 		return err
 	}
 	switch req.Status {
-	case "draft", "pending":
+	case "draft", "pending", "rejected":
 		_, _ = facades.Orm().Query().Model(&models.OutOfStationApproval{}).
 			Where("out_of_station_request_id", id).
 			Delete()
@@ -288,10 +316,49 @@ func (s *OutOfStationService) Delete(staffID, id uint) error {
 	}
 }
 
-func (s *OutOfStationService) ListForStaff(staffID uint) ([]models.OutOfStationRequest, error) {
+func (s *OutOfStationService) ListForStaff(staffID uint) ([]OosRequestRow, error) {
 	var rows []models.OutOfStationRequest
-	err := facades.Orm().Query().Where("staff_id", staffID).Order("created_at desc").Get(&rows)
-	return rows, err
+	if err := facades.Orm().Query().Where("staff_id", staffID).Order("created_at desc").Get(&rows); err != nil {
+		return nil, err
+	}
+	rejectionMap := latestOosRejectionComments(rows)
+	out := make([]OosRequestRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, OosRequestRow{
+			OutOfStationRequest: row,
+			RejectionComment:    rejectionMap[row.ID],
+		})
+	}
+	return out, nil
+}
+
+type OosRequestRow struct {
+	models.OutOfStationRequest
+	RejectionComment string `json:"rejection_comment,omitempty"`
+}
+
+func latestOosRejectionComments(rows []models.OutOfStationRequest) map[uint]string {
+	out := map[uint]string{}
+	ids := make([]uint, 0)
+	for _, row := range rows {
+		if row.Status == "rejected" {
+			ids = append(ids, row.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return out
+	}
+	var approvals []models.OutOfStationApproval
+	_ = facades.Orm().Query().Where("out_of_station_request_id in ?", ids).Where("status", "rejected").Order("id desc").Get(&approvals)
+	for _, a := range approvals {
+		if _, exists := out[a.OutOfStationRequestID]; exists {
+			continue
+		}
+		if a.Comments != nil && strings.TrimSpace(*a.Comments) != "" {
+			out[a.OutOfStationRequestID] = strings.TrimSpace(*a.Comments)
+		}
+	}
+	return out
 }
 
 func (s *OutOfStationService) ListReasons() ([]models.OutOfStationReason, error) {

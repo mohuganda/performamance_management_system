@@ -83,9 +83,11 @@ Destination may be sent as lat/lng/name **or** `cached_place_id` (server copies 
 | GET | `/mobile/out-of-station/requests` | My requests |
 | GET | `/mobile/out-of-station/requests/{id}` | Owner or assigned approver |
 | POST | `/mobile/out-of-station/requests` | Create draft (`submit: true` optional) |
-| PUT | `/mobile/out-of-station/requests/{id}` | Update **draft** only |
-| POST | `/mobile/out-of-station/requests/{id}/submit` | Draft → pending + seed approvals |
+| PUT | `/mobile/out-of-station/requests/{id}` | Update **draft** or **rejected** (`submit: true` optional; `clarification` required when resubmitting rejected) |
+| POST | `/mobile/out-of-station/requests/{id}/submit` | Draft/rejected → pending + seed approvals |
 | POST | `/mobile/out-of-station/requests/{id}/cancel` | Cancel **draft** or **pending** |
+| POST | `/mobile/out-of-station/requests/{id}/recall` | Pending → draft |
+| DELETE | `/mobile/out-of-station/requests/{id}` | Delete draft, pending, or rejected |
 | GET | `/mobile/out-of-station/pending-approvals` | Approver queue |
 | POST | `/mobile/out-of-station/approvals/{id}` | Approve / reject |
 
@@ -124,12 +126,12 @@ Or with explicit coordinates (no `cached_place_id`):
 ### Update → submit → cancel
 
 ```bash
-# Update draft
+# Update draft (or revise rejected — include clarification before resubmit)
 curl -sS -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{ ...same fields as create without submit... }' \
+  -d '{ ...same fields as create..., "clarification": "Adjusted dates per supervisor feedback", "submit": false }' \
   "$API/mobile/out-of-station/requests/42"
 
-# Submit
+# Submit (draft or rejected → pending; clarification required if rejected)
 curl -sS -X POST -H "Authorization: Bearer $TOKEN" \
   "$API/mobile/out-of-station/requests/42/submit"
 

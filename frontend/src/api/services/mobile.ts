@@ -41,11 +41,32 @@ export const leaveService = {
     start_date: string
     end_date: string
     reason: string
+    clarification?: string
     medical_report_url?: string
     oic_staff_id: number
     submit: boolean
   }) => {
     const { data } = await apiClient.post('/mobile/leave/requests', payload)
+    return data
+  },
+  updateRequest: async (
+    id: number,
+    payload: {
+      leave_type_id: number
+      start_date: string
+      end_date: string
+      reason: string
+      clarification?: string
+      medical_report_url?: string
+      oic_staff_id: number
+      submit?: boolean
+    },
+  ) => {
+    const { data } = await apiClient.put(`/mobile/leave/requests/${id}`, payload)
+    return data
+  },
+  submitRequest: async (id: number) => {
+    const { data } = await apiClient.post(`/mobile/leave/requests/${id}/submit`)
     return data
   },
   listOicCandidates: async () => {
@@ -169,6 +190,7 @@ export const oosService = {
     end_date: string
     remarks?: string
     expected_deliverables?: string
+    clarification?: string
     attachment_url?: string
     destination_name?: string
     destination_address?: string
@@ -189,6 +211,7 @@ export const oosService = {
       end_date: string
       remarks?: string
       expected_deliverables?: string
+      clarification?: string
       attachment_url?: string
       destination_name?: string
       destination_address?: string
@@ -196,6 +219,7 @@ export const oosService = {
       destination_longitude: number
       geofence_radius_meters?: number
       cached_place_id?: number
+      submit?: boolean
     },
   ) => {
     const { data } = await apiClient.put(`/mobile/out-of-station/requests/${id}`, payload)

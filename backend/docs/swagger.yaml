@@ -24,6 +24,8 @@ definitions:
     type: object
   controllers.leaveRequestBody:
     properties:
+      clarification:
+        type: string
       end_date:
         type: string
       leave_type_id:
@@ -77,6 +79,8 @@ definitions:
         type: string
       cached_place_id:
         type: integer
+      clarification:
+        type: string
       destination_address:
         type: string
       destination_latitude:
@@ -1510,10 +1514,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: 'Per leave.md: submit at least 2 weeks in advance; sick leave >2
-        days needs medical report'
+      description: Creates a leave request as draft (submit=false) or submits immediately
+        (submit=true). Clarification is optional on create; required when resubmitting
+        a rejected request.
       parameters:
-      - description: Leave request
+      - description: Leave request (submit=false saves draft)
         in: body
         name: body
         required: true
@@ -1527,9 +1532,142 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
       security:
       - BearerAuth: []
       summary: Create leave request (self-service)
+      tags:
+      - mobile-leave
+  /api/v1/mobile/leave/requests/{id}:
+    delete:
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete draft, pending, or rejected leave request
+      tags:
+      - mobile-leave
+    put:
+      consumes:
+      - application/json
+      description: Updates an owned leave request in draft or rejected status. Set
+        submit=true to save and submit in one call. When status is rejected, clarification
+        is required before submit (explains the revision to approvers).
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Leave fields (clarification required on rejected resubmit)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.leaveRequestBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update draft or rejected leave request
+      tags:
+      - mobile-leave
+  /api/v1/mobile/leave/requests/{id}/cancel:
+    post:
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cancel draft or pending leave request
+      tags:
+      - mobile-leave
+  /api/v1/mobile/leave/requests/{id}/recall:
+    post:
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Recall pending leave request to draft
+      tags:
+      - mobile-leave
+  /api/v1/mobile/leave/requests/{id}/submit:
+    post:
+      description: Moves an owned draft or rejected leave request to pending approval.
+        Rejected resubmits require a non-empty clarification field on the request
+        and clear prior approval rows.
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Submit draft or rejected leave request
       tags:
       - mobile-leave
   /api/v1/mobile/leave/types:
@@ -1606,11 +1744,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: Mirrors attend/requests/newRequest with map-picked destination
-        coordinates for GPS verification. Optional cached_place_id copies snapshot
-        destination fields.
+      description: Creates a travel request as draft (submit=false) or submits immediately
+        (submit=true). Destination coordinates are used for GPS verification. Optional
+        cached_place_id copies snapshot destination fields.
       parameters:
-      - description: Out of station request
+      - description: Out of station request (submit=false saves draft)
         in: body
         name: body
         required: true
@@ -1624,12 +1762,37 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
       security:
       - BearerAuth: []
       summary: Create out-of-station request
       tags:
       - mobile-out-of-station
   /api/v1/mobile/out-of-station/requests/{id}:
+    delete:
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete draft, pending, or rejected out-of-station request
+      tags:
+      - mobile-out-of-station
     get:
       description: Owner or assigned approver
       parameters:
@@ -1659,13 +1822,16 @@ paths:
     put:
       consumes:
       - application/json
+      description: Updates an owned travel request in draft or rejected status. Set
+        submit=true to save and submit in one call. When status is rejected, clarification
+        is required before submit.
       parameters:
       - description: Request ID
         in: path
         name: id
         required: true
         type: integer
-      - description: Draft fields
+      - description: Draft fields (clarification required on rejected resubmit)
         in: body
         name: body
         required: true
@@ -1679,9 +1845,14 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
       security:
       - BearerAuth: []
-      summary: Update draft out-of-station request
+      summary: Update draft or rejected out-of-station request
       tags:
       - mobile-out-of-station
   /api/v1/mobile/out-of-station/requests/{id}/cancel:
@@ -1705,7 +1876,7 @@ paths:
       summary: Cancel draft or pending out-of-station request
       tags:
       - mobile-out-of-station
-  /api/v1/mobile/out-of-station/requests/{id}/submit:
+  /api/v1/mobile/out-of-station/requests/{id}/recall:
     post:
       parameters:
       - description: Request ID
@@ -1723,7 +1894,35 @@ paths:
             type: object
       security:
       - BearerAuth: []
-      summary: Submit draft out-of-station request
+      summary: Recall pending out-of-station request to draft
+      tags:
+      - mobile-out-of-station
+  /api/v1/mobile/out-of-station/requests/{id}/submit:
+    post:
+      description: Moves an owned draft or rejected travel request to pending approval.
+        Rejected resubmits require clarification and clear prior approval rows.
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Submit draft or rejected out-of-station request
       tags:
       - mobile-out-of-station
   /api/v1/mobile/performance/kpis/grouped:

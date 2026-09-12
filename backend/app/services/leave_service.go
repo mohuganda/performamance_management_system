@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"goravel/app/facades"
@@ -28,6 +29,16 @@ type CreateLeaveInput struct {
 	Reason           string
 	MedicalReportURL string
 	OicStaffID       uint
+	Clarification    string
+}
+
+func leaveEditableStatus(status string) bool {
+	switch status {
+	case "draft", "rejected":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *LeaveService) CreateDraft(input CreateLeaveInput) (models.LeaveRequest, error) {
@@ -72,6 +83,7 @@ func (s *LeaveService) CreateDraft(input CreateLeaveInput) (models.LeaveRequest,
 		EndDate:          input.EndDate,
 		DaysRequested:    days,
 		Reason:           strPtrIf(input.Reason),
+		Clarification:    strPtrIf(input.Clarification),
 		Status:           "draft",
 		AdvanceNoticeMet: advanceNotice,
 		ApprovalStage:    firstStage,
@@ -88,13 +100,77 @@ func (s *LeaveService) CreateDraft(input CreateLeaveInput) (models.LeaveRequest,
 	return req, nil
 }
 
+func (s *LeaveService) UpdateDraft(staffID, id uint, input CreateLeaveInput) (models.LeaveRequest, error) {
+	req, err := s.GetOwned(staffID, id)
+	if err != nil {
+		return models.LeaveRequest{}, err
+	}
+	if !leaveEditableStatus(req.Status) {
+		return models.LeaveRequest{}, fmt.Errorf("only draft or rejected requests can be updated")
+	}
+	if input.EndDate.Before(input.StartDate) {
+		return models.LeaveRequest{}, fmt.Errorf("end date must be on or after start date")
+	}
+	if input.OicStaffID == 0 {
+		return models.LeaveRequest{}, fmt.Errorf("officer in charge (OIC) is required")
+	}
+	if input.OicStaffID == staffID {
+		return models.LeaveRequest{}, fmt.Errorf("OIC cannot be the same as the leave applicant")
+	}
+	var oic models.Staff
+	if err := facades.Orm().Query().Where("id", input.OicStaffID).First(&oic); err != nil || oic.ID == 0 {
+		return models.LeaveRequest{}, fmt.Errorf("OIC staff record not found")
+	}
+
+	leaveType, err := s.config.GetTypeByID(input.LeaveTypeID)
+	if err != nil {
+		return models.LeaveRequest{}, fmt.Errorf("leave type not found")
+	}
+	if err := s.config.ValidateRequest(leaveType, staffID, input.StartDate, input.EndDate, input.MedicalReportURL); err != nil {
+		return models.LeaveRequest{}, err
+	}
+
+	wasRejected := req.Status == "rejected"
+
+	days := int(input.EndDate.Sub(input.StartDate).Hours()/24) + 1
+	advanceDays, _ := s.config.AdvanceNoticeDaysForType(leaveType)
+	advanceNotice := input.StartDate.Sub(time.Now()) >= time.Duration(advanceDays)*24*time.Hour
+	oicID := input.OicStaffID
+
+	req.LeaveTypeID = input.LeaveTypeID
+	req.StartDate = input.StartDate
+	req.EndDate = input.EndDate
+	req.DaysRequested = days
+	req.Reason = strPtrIf(input.Reason)
+	req.Clarification = strPtrIf(input.Clarification)
+	req.AdvanceNoticeMet = advanceNotice
+	req.OicStaffID = &oicID
+	if input.MedicalReportURL != "" {
+		req.MedicalReportURL = &input.MedicalReportURL
+	} else {
+		req.MedicalReportURL = nil
+	}
+	// Keep rejected until Submit so drafts of a revision stay revisable with the rejection note visible.
+	if wasRejected {
+		req.SubmittedAt = nil
+	}
+
+	if err := facades.Orm().Query().Save(req); err != nil {
+		return models.LeaveRequest{}, err
+	}
+	return *req, nil
+}
+
 func (s *LeaveService) Submit(requestID uint, staffID uint) error {
 	var req models.LeaveRequest
 	if err := facades.Orm().Query().Where("id", requestID).Where("staff_id", staffID).First(&req); err != nil {
 		return fmt.Errorf("leave request not found")
 	}
-	if req.Status != "draft" {
-		return fmt.Errorf("only draft requests can be submitted")
+	if !leaveEditableStatus(req.Status) {
+		return fmt.Errorf("only draft or rejected requests can be submitted")
+	}
+	if req.Status == "rejected" && (req.Clarification == nil || strings.TrimSpace(*req.Clarification) == "") {
+		return fmt.Errorf("add a clarification explaining the revision before resubmitting")
 	}
 
 	leaveType, err := s.config.GetTypeByID(req.LeaveTypeID)
@@ -110,10 +186,22 @@ func (s *LeaveService) Submit(requestID uint, staffID uint) error {
 		return err
 	}
 
+	if req.Status == "rejected" {
+		_, _ = facades.Orm().Query().Model(&models.LeaveApproval{}).
+			Where("leave_request_id", requestID).
+			Delete()
+	}
+
 	now := time.Now()
 	req.Status = "pending"
 	req.SubmittedAt = &now
 	req.CurrentApprovalSequence = 1
+	firstStage := "supervisor"
+	stages, _ := s.config.ListActiveApprovalStages()
+	if len(stages) > 0 {
+		firstStage = stages[0].Code
+	}
+	req.ApprovalStage = firstStage
 	if err := facades.Orm().Query().Save(&req); err != nil {
 		return err
 	}
@@ -169,7 +257,7 @@ func (s *LeaveService) Delete(staffID, id uint) error {
 		return err
 	}
 	switch req.Status {
-	case "draft", "pending":
+	case "draft", "pending", "rejected":
 		_, _ = facades.Orm().Query().Model(&models.LeaveApproval{}).
 			Where("leave_request_id", id).
 			Delete()
@@ -208,7 +296,8 @@ func (s *LeaveService) Cancel(staffID, id uint) error {
 
 type LeaveRequestRow struct {
 	models.LeaveRequest
-	OicName string `json:"oic_name,omitempty"`
+	OicName               string `json:"oic_name,omitempty"`
+	RejectionComment      string `json:"rejection_comment,omitempty"`
 }
 
 func (s *LeaveService) ListRowsForStaff(staffID uint) ([]LeaveRequestRow, error) {
@@ -229,15 +318,40 @@ func enrichLeaveRequestRows(rows []models.LeaveRequest) []LeaveRequestRow {
 		}
 	}
 	staffMap := loadStaffByIDs(oicIDs)
+	rejectionMap := latestLeaveRejectionComments(rows)
 	out := make([]LeaveRequestRow, 0, len(rows))
 	for _, row := range rows {
-		item := LeaveRequestRow{LeaveRequest: row}
+		item := LeaveRequestRow{LeaveRequest: row, RejectionComment: rejectionMap[row.ID]}
 		if row.OicStaffID != nil {
 			if st, ok := staffMap[*row.OicStaffID]; ok {
 				item.OicName = staffDisplayName(st)
 			}
 		}
 		out = append(out, item)
+	}
+	return out
+}
+
+func latestLeaveRejectionComments(rows []models.LeaveRequest) map[uint]string {
+	out := map[uint]string{}
+	ids := make([]uint, 0)
+	for _, row := range rows {
+		if row.Status == "rejected" {
+			ids = append(ids, row.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return out
+	}
+	var approvals []models.LeaveApproval
+	_ = facades.Orm().Query().Where("leave_request_id in ?", ids).Where("status", "rejected").Order("id desc").Get(&approvals)
+	for _, a := range approvals {
+		if _, exists := out[a.LeaveRequestID]; exists {
+			continue
+		}
+		if a.Comments != nil && strings.TrimSpace(*a.Comments) != "" {
+			out[a.LeaveRequestID] = strings.TrimSpace(*a.Comments)
+		}
 	}
 	return out
 }

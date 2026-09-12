@@ -148,6 +148,7 @@ type leaveRequestBody struct {
 	StartDate        string `json:"start_date"`
 	EndDate          string `json:"end_date"`
 	Reason           string `json:"reason"`
+	Clarification    string `json:"clarification"`
 	MedicalReportURL string `json:"medical_report_url"`
 	OicStaffID       uint   `json:"oic_staff_id"`
 	Submit           bool   `json:"submit"`
@@ -155,13 +156,14 @@ type leaveRequestBody struct {
 
 // CreateLeaveRequest godoc
 // @Summary      Create leave request (self-service)
-// @Description  Per leave.md: submit at least 2 weeks in advance; sick leave >2 days needs medical report
+// @Description  Creates a leave request as draft (submit=false) or submits immediately (submit=true). Clarification is optional on create; required when resubmitting a rejected request.
 // @Tags         mobile-leave
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        body body leaveRequestBody true "Leave request"
+// @Param        body body leaveRequestBody true "Leave request (submit=false saves draft)"
 // @Success      201 {object} map[string]any
+// @Failure      422 {object} map[string]any
 // @Router       /api/v1/mobile/leave/requests [post]
 func (c *MobileController) CreateLeaveRequest(ctx http.Context) http.Response {
 	staffID, err := staffIDFromContext(ctx)
@@ -186,6 +188,7 @@ func (c *MobileController) CreateLeaveRequest(ctx http.Context) http.Response {
 		StartDate:        start,
 		EndDate:          end,
 		Reason:           body.Reason,
+		Clarification:    body.Clarification,
 		MedicalReportURL: body.MedicalReportURL,
 		OicStaffID:       body.OicStaffID,
 	})
@@ -200,6 +203,88 @@ func (c *MobileController) CreateLeaveRequest(ctx http.Context) http.Response {
 	}
 
 	return ctx.Response().Status(http.StatusCreated).Json(req)
+}
+
+// UpdateLeaveRequest godoc
+// @Summary      Update draft or rejected leave request
+// @Description  Updates an owned leave request in draft or rejected status. Set submit=true to save and submit in one call. When status is rejected, clarification is required before submit (explains the revision to approvers).
+// @Tags         mobile-leave
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path int true "Request ID"
+// @Param        body body leaveRequestBody true "Leave fields (clarification required on rejected resubmit)"
+// @Success      200 {object} map[string]any
+// @Failure      422 {object} map[string]any
+// @Router       /api/v1/mobile/leave/requests/{id} [put]
+func (c *MobileController) UpdateLeaveRequest(ctx http.Context) http.Response {
+	staffID, err := staffIDFromContext(ctx)
+	if err != nil || staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	id, _ := strconv.Atoi(ctx.Request().Route("id"))
+	if id <= 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request id"})
+	}
+
+	var body leaveRequestBody
+	if err := ctx.Request().Bind(&body); err != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request body"})
+	}
+	start, err1 := time.Parse("2006-01-02", body.StartDate)
+	end, err2 := time.Parse("2006-01-02", body.EndDate)
+	if err1 != nil || err2 != nil {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "start_date and end_date must be YYYY-MM-DD"})
+	}
+
+	req, err := c.leave.UpdateDraft(staffID, uint(id), services.CreateLeaveInput{
+		StaffID:          staffID,
+		LeaveTypeID:      body.LeaveTypeID,
+		StartDate:        start,
+		EndDate:          end,
+		Reason:           body.Reason,
+		Clarification:    body.Clarification,
+		MedicalReportURL: body.MedicalReportURL,
+		OicStaffID:       body.OicStaffID,
+	})
+	if err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	if body.Submit {
+		if err := c.leave.Submit(req.ID, staffID); err != nil {
+			return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+		}
+		owned, _ := c.leave.GetOwned(staffID, req.ID)
+		if owned != nil {
+			return ctx.Response().Success().Json(owned)
+		}
+	}
+	return ctx.Response().Success().Json(req)
+}
+
+// SubmitLeaveRequest godoc
+// @Summary      Submit draft or rejected leave request
+// @Description  Moves an owned draft or rejected leave request to pending approval. Rejected resubmits require a non-empty clarification field on the request and clear prior approval rows.
+// @Tags         mobile-leave
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path int true "Request ID"
+// @Success      200 {object} map[string]any
+// @Failure      422 {object} map[string]any
+// @Router       /api/v1/mobile/leave/requests/{id}/submit [post]
+func (c *MobileController) SubmitLeaveRequest(ctx http.Context) http.Response {
+	staffID, err := staffIDFromContext(ctx)
+	if err != nil || staffID == 0 {
+		return ctx.Response().Status(http.StatusForbidden).Json(http.Json{"message": "authenticated user is not linked to a staff record"})
+	}
+	id, _ := strconv.Atoi(ctx.Request().Route("id"))
+	if id <= 0 {
+		return ctx.Response().Status(http.StatusBadRequest).Json(http.Json{"message": "invalid request id"})
+	}
+	if err := c.leave.Submit(uint(id), staffID); err != nil {
+		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+	}
+	return ctx.Response().Success().Json(http.Json{"message": "leave request submitted"})
 }
 
 // ListOosReasons godoc
@@ -241,6 +326,7 @@ type oosRequestBody struct {
 	EndDate              string  `json:"end_date"`
 	Remarks              string  `json:"remarks"`
 	ExpectedDeliverables string  `json:"expected_deliverables"`
+	Clarification        string  `json:"clarification"`
 	AttachmentURL        string  `json:"attachment_url"`
 	DestinationName      string  `json:"destination_name"`
 	DestinationAddress   string  `json:"destination_address"`
@@ -259,6 +345,7 @@ func oosInputFromBody(staffID uint, body oosRequestBody, start, end time.Time) s
 		EndDate:              end,
 		Remarks:              body.Remarks,
 		ExpectedDeliverables: body.ExpectedDeliverables,
+		Clarification:        body.Clarification,
 		AttachmentURL:        body.AttachmentURL,
 		DestinationName:      body.DestinationName,
 		DestinationAddress:   body.DestinationAddress,
@@ -271,13 +358,14 @@ func oosInputFromBody(staffID uint, body oosRequestBody, start, end time.Time) s
 
 // CreateOosRequest godoc
 // @Summary      Create out-of-station request
-// @Description  Mirrors attend/requests/newRequest with map-picked destination coordinates for GPS verification. Optional cached_place_id copies snapshot destination fields.
+// @Description  Creates a travel request as draft (submit=false) or submits immediately (submit=true). Destination coordinates are used for GPS verification. Optional cached_place_id copies snapshot destination fields.
 // @Tags         mobile-out-of-station
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        body body oosRequestBody true "Out of station request"
+// @Param        body body oosRequestBody true "Out of station request (submit=false saves draft)"
 // @Success      201 {object} map[string]any
+// @Failure      422 {object} map[string]any
 // @Router       /api/v1/mobile/out-of-station/requests [post]
 func (c *MobileController) CreateOosRequest(ctx http.Context) http.Response {
 	staffID, err := staffIDFromContext(ctx)
@@ -337,14 +425,16 @@ func (c *MobileController) GetOosRequest(ctx http.Context) http.Response {
 }
 
 // UpdateOosRequest godoc
-// @Summary      Update draft out-of-station request
+// @Summary      Update draft or rejected out-of-station request
+// @Description  Updates an owned travel request in draft or rejected status. Set submit=true to save and submit in one call. When status is rejected, clarification is required before submit.
 // @Tags         mobile-out-of-station
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
 // @Param        id path int true "Request ID"
-// @Param        body body oosRequestBody true "Draft fields"
+// @Param        body body oosRequestBody true "Draft fields (clarification required on rejected resubmit)"
 // @Success      200 {object} map[string]any
+// @Failure      422 {object} map[string]any
 // @Router       /api/v1/mobile/out-of-station/requests/{id} [put]
 func (c *MobileController) UpdateOosRequest(ctx http.Context) http.Response {
 	staffID, err := staffIDFromContext(ctx)
@@ -370,16 +460,27 @@ func (c *MobileController) UpdateOosRequest(ctx http.Context) http.Response {
 	if err != nil {
 		return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
 	}
+	if body.Submit {
+		if err := c.oos.Submit(req.ID, staffID); err != nil {
+			return ctx.Response().Status(http.StatusUnprocessableEntity).Json(http.Json{"message": err.Error()})
+		}
+		owned, _ := c.oos.GetOwned(staffID, req.ID)
+		if owned != nil {
+			return ctx.Response().Success().Json(owned)
+		}
+	}
 	return ctx.Response().Success().Json(req)
 }
 
 // SubmitOosRequest godoc
-// @Summary      Submit draft out-of-station request
+// @Summary      Submit draft or rejected out-of-station request
+// @Description  Moves an owned draft or rejected travel request to pending approval. Rejected resubmits require clarification and clear prior approval rows.
 // @Tags         mobile-out-of-station
 // @Produce      json
 // @Security     BearerAuth
 // @Param        id path int true "Request ID"
 // @Success      200 {object} map[string]any
+// @Failure      422 {object} map[string]any
 // @Router       /api/v1/mobile/out-of-station/requests/{id}/submit [post]
 func (c *MobileController) SubmitOosRequest(ctx http.Context) http.Response {
 	staffID, err := staffIDFromContext(ctx)
@@ -455,7 +556,7 @@ func (c *MobileController) RecallOosRequest(ctx http.Context) http.Response {
 }
 
 // DeleteOosRequest godoc
-// @Summary      Delete draft/pending out-of-station request
+// @Summary      Delete draft, pending, or rejected out-of-station request
 // @Tags         mobile-out-of-station
 // @Produce      json
 // @Security     BearerAuth
@@ -505,7 +606,7 @@ func (c *MobileController) RecallLeaveRequest(ctx http.Context) http.Response {
 }
 
 // DeleteLeaveRequest godoc
-// @Summary      Delete draft/pending leave request
+// @Summary      Delete draft, pending, or rejected leave request
 // @Tags         mobile-leave
 // @Produce      json
 // @Security     BearerAuth

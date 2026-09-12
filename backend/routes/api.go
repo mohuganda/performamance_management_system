@@ -248,6 +248,8 @@ func Api() {
 				mobile.Middleware(middleware.Permission("leave.requests.view")).Get("/leave/requests", mobileController.ListLeaveRequests)
 				mobile.Middleware(middleware.Permission("leave.requests.create")).Get("/leave/oic-candidates", mobileController.ListOicCandidates)
 				mobile.Middleware(middleware.Permission("leave.requests.create")).Post("/leave/requests", mobileController.CreateLeaveRequest)
+				mobile.Middleware(middleware.Permission("leave.requests.create")).Put("/leave/requests/{id}", mobileController.UpdateLeaveRequest)
+				mobile.Middleware(middleware.Permission("leave.requests.create")).Post("/leave/requests/{id}/submit", mobileController.SubmitLeaveRequest)
 				mobile.Middleware(middleware.Permission("leave.requests.create")).Post("/leave/requests/{id}/recall", mobileController.RecallLeaveRequest)
 				mobile.Middleware(middleware.Permission("leave.requests.create")).Post("/leave/requests/{id}/cancel", mobileController.CancelLeaveRequest)
 				mobile.Middleware(middleware.Permission("leave.requests.create")).Delete("/leave/requests/{id}", mobileController.DeleteLeaveRequest)

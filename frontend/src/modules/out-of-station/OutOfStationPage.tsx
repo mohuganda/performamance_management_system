@@ -11,6 +11,7 @@ import {
   canDeleteRequest,
   canOfficialPrintRequest,
   canRecallRequest,
+  canReviseRequest,
 } from '@/components/molecules/RequestDetailDialog'
 import { RequestHistoryPanel } from '@/components/molecules/RequestHistoryPanel'
 import { SearchableSelect } from '@/components/molecules/SearchableSelect'
@@ -22,7 +23,7 @@ import { ProcessGuide } from '@/components/organisms/ProcessGuide'
 import { QueryState } from '@/components/organisms/QueryState'
 import { notifyApiError, toast } from '@/features/toast'
 import { useAuthStore } from '@/stores/appStore'
-import { serializeAttachments, type AttachmentMeta } from '@/utils/attachments'
+import { serializeAttachments, parseAttachments, type AttachmentMeta } from '@/utils/attachments'
 import {
   formatRequestPeriod,
   pickField,
@@ -35,7 +36,8 @@ import { mt } from '@/utils/mt'
 const OOS_STEPS = [
   {
     title: 'Select reason and dates',
-    description: 'Choose the official reason (training, field work, meeting, etc.) and travel dates.',
+    description:
+      'Choose the official reason (training, field work, meeting, etc.) and travel dates. Save as draft anytime. If rejected, revise with a clarification and resubmit.',
     actor: 'Employee',
   },
   {
@@ -72,12 +74,16 @@ export function OutOfStationPage() {
     end_date: '',
     remarks: '',
     expected_deliverables: '',
+    clarification: '',
     destination_name: '',
     destination_address: '',
     destination_latitude: '',
     destination_longitude: '',
     submit: true,
   })
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingStatus, setEditingStatus] = useState('')
+  const [rejectionComment, setRejectionComment] = useState('')
   const [attachments, setAttachments] = useState<AttachmentMeta[]>([])
   const [approvalComment, setApprovalComment] = useState('')
   const [detailRow, setDetailRow] = useState<Record<string, unknown> | null>(null)
@@ -107,6 +113,7 @@ export function OutOfStationPage() {
       end_date: '',
       remarks: '',
       expected_deliverables: '',
+      clarification: '',
       destination_name: '',
       destination_address: '',
       destination_latitude: '',
@@ -114,30 +121,46 @@ export function OutOfStationPage() {
       submit: true,
     })
     setAttachments([])
+    setEditingId(null)
+    setEditingStatus('')
+    setRejectionComment('')
   }
 
+  const oosPayload = (submit: boolean) => ({
+    reason_id: Number(form.reason_id),
+    start_date: form.start_date,
+    end_date: form.end_date,
+    remarks: form.remarks,
+    expected_deliverables: form.expected_deliverables,
+    clarification: form.clarification || undefined,
+    attachment_url: serializeAttachments(attachments),
+    destination_name: form.destination_name,
+    destination_address: form.destination_address,
+    destination_latitude: Number(form.destination_latitude),
+    destination_longitude: Number(form.destination_longitude),
+    submit,
+  })
+
   const createMutation = useMutation({
-    mutationFn: () =>
-      oosService.createRequest({
-        reason_id: Number(form.reason_id),
-        start_date: form.start_date,
-        end_date: form.end_date,
-        remarks: form.remarks,
-        expected_deliverables: form.expected_deliverables,
-        attachment_url: serializeAttachments(attachments),
-        destination_name: form.destination_name,
-        destination_address: form.destination_address,
-        destination_latitude: Number(form.destination_latitude),
-        destination_longitude: Number(form.destination_longitude),
-        submit: form.submit,
-      }),
-    onSuccess: () => {
+    mutationFn: (submit: boolean) =>
+      editingId
+        ? oosService.updateRequest(editingId, oosPayload(submit))
+        : oosService.createRequest(oosPayload(submit)),
+    onSuccess: (_data, submit) => {
+      const revising = Boolean(editingId)
       queryClient.invalidateQueries({ queryKey: ['oos'] })
       resetForm()
-      toast.success('Out-of-station request submitted.', 'Travel')
-      setTab('history')
+      toast.success(
+        submit
+          ? revising
+            ? 'Revised travel request resubmitted.'
+            : 'Out-of-station request submitted.'
+          : 'Travel draft saved. You can submit it when ready.',
+        submit ? 'Travel' : 'Draft saved',
+      )
+      if (submit) setTab('history')
     },
-    onError: (error: unknown) => notifyApiError(error, 'Could not submit travel request'),
+    onError: (error: unknown) => notifyApiError(error, 'Could not save travel request'),
   })
 
   const approveMutation = useMutation({
@@ -192,7 +215,7 @@ export function OutOfStationPage() {
     }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent, submit = true) => {
     e.preventDefault()
     const today = startOfDay(new Date())
     if (!form.reason_id) {
@@ -221,7 +244,47 @@ export function OutOfStationPage() {
       toast.warning('Search and select your destination on Google Maps.', 'Travel form')
       return
     }
-    createMutation.mutate()
+    if (
+      submit &&
+      (editingStatus === 'rejected' || Boolean(rejectionComment)) &&
+      !form.clarification.trim()
+    ) {
+      toast.warning('Add a clarification explaining the revision before resubmitting.', 'Travel form')
+      return
+    }
+    createMutation.mutate(submit)
+  }
+
+  const loadOosForEdit = (row: Record<string, unknown>) => {
+    const status = requestStatus(row)
+    if (!canReviseRequest(status)) return
+    setEditingId(rowId(row))
+    setEditingStatus(status)
+    setRejectionComment(pickString(row, 'rejection_comment', 'RejectionComment'))
+    setForm({
+      reason_id: String(pickField(row, 'reason_id', 'ReasonID') ?? ''),
+      start_date: String(pickField(row, 'start_date', 'StartDate') ?? '').slice(0, 10),
+      end_date: String(pickField(row, 'end_date', 'EndDate') ?? '').slice(0, 10),
+      remarks: pickString(row, 'remarks', 'Remarks'),
+      expected_deliverables: pickString(row, 'expected_deliverables', 'ExpectedDeliverables'),
+      clarification: pickString(row, 'clarification', 'Clarification'),
+      destination_name: pickString(row, 'destination_name', 'DestinationName'),
+      destination_address: pickString(row, 'destination_address', 'DestinationAddress'),
+      destination_latitude: String(pickField(row, 'destination_latitude', 'DestinationLatitude') ?? ''),
+      destination_longitude: String(pickField(row, 'destination_longitude', 'DestinationLongitude') ?? ''),
+      submit: true,
+    })
+    setAttachments(
+      parseAttachments(pickString(row, 'attachment_url', 'AttachmentURL') || undefined),
+    )
+    setDetailRow(null)
+    setTab('apply')
+    toast.info(
+      status === 'rejected'
+        ? 'Update the request, add clarification, then resubmit.'
+        : 'Editing draft — save or submit when ready.',
+      status === 'rejected' ? 'Revise travel request' : 'Edit draft',
+    )
   }
 
   const hasDestination =
@@ -389,10 +452,27 @@ export function OutOfStationPage() {
 
       {staffId && tab === 'apply' && canCreate ? (
         <Card {...mt} className="rounded-sm border border-moh-green/15 p-4">
-          <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
-            New out-of-station application
-          </Typography>
-          <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <Typography {...mt} className="text-sm font-bold uppercase text-moh-green">
+              {editingId
+                ? editingStatus === 'rejected'
+                  ? 'Revise & resubmit travel'
+                  : 'Edit travel draft'
+                : 'New out-of-station application'}
+            </Typography>
+            {editingId ? (
+              <Button {...mt} size="sm" variant="text" className="rounded-sm normal-case" onClick={resetForm}>
+                Cancel edit
+              </Button>
+            ) : null}
+          </div>
+          {rejectionComment ? (
+            <div className="mb-4 rounded-sm border border-moh-warning/40 bg-moh-warning/10 px-3 py-2 text-sm">
+              <p className="font-semibold text-moh-warning">Supervisor rejection note</p>
+              <p className="mt-1 whitespace-pre-wrap">{rejectionComment}</p>
+            </div>
+          ) : null}
+          <form className="grid gap-4 md:grid-cols-2" onSubmit={(e) => handleSubmit(e, true)}>
             <SearchableSelect
               label="Reason"
               labelPosition="top"
@@ -459,6 +539,17 @@ export function OutOfStationPage() {
                 onChange={(e) => setForm((f) => ({ ...f, remarks: e.target.value }))}
               />
             </div>
+            {editingStatus === 'rejected' || rejectionComment || form.clarification ? (
+              <div className="md:col-span-2">
+                <Textarea
+                  {...mt}
+                  label="Clarification for resubmission"
+                  value={form.clarification}
+                  onChange={(e) => setForm((f) => ({ ...f, clarification: e.target.value }))}
+                  placeholder="Explain how you addressed the rejection or what you clarified."
+                />
+              </div>
+            ) : null}
             <div className="md:col-span-2">
               <FileAttachmentField
                 label="Supporting documents"
@@ -472,14 +563,32 @@ export function OutOfStationPage() {
                 {(createMutation.error as Error).message}
               </Typography>
             ) : null}
-            <Button
-              {...mt}
-              type="submit"
-              className="rounded-sm bg-moh-green md:col-span-2"
-              disabled={createMutation.isPending}
-            >
-              Submit for supervisor approval
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row md:col-span-2">
+              <Button
+                {...mt}
+                type="button"
+                variant="outlined"
+                className="rounded-sm flex-1"
+                disabled={createMutation.isPending}
+                onClick={(e) => handleSubmit(e, false)}
+              >
+                {createMutation.isPending ? 'Saving…' : 'Save as draft'}
+              </Button>
+              <Button
+                {...mt}
+                type="submit"
+                className="rounded-sm bg-moh-green flex-1"
+                disabled={createMutation.isPending}
+              >
+                {createMutation.isPending
+                  ? 'Submitting…'
+                  : editingStatus === 'rejected'
+                    ? 'Resubmit for approval'
+                    : editingId
+                      ? 'Submit draft'
+                      : 'Submit for supervisor approval'}
+              </Button>
+            </div>
           </form>
         </Card>
       ) : null}
@@ -564,6 +673,7 @@ export function OutOfStationPage() {
                     <RequestRowActions
                       status={status}
                       onPreview={() => setDetailRow(row)}
+                      onRevise={canReviseRequest(status) ? () => loadOosForEdit(row) : undefined}
                       onRecall={canRecallRequest(status) ? () => confirmRecall(id) : undefined}
                       onDelete={canDeleteRequest(status) ? () => confirmDelete(id) : undefined}
                       recalling={recallMutation.isPending && actionId === id}
@@ -621,6 +731,14 @@ export function OutOfStationPage() {
                 {
                   label: 'Remarks',
                   value: pickString(detailRow, 'remarks', 'Remarks') || '—',
+                },
+                {
+                  label: 'Clarification',
+                  value: pickString(detailRow, 'clarification', 'Clarification') || '—',
+                },
+                {
+                  label: 'Rejection note',
+                  value: pickString(detailRow, 'rejection_comment', 'RejectionComment') || '—',
                 },
                 {
                   label: 'Coordinates',

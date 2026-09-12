@@ -37,7 +37,7 @@ type RequestDetailDialogProps = {
 
 export function canMutateRequest(status: string): boolean {
   const s = status.trim().toLowerCase()
-  return s === 'draft' || s === 'pending'
+  return s === 'draft' || s === 'pending' || s === 'rejected'
 }
 
 export function canRecallRequest(status: string): boolean {
@@ -45,7 +45,13 @@ export function canRecallRequest(status: string): boolean {
 }
 
 export function canDeleteRequest(status: string): boolean {
-  return canMutateRequest(status)
+  const s = status.trim().toLowerCase()
+  return s === 'draft' || s === 'pending' || s === 'rejected'
+}
+
+export function canReviseRequest(status: string): boolean {
+  const s = status.trim().toLowerCase()
+  return s === 'draft' || s === 'rejected'
 }
 
 export function canPreviewPrintRequest(status: string): boolean {
@@ -210,6 +216,7 @@ export function RequestDetailDialog({
 type RequestRowActionsProps = {
   status: string
   onPreview: () => void
+  onRevise?: () => void
   onRecall?: () => void
   onDelete?: () => void
   recalling?: boolean
@@ -219,13 +226,15 @@ type RequestRowActionsProps = {
 export function RequestRowActions({
   status,
   onPreview,
+  onRevise,
   onRecall,
   onDelete,
   recalling,
   deleting,
 }: RequestRowActionsProps) {
-  const mutable = canMutateRequest(status)
+  const mutable = canDeleteRequest(status)
   const recallable = canRecallRequest(status)
+  const revisable = canReviseRequest(status)
 
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -239,6 +248,17 @@ export function RequestRowActions({
         <Eye className="h-3.5 w-3.5" />
         {status.trim().toLowerCase() === 'approved' ? 'Preview' : 'View'}
       </Button>
+      {revisable && onRevise ? (
+        <Button
+          {...mt}
+          size="sm"
+          variant="outlined"
+          className="flex items-center gap-1 rounded-sm px-2 py-1 text-xs normal-case"
+          onClick={onRevise}
+        >
+          {status.trim().toLowerCase() === 'rejected' ? 'Revise' : 'Edit'}
+        </Button>
+      ) : null}
       {recallable && onRecall ? (
         <Button
           {...mt}

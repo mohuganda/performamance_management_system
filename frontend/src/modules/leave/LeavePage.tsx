@@ -14,6 +14,7 @@ import {
   canDeleteRequest,
   canOfficialPrintRequest,
   canRecallRequest,
+  canReviseRequest,
 } from '@/components/molecules/RequestDetailDialog'
 import { SearchableSelect } from '@/components/molecules/SearchableSelect'
 import { SegmentedTabs } from '@/components/molecules/SegmentedTabs'
@@ -46,9 +47,11 @@ function validateLeaveForm(
     end_date: string
     reason: string
     oic_staff_id: string
+    clarification?: string
   },
   policy: LeavePolicyConfig | undefined,
   leaveType: { code?: string; advance_notice_days?: number | null } | undefined,
+  opts?: { requireClarification?: boolean },
 ): string | null {
   if (!form.leave_type_id) return 'Select a leave type before continuing.'
   if (!form.start_date) return 'Enter a start date.'
@@ -57,6 +60,9 @@ function validateLeaveForm(
   if (dateError) return dateError
   if (!form.oic_staff_id) return 'Select an Officer in Charge (OIC) for your leave period.'
   if (!form.reason.trim()) return 'Provide a reason for your leave request.'
+  if (opts?.requireClarification && !form.clarification?.trim()) {
+    return 'Add a clarification explaining how you addressed the rejection before resubmitting.'
+  }
   return null
 }
 
@@ -69,7 +75,7 @@ const LEAVE_STEPS = [
   {
     title: 'Submit application',
     description:
-      'Fill in leave type, dates, and reason. Most leave types require advance notice (configurable by HR). Sick leave may be exempt. Past dates are not allowed.',
+      'Fill in leave type, dates, and reason. Save as draft anytime, or submit for approval. If rejected, revise with a clarification and resubmit. Most leave types require advance notice (configurable by HR). Sick leave may be exempt. Past dates are not allowed.',
     actor: 'Employee',
   },
   {
@@ -97,9 +103,13 @@ export function LeavePage() {
     start_date: '',
     end_date: '',
     reason: '',
+    clarification: '',
     oic_staff_id: '',
     submit: true,
   })
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingStatus, setEditingStatus] = useState('')
+  const [rejectionComment, setRejectionComment] = useState('')
   const [approvalComment, setApprovalComment] = useState('')
   const [attachments, setAttachments] = useState<AttachmentMeta[]>([])
   const [formAlert, setFormAlert] = useState<FormAlert | null>(null)
@@ -145,27 +155,50 @@ export function LeavePage() {
     enabled: Boolean(staffId) && canApprove,
   })
 
+  const resetLeaveForm = () => {
+    setForm({
+      leave_type_id: '',
+      start_date: '',
+      end_date: '',
+      reason: '',
+      clarification: '',
+      oic_staff_id: '',
+      submit: true,
+    })
+    setAttachments([])
+    setEditingId(null)
+    setEditingStatus('')
+    setRejectionComment('')
+  }
+
+  const leavePayload = (submit: boolean) => ({
+    leave_type_id: Number(form.leave_type_id),
+    start_date: form.start_date,
+    end_date: form.end_date,
+    reason: form.reason,
+    clarification: form.clarification || undefined,
+    medical_report_url: serializeAttachments(attachments),
+    oic_staff_id: Number(form.oic_staff_id),
+    submit,
+  })
+
   const createMutation = useMutation({
     mutationFn: (submit: boolean) =>
-      leaveService.createRequest({
-        leave_type_id: Number(form.leave_type_id),
-        start_date: form.start_date,
-        end_date: form.end_date,
-        reason: form.reason,
-        medical_report_url: serializeAttachments(attachments),
-        oic_staff_id: Number(form.oic_staff_id),
-        submit,
-      }),
+      editingId
+        ? leaveService.updateRequest(editingId, leavePayload(submit))
+        : leaveService.createRequest(leavePayload(submit)),
     onSuccess: (_data, submit) => {
+      const revising = Boolean(editingId)
       queryClient.invalidateQueries({ queryKey: ['leave'] })
-      setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', oic_staff_id: '', submit: true })
-      setAttachments([])
+      resetLeaveForm()
       const message = submit
-        ? 'Your leave request has been submitted for supervisor approval.'
+        ? revising
+          ? 'Your revised leave request has been resubmitted for approval.'
+          : 'Your leave request has been submitted for supervisor approval.'
         : 'Your leave request has been saved as a draft. You can submit it when ready.'
       setFormAlert({
         type: 'success',
-        title: submit ? 'Submitted' : 'Draft saved',
+        title: submit ? (revising ? 'Resubmitted' : 'Submitted') : 'Draft saved',
         message,
       })
       toast.success(message, submit ? 'Leave submitted' : 'Draft saved')
@@ -230,7 +263,10 @@ export function LeavePage() {
   })
 
   const handleCreate = (submit: boolean) => {
-    const validationError = validateLeaveForm(form, leavePolicy, selectedLeaveType)
+    const validationError = validateLeaveForm(form, leavePolicy, selectedLeaveType, {
+      requireClarification:
+        submit && (editingStatus === 'rejected' || Boolean(rejectionComment)),
+    })
     if (validationError) {
       setFormAlert({ type: 'warning', title: 'Check the form', message: validationError })
       toast.warning(validationError, 'Leave form')
@@ -244,6 +280,34 @@ export function LeavePage() {
     }
     setFormAlert(null)
     createMutation.mutate(submit)
+  }
+
+  const loadLeaveForEdit = (row: Record<string, unknown>) => {
+    const status = requestStatus(row)
+    if (!canReviseRequest(status)) return
+    const id = Number(row.id ?? row.ID ?? 0)
+    setEditingId(id)
+    setEditingStatus(status)
+    setRejectionComment(pickString(row, 'rejection_comment', 'RejectionComment'))
+    setForm({
+      leave_type_id: String(pickField(row, 'leave_type_id', 'LeaveTypeID') ?? ''),
+      start_date: String(pickField(row, 'start_date', 'StartDate') ?? '').slice(0, 10),
+      end_date: String(pickField(row, 'end_date', 'EndDate') ?? '').slice(0, 10),
+      reason: pickString(row, 'reason', 'Reason'),
+      clarification: pickString(row, 'clarification', 'Clarification'),
+      oic_staff_id: String(pickField(row, 'oic_staff_id', 'OicStaffID') ?? ''),
+      submit: true,
+    })
+    setDetailRow(null)
+    setTab('apply')
+    setFormAlert({
+      type: 'info',
+      title: status === 'rejected' ? 'Revise rejected request' : 'Editing draft',
+      message:
+        status === 'rejected'
+          ? 'Update the details, add a clarification for your supervisor, then resubmit.'
+          : 'Update this draft and save or submit when ready.',
+    })
   }
 
   const staffLinked = Boolean(staffId)
@@ -459,9 +523,26 @@ export function LeavePage() {
           </QueryState>
 
           <Card {...mt} className="rounded-sm border border-moh-green/15 p-4 lg:col-span-2">
-            <Typography {...mt} className="mb-4 text-sm font-bold uppercase text-moh-green">
-              New leave application
-            </Typography>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <Typography {...mt} className="text-sm font-bold uppercase text-moh-green">
+                {editingId
+                  ? editingStatus === 'rejected'
+                    ? 'Revise & resubmit leave'
+                    : 'Edit leave draft'
+                  : 'New leave application'}
+              </Typography>
+              {editingId ? (
+                <Button
+                  {...mt}
+                  size="sm"
+                  variant="text"
+                  className="rounded-sm normal-case"
+                  onClick={resetLeaveForm}
+                >
+                  Cancel edit
+                </Button>
+              ) : null}
+            </div>
             {formAlert ? (
               <FormStatusAlert
                 type={formAlert.type}
@@ -470,6 +551,12 @@ export function LeavePage() {
                 onDismiss={() => setFormAlert(null)}
                 className="mb-4"
               />
+            ) : null}
+            {rejectionComment ? (
+              <div className="mb-4 rounded-sm border border-moh-warning/40 bg-moh-warning/10 px-3 py-2 text-sm text-ui-text">
+                <p className="font-semibold text-moh-warning">Supervisor rejection note</p>
+                <p className="mt-1 whitespace-pre-wrap">{rejectionComment}</p>
+              </div>
             ) : null}
             {showAdvanceNotice ? (
               <p className="mb-4 rounded-sm border border-ui-border bg-ui-subtle/40 px-3 py-2 text-sm text-ui-muted">
@@ -539,6 +626,18 @@ export function LeavePage() {
                   className="rounded-sm"
                 />
               </div>
+              {editingStatus === 'rejected' || rejectionComment || form.clarification ? (
+                <div className="md:col-span-2">
+                  <Textarea
+                    {...mt}
+                    label="Clarification for resubmission"
+                    value={form.clarification}
+                    onChange={(e) => setForm((f) => ({ ...f, clarification: e.target.value }))}
+                    className="rounded-sm"
+                    placeholder="Explain how you addressed the rejection or what you clarified."
+                  />
+                </div>
+              ) : null}
               <div className="md:col-span-2">
                 <FileAttachmentField
                   label={needsMedicalReport ? 'Medical report / supporting documents' : 'Supporting documents'}
@@ -568,7 +667,13 @@ export function LeavePage() {
                   className="rounded-sm bg-moh-green flex-1"
                   disabled={createMutation.isPending}
                 >
-                  {createMutation.isPending ? 'Submitting...' : 'Submit for supervisor approval'}
+                  {createMutation.isPending
+                    ? 'Submitting...'
+                    : editingStatus === 'rejected'
+                      ? 'Resubmit for approval'
+                      : editingId
+                        ? 'Submit draft'
+                        : 'Submit for supervisor approval'}
                 </Button>
               </div>
             </form>
@@ -647,6 +752,9 @@ export function LeavePage() {
                     <RequestRowActions
                       status={status}
                       onPreview={() => setDetailRow(row)}
+                      onRevise={
+                        canReviseRequest(status) ? () => loadLeaveForEdit(row) : undefined
+                      }
                       onRecall={
                         canRecallRequest(status)
                           ? () => {
@@ -749,6 +857,14 @@ export function LeavePage() {
                 { label: 'Days', value: pickString(detailRow, 'days_requested', 'DaysRequested') || '—' },
                 { label: 'OIC', value: pickString(detailRow, 'oic_name', 'OicName') || '—' },
                 { label: 'Reason', value: pickString(detailRow, 'reason', 'Reason') || '—' },
+                {
+                  label: 'Clarification',
+                  value: pickString(detailRow, 'clarification', 'Clarification') || '—',
+                },
+                {
+                  label: 'Rejection note',
+                  value: pickString(detailRow, 'rejection_comment', 'RejectionComment') || '—',
+                },
                 {
                   label: 'Approval stage',
                   value: pickString(detailRow, 'approval_stage', 'ApprovalStage') || '—',

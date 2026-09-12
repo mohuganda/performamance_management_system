@@ -49,5 +49,6 @@ func Migrations() []schema.Migration {
 		&migrations.M20260911000004SettingsBackupsPermission{},
 		&migrations.M20260911000005HrmExportAndSyncRuns{},
 		&migrations.M20260911000006DocumentVerifications{},
+		&migrations.M20260912000001RequestClarification{},
 	}
 }

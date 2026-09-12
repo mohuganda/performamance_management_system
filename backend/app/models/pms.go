@@ -399,6 +399,7 @@ type LeaveRequest struct {
 	ApprovalStage           string `gorm:"default:supervisor"`
 	CarryOverRequested      bool   `gorm:"default:false"`
 	OicStaffID              *uint  `gorm:"column:oic_staff_id"`
+	Clarification           *string `gorm:"column:clarification"`
 }
 
 type LeavePlan struct {
@@ -469,6 +470,7 @@ type OutOfStationRequest struct {
 	Status                   string
 	CurrentApprovalSequence  uint8 `gorm:"default:1"`
 	SubmittedAt              *time.Time
+	Clarification            *string `gorm:"column:clarification"`
 }
 
 type OutOfStationApproval struct {

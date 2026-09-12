@@ -2100,7 +2100,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Per leave.md: submit at least 2 weeks in advance; sick leave \u003e2 days needs medical report",
+                "description": "Creates a leave request as draft (submit=false) or submits immediately (submit=true). Clarification is optional on create; required when resubmitting a rejected request.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2113,7 +2113,7 @@ const docTemplate = `{
                 "summary": "Create leave request (self-service)",
                 "parameters": [
                     {
-                        "description": "Leave request",
+                        "description": "Leave request (submit=false saves draft)",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2125,6 +2125,209 @@ const docTemplate = `{
                 "responses": {
                     "201": {
                         "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/leave/requests/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates an owned leave request in draft or rejected status. Set submit=true to save and submit in one call. When status is rejected, clarification is required before submit (explains the revision to approvers).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-leave"
+                ],
+                "summary": "Update draft or rejected leave request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Leave fields (clarification required on rejected resubmit)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.leaveRequestBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-leave"
+                ],
+                "summary": "Delete draft, pending, or rejected leave request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/leave/requests/{id}/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-leave"
+                ],
+                "summary": "Cancel draft or pending leave request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/leave/requests/{id}/recall": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-leave"
+                ],
+                "summary": "Recall pending leave request to draft",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/leave/requests/{id}/submit": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Moves an owned draft or rejected leave request to pending approval. Rejected resubmits require a non-empty clarification field on the request and clear prior approval rows.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-leave"
+                ],
+                "summary": "Submit draft or rejected leave request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -2250,7 +2453,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Mirrors attend/requests/newRequest with map-picked destination coordinates for GPS verification. Optional cached_place_id copies snapshot destination fields.",
+                "description": "Creates a travel request as draft (submit=false) or submits immediately (submit=true). Destination coordinates are used for GPS verification. Optional cached_place_id copies snapshot destination fields.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2263,7 +2466,7 @@ const docTemplate = `{
                 "summary": "Create out-of-station request",
                 "parameters": [
                     {
-                        "description": "Out of station request",
+                        "description": "Out of station request (submit=false saves draft)",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2275,6 +2478,13 @@ const docTemplate = `{
                 "responses": {
                     "201": {
                         "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -2330,6 +2540,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Updates an owned travel request in draft or rejected status. Set submit=true to save and submit in one call. When status is rejected, clarification is required before submit.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2339,7 +2550,7 @@ const docTemplate = `{
                 "tags": [
                     "mobile-out-of-station"
                 ],
-                "summary": "Update draft out-of-station request",
+                "summary": "Update draft or rejected out-of-station request",
                 "parameters": [
                     {
                         "type": "integer",
@@ -2349,13 +2560,52 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Draft fields",
+                        "description": "Draft fields (clarification required on rejected resubmit)",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/controllers.oosRequestBody"
                         }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-out-of-station"
+                ],
+                "summary": "Delete draft, pending, or rejected out-of-station request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -2403,7 +2653,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/mobile/out-of-station/requests/{id}/submit": {
+        "/api/v1/mobile/out-of-station/requests/{id}/recall": {
             "post": {
                 "security": [
                     {
@@ -2416,7 +2666,7 @@ const docTemplate = `{
                 "tags": [
                     "mobile-out-of-station"
                 ],
-                "summary": "Submit draft out-of-station request",
+                "summary": "Recall pending out-of-station request to draft",
                 "parameters": [
                     {
                         "type": "integer",
@@ -2429,6 +2679,48 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/mobile/out-of-station/requests/{id}/submit": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Moves an owned draft or rejected travel request to pending approval. Rejected resubmits require clarification and clear prior approval rows.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mobile-out-of-station"
+                ],
+                "summary": "Submit draft or rejected out-of-station request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Request ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -2815,6 +3107,9 @@ const docTemplate = `{
         "controllers.leaveRequestBody": {
             "type": "object",
             "properties": {
+                "clarification": {
+                    "type": "string"
+                },
                 "end_date": {
                     "type": "string"
                 },
@@ -2895,6 +3190,9 @@ const docTemplate = `{
                 },
                 "cached_place_id": {
                     "type": "integer"
+                },
+                "clarification": {
+                    "type": "string"
                 },
                 "destination_address": {
                     "type": "string"
