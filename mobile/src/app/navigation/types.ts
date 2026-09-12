@@ -8,7 +8,8 @@ export type AppStackParamList = {
   Profile: undefined;
   Notifications: undefined;
   Settings: undefined;
-  OutOfStation: undefined;
+  OutOfStation: { initialTab?: 'history' | 'apply' | 'approvals' } | undefined;
+  OutOfStationDetails: { requestId: number | string };
   LeaveRequest: { editMode?: boolean; localRecordId?: string } | undefined;
   LeaveHistory: undefined;
   SyncIssues: undefined;

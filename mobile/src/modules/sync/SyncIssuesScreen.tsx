@@ -9,6 +9,7 @@ import { showAlert } from '../../stores/alertStore';
 import { Trash2, Edit3, AlertTriangle } from 'lucide-react-native';
 import { Card } from '../../components/atoms/Card';
 import { EmptyState } from '../../components/molecules/EmptyState';
+import { formatDate } from '../../utils/date';
 
 export const SyncIssuesScreen = ({ navigation }: any) => {
   const { t } = useTranslation();
@@ -60,7 +61,7 @@ export const SyncIssuesScreen = ({ navigation }: any) => {
             {item.type.replace('_', ' ')}
           </Text>
           <Text className="text-xs text-muted-foreground">
-            {new Date(item.failedAt).toLocaleDateString()}
+            {formatDate(item.failedAt)}
           </Text>
         </View>
         

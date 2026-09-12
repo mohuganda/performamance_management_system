@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Switch, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
+import { View, Text, Switch, TouchableOpacity, StyleProp, ViewStyle, ActivityIndicator } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../../app/hooks/useTheme';
 
@@ -30,16 +30,17 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
   isLast = false,
   style,
 }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
-  const renderRight = () => {
+  const renderRightElement = () => {
     if (type === 'toggle') {
       return (
         <Switch
           value={value}
           onValueChange={onValueChange}
-          trackColor={{ false: '#767577', true: colors.primary }}
-          thumbColor={value ? '#FFFFFF' : '#f4f3f4'}
+          trackColor={{ false: isDark ? '#3F3F46' : '#E4E4E7', true: colors.primary }}
+          thumbColor="#FFFFFF"
+          ios_backgroundColor={isDark ? '#3F3F46' : '#E4E4E7'}
         />
       );
     }
@@ -66,7 +67,11 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
             className="w-9 h-9 rounded-full items-center justify-center"
             style={{ backgroundColor: iconBgColor }}
           >
-            <Icon size={18} color={colors.text} className={loading ? 'animate-spin' : ''} />
+            {loading ? (
+              <ActivityIndicator size="small" color={colors.text} style={{ transform: [{ scale: 0.8 }] }} />
+            ) : (
+              <Icon size={18} color={colors.text} />
+            )}
           </View>
         )}
         <View className="ml-1 flex-1 pr-2">
@@ -86,7 +91,7 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
           )}
         </View>
       </View>
-      {renderRight()}
+      <View className="items-end justify-center">{renderRightElement()}</View>
     </View>
   );
 

@@ -40,6 +40,7 @@ export class AttendanceDbService {
               log.locationLabel = apiClock.location_label || null;
               log.verificationStatus = apiClock.verification_status || null;
               log.distanceFromDestinationMeters = apiClock.distance_from_destination_meters ?? null;
+              log.outOfStationRequestId = apiClock.out_of_station_request_id ?? null;
             })
           );
           localMap.delete(apiClock.id);
@@ -59,6 +60,7 @@ export class AttendanceDbService {
               log.locationLabel = apiClock.location_label || null;
               log.verificationStatus = apiClock.verification_status || null;
               log.distanceFromDestinationMeters = apiClock.distance_from_destination_meters ?? null;
+              log.outOfStationRequestId = apiClock.out_of_station_request_id ?? null;
             })
           );
         }
@@ -82,7 +84,7 @@ export class AttendanceDbService {
       const collection = database.collections.get<AttendanceLog>('attendance_logs');
       newLog = await collection.create((log: AttendanceLog) => {
         log.remoteId = null; // null indicates it hasn't synced to server
-        log.action = payload.action;
+        log.action = payload.clock_type || payload.action || 'in';
         log.clockedAt = payload.clocked_at || new Date().toISOString();
         log.createdAt = new Date().toISOString();
         log.latitude = payload.latitude;
@@ -94,6 +96,7 @@ export class AttendanceDbService {
         log.locationLabel = payload.location_label || null;
         log.verificationStatus = 'pending';
         log.distanceFromDestinationMeters = null;
+        log.outOfStationRequestId = payload.out_of_station_request_id ?? null;
       });
     });
     return newLog!;

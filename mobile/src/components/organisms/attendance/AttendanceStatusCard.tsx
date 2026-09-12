@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../app/hooks/useTheme';
 import { ActiveShiftTimer } from '../../molecules/ActiveShiftTimer';
 import { ClockResponse } from '../../../api/attendance/types';
+import { formatDate } from '../../../utils/date';
 
 interface AttendanceStatusCardProps {
   isClockedIn: boolean;
@@ -35,7 +36,7 @@ export const AttendanceStatusCard: React.FC<AttendanceStatusCardProps> = ({
         <View className="flex-row items-center gap-1">
           <Clock size={14} color="#9CA3AF" />
           <Text className="text-gray-400 font-medium text-xs">
-            {new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+            {formatDate(new Date(), 'ddd, MMM D')}
           </Text>
         </View>
       </View>

@@ -327,7 +327,6 @@ export function OosRequestTab({ onComplete }: { onComplete: () => void }) {
           onSelectPrediction={selectPrediction}
           placeholder={t('oos_form_destination_name_placeholder')}
           error={validationErrors.destination_name}
-          disabled={isOffline}
           isResolving={isGeocoding}
           className="mb-6"
         />

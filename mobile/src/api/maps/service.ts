@@ -1,58 +1,73 @@
 import axios from 'axios';
 import Config from 'react-native-config';
+import apiClient from '../client';
+import { PlacesDbService } from '../../db/services/PlacesDbService';
 import {
   GooglePlacePrediction,
   GooglePlaceDetails,
   GoogleGeocodingResult,
-  PlacesNewSuggestion,
-  PlacesNewDetail,
+  BackendPlace,
 } from './types';
 
 const API_KEY = Config.GOOGLE_MAPS_API_KEY;
 
-// ─── Places API (New) base URL ────────────────────────────────────────────────
-const PLACES_NEW_BASE = 'https://places.googleapis.com/v1/places';
-
-// ─── Geocoding API (separate from Places, still current) ─────────────────────
+// ─── Geocoding API (used for reverse geocoding coordinates) ───────────────────
 const GEOCODING_BASE = 'https://maps.googleapis.com/maps/api/geocode/json';
+
+function mapBackendPlaceToPrediction(place: BackendPlace): GooglePlacePrediction {
+  const secondaryText = place.address && place.address !== place.name ? place.address : '';
+  return {
+    place_id: place.google_place_id || String(place.id),
+    description: place.address || place.name,
+    name: place.name,
+    address: place.address,
+    latitude: place.latitude,
+    longitude: place.longitude,
+    structured_formatting: {
+      main_text: place.name,
+      secondary_text: secondaryText,
+    },
+  };
+}
 
 export const mapsService = {
   /**
-   * Autocomplete predictions using the Places API (New)
-   * POST /v1/places:autocomplete
-   * Restricted to Uganda (includedRegionCodes: ["ug"])
+   * Search places using backend GET /places/search?q=<query>
+   * Checks WatermelonDB local cache first for exact normalized search text.
+   * If cached, returns local results immediately without calling upstream API.
    */
   async getPlacePredictions(query: string): Promise<GooglePlacePrediction[]> {
-    if (!API_KEY || !query.trim()) return [];
+    const trimmed = query.trim();
+    if (!trimmed) return [];
 
+    const normalized = trimmed.toLowerCase();
+
+    // 1. Check local WatermelonDB cache for exact normalized match
     try {
-      const response = await axios.post<{ suggestions?: PlacesNewSuggestion[] }>(
-        `${PLACES_NEW_BASE}:autocomplete`,
-        {
-          input: query,
-          includedRegionCodes: ['ug'],
-        },
-        {
-          headers: {
-            'X-Goog-Api-Key': API_KEY,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const cached = await PlacesDbService.getCachedPlaces(normalized);
+      if (cached && Array.isArray(cached) && cached.length > 0) {
+        return cached.map(mapBackendPlaceToPrediction);
+      }
+    } catch (cacheErr) {
+      console.warn('[mapsService] Error checking local cache:', cacheErr);
+    }
 
-      const suggestions = response.data?.suggestions ?? [];
+    // 2. Fetch from backend API
+    try {
+      const response = await apiClient.get<BackendPlace[]>('/places/search', {
+        params: { q: trimmed },
+      });
 
-      // Map new API shape → stable GooglePlacePrediction interface
-      return suggestions.map((s) => ({
-        place_id: s.placePrediction.placeId,
-        description: s.placePrediction.text.text,
-        structured_formatting: s.placePrediction.structuredFormat
-          ? {
-              main_text: s.placePrediction.structuredFormat.mainText.text,
-              secondary_text: s.placePrediction.structuredFormat.secondaryText.text,
-            }
-          : undefined,
-      }));
+      const places = response.data ?? [];
+
+      // 3. Save to WatermelonDB cache for offline access
+      if (places.length > 0) {
+        PlacesDbService.cachePlaces(normalized, places).catch((err) => {
+          console.warn('[mapsService] Error saving to local cache:', err);
+        });
+      }
+
+      return places.map(mapBackendPlaceToPrediction);
     } catch (error) {
       console.error('[mapsService] getPlacePredictions error:', error);
       return [];
@@ -60,42 +75,15 @@ export const mapsService = {
   },
 
   /**
-   * Place details using the Places API (New)
-   * GET /v1/places/{placeId}
+   * Legacy place details resolver (for backward compatibility if needed)
    */
   async getPlaceDetails(placeId: string): Promise<GooglePlaceDetails | null> {
-    if (!API_KEY || !placeId) return null;
-
-    try {
-      const response = await axios.get<PlacesNewDetail>(
-        `${PLACES_NEW_BASE}/${placeId}`,
-        {
-          headers: {
-            'X-Goog-Api-Key': API_KEY,
-            'X-Goog-FieldMask': 'displayName,formattedAddress,location',
-          },
-        }
-      );
-
-      const result = response.data;
-      if (result?.location) {
-        return {
-          name: result.displayName?.text ?? '',
-          formatted_address: result.formattedAddress ?? '',
-          latitude: result.location.latitude,
-          longitude: result.location.longitude,
-        };
-      }
-      return null;
-    } catch (error) {
-      console.error('[mapsService] getPlaceDetails error:', error);
-      return null;
-    }
+    if (!placeId) return null;
+    return null;
   },
 
   /**
-   * Reverse geocoding using the Geocoding API
-   * (Not part of the Places API — this is a separate product and is current)
+   * Reverse geocoding using the Google Geocoding API
    */
   async reverseGeocode(latitude: number, longitude: number): Promise<GoogleGeocodingResult | null> {
     if (!API_KEY) return null;

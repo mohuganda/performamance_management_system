@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../app/hooks/useTheme';
 import { MainTemplate } from '../../components/templates';
 import { useLeaveRequestsSync, useLeaveTypesSync } from '../../app/hooks/useLeave';
-import { formatDisplayDate, parseISODate } from '../../utils/leavePolicy';
+import { parseISODate } from '../../utils/leavePolicy';
+import { formatDate } from '../../utils/date';
 import { LeaveHistoryCard } from '../../components/organisms/leave/LeaveHistoryCard';
 import { EmptyState } from '../../components/molecules/EmptyState';
 import { Calendar } from 'lucide-react-native';
@@ -66,8 +67,8 @@ const BaseLeaveHistoryScreen: React.FC<LeaveHistoryScreenProps> = ({ requests, l
         ItemSeparatorComponent={() => <View className="h-4" />}
         renderItem={({ item }) => {
           const typeName = typeMap.get(item.leaveTypeId) ?? 'Leave Request';
-          const displayStart = item.startDate ? formatDisplayDate(parseISODate(item.startDate)) : '';
-          const displayEnd = item.endDate ? formatDisplayDate(parseISODate(item.endDate)) : '';
+          const displayStart = item.startDate ? formatDate(item.startDate) : '';
+          const displayEnd = item.endDate ? formatDate(item.endDate) : '';
 
           // Calculate duration if not provided by backend payload
           let duration = item.daysRequested;

@@ -1,8 +1,12 @@
 // Public-facing prediction type used by PlacesSearchInput molecule and usePlacesSearch hook.
-// Kept stable so consumers don't change when the underlying API version changes.
+// Kept backwards-compatible while carrying pre-resolved coordinates from the backend.
 export interface GooglePlacePrediction {
   place_id: string;
   description: string;
+  name?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
   structured_formatting?: {
     main_text: string;
     secondary_text: string;
@@ -21,25 +25,19 @@ export interface GoogleGeocodingResult {
   name: string;
 }
 
-// ─── Internal: New Places API (v1) raw response shapes ───────────────────────
+// ─── Backend Places Search API response shape ─────────────────────────────────
 
-/** Raw suggestion returned by POST /v1/places:autocomplete (New) */
-export interface PlacesNewSuggestion {
-  placePrediction: {
-    place: string;       // "places/<placeId>"
-    placeId: string;
-    text: { text: string };
-    structuredFormat?: {
-      mainText: { text: string };
-      secondaryText: { text: string };
-    };
-  };
-}
-
-/** Raw place returned by GET /v1/places/{placeId} (New) */
-export interface PlacesNewDetail {
-  name: string;             // "places/<placeId>"
-  displayName: { text: string; languageCode: string };
-  formattedAddress: string;
-  location: { latitude: number; longitude: number };
+export interface BackendPlace {
+  id: number;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  country_code: string;
+  google_place_id?: string;
+  normalized_name?: string;
+  source?: string;
+  hit_count?: number;
+  created_at?: string;
+  updated_at?: string;
 }

@@ -11,6 +11,7 @@ import OosRequest from './models/OosRequest';
 import LeaveBalanceModel from './models/LeaveBalanceModel';
 import LeaveTypeModel from './models/LeaveTypeModel';
 import ProfileModel from './models/ProfileModel';
+import PlacesSearchCache from './models/PlacesSearchCache';
 
 const adapter = new SQLiteAdapter({
   schema,
@@ -33,5 +34,6 @@ export const database = new Database({
     LeaveBalanceModel,
     LeaveTypeModel,
     ProfileModel,
+    PlacesSearchCache,
   ],
 });

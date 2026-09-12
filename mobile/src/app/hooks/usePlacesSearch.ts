@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import mapsService from '../../api/maps/service';
-import { GooglePlacePrediction, GooglePlaceDetails } from '../../api/maps/types';
+import { GooglePlacePrediction } from '../../api/maps/types';
 
 export interface PlaceSelectedResult {
   name: string;
@@ -20,9 +20,16 @@ export function usePlacesSearch(options: UsePlacesSearchOptions = {}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [predictions, setPredictions] = useState<GooglePlacePrediction[]>([]);
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const skipNextSearchRef = useRef(false);
 
   // Debounced autocomplete predictions fetch (300ms)
   useEffect(() => {
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false;
+      setPredictions([]);
+      return;
+    }
+
     if (!searchQuery.trim()) {
       setPredictions([]);
       return;
@@ -30,16 +37,39 @@ export function usePlacesSearch(options: UsePlacesSearchOptions = {}) {
 
     const delayDebounce = setTimeout(async () => {
       const list = await mapsService.getPlacePredictions(searchQuery);
-      setPredictions(list);
+      if (!skipNextSearchRef.current) {
+        setPredictions(list);
+      }
     }, 300);
 
     return () => clearTimeout(delayDebounce);
   }, [searchQuery]);
 
-  /** Select a prediction, resolve place details, and notify parent */
+  /** Custom query setter that allows normal keystrokes to search */
+  const handleSetSearchQuery = useCallback((query: string) => {
+    skipNextSearchRef.current = false;
+    setSearchQuery(query);
+  }, []);
+
+  /** Select a prediction, resolve place details, dismiss dropdown, and notify parent */
   const selectPrediction = useCallback(async (prediction: GooglePlacePrediction): Promise<PlaceSelectedResult | null> => {
-    setIsGeocoding(true);
+    skipNextSearchRef.current = true;
     setPredictions([]);
+
+    // Direct resolution if coordinates are already present in prediction
+    if (prediction.latitude !== undefined && prediction.longitude !== undefined) {
+      const result: PlaceSelectedResult = {
+        name: prediction.name || prediction.structured_formatting?.main_text || prediction.description,
+        formatted_address: prediction.address || prediction.description,
+        latitude: prediction.latitude,
+        longitude: prediction.longitude,
+      };
+      setSearchQuery(result.name);
+      options.onPlaceSelected?.(result);
+      return result;
+    }
+
+    setIsGeocoding(true);
     try {
       const details = await mapsService.getPlaceDetails(prediction.place_id);
       if (details) {
@@ -68,6 +98,8 @@ export function usePlacesSearch(options: UsePlacesSearchOptions = {}) {
     try {
       const res = await mapsService.reverseGeocode(lat, lng);
       if (res) {
+        skipNextSearchRef.current = true;
+        setPredictions([]);
         setSearchQuery(res.name);
         options.onReverseGeocoded?.(res);
         return res;
@@ -83,13 +115,14 @@ export function usePlacesSearch(options: UsePlacesSearchOptions = {}) {
 
   /** Reset all search state */
   const clearSearch = useCallback(() => {
+    skipNextSearchRef.current = true;
     setSearchQuery('');
     setPredictions([]);
   }, []);
 
   return {
     searchQuery,
-    setSearchQuery,
+    setSearchQuery: handleSetSearchQuery,
     predictions,
     isGeocoding,
     selectPrediction,

@@ -1,12 +1,14 @@
 import React, { useMemo } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { useOosRequestsSync, useOosReasonsQuery } from '../../../app/hooks/useOos';
 import { useTheme } from '../../../app/hooks/useTheme';
-import { FileText, MapPin, Calendar, CheckCircle2, AlertTriangle, Clock, RefreshCw } from 'lucide-react-native';
+import { FileText, MapPin, Calendar, CheckCircle2, AlertTriangle, Clock, RefreshCw, ChevronRight } from 'lucide-react-native';
 import withObservables from '@nozbe/with-observables';
 import { database } from '../../../db';
 import OosRequestModel from '../../../db/models/OosRequest';
+import { formatDate } from '../../../utils/date';
 
 interface OosHistoryTabProps {
   requests: OosRequestModel[];
@@ -15,6 +17,7 @@ interface OosHistoryTabProps {
 const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const navigation = useNavigation<any>();
 
   const requestsSync = useOosRequestsSync();
   const reasonsQuery = useOosReasonsQuery();
@@ -50,7 +53,18 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
 
   if (requests.length === 0) {
     return (
-      <View className="flex-1 justify-center items-center py-10 px-6">
+      <ScrollView
+        className="flex-1 px-4 py-3"
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center' }}
+        refreshControl={
+          <RefreshControl
+            refreshing={requestsSync.isFetching}
+            onRefresh={() => requestsSync.refetch()}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+      >
         <FileText size={32} color={colors.border} className="mb-4" />
         <Text className="text-sm font-medium text-center" style={{ color: colors.text }}>
           {t('oos_history_empty_title')}
@@ -58,7 +72,7 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
         <Text className="text-xs text-center mt-1" style={{ color: colors.muted }}>
           {t('oos_history_empty_subtitle')}
         </Text>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -116,7 +130,18 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
   };
 
   return (
-    <ScrollView className="flex-1 px-4 py-3" showsVerticalScrollIndicator={false}>
+    <ScrollView
+      className="flex-1 px-4 py-3"
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={requestsSync.isFetching}
+          onRefresh={() => requestsSync.refetch()}
+          colors={[colors.primary]}
+          tintColor={colors.primary}
+        />
+      }
+    >
       <Text className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: colors.muted }}>
         {t('oos_history_title')}
       </Text>
@@ -129,8 +154,10 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
           const isSyncFailed = req.status === 'sync_failed';
 
           return (
-            <View
+            <TouchableOpacity
               key={req.remoteId || req.id}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('OutOfStationDetails', { requestId: req.remoteId || req.id })}
               className={`p-4 border shadow-sm rounded-none ${isSyncFailed ? 'border-l-4 border-l-red-500' : ''}`}
               style={{
                 backgroundColor: colors.surface,
@@ -156,7 +183,7 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
               <View className="flex-row items-center gap-2 mb-2">
                 <Calendar size={14} color={colors.muted} />
                 <Text className="text-xs font-medium" style={{ color: colors.text }}>
-                  {req.startDate} to {req.endDate}
+                  {formatDate(req.startDate)} to {formatDate(req.endDate)}
                 </Text>
               </View>
 
@@ -177,13 +204,13 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
 
               {/* Deliverables / Remarks details */}
               {(req.expectedDeliverables || req.remarks) && (
-                <View className="mt-3 pt-3 border-t space-y-2" style={{ borderColor: `${colors.border}60` }}>
+                <View className="mt-2 pt-2 border-t space-y-1.5" style={{ borderColor: `${colors.border}60` }}>
                   {req.expectedDeliverables && (
                     <View>
                       <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colors.muted }}>
                         {t('oos_form_deliverables')}
                       </Text>
-                      <Text className="text-xs mt-0.5" style={{ color: colors.text }}>
+                      <Text className="text-xs mt-0.5" numberOfLines={2} style={{ color: colors.text }}>
                         {req.expectedDeliverables}
                       </Text>
                     </View>
@@ -194,7 +221,7 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
                       <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colors.muted }}>
                         {t('oos_form_remarks')}
                       </Text>
-                      <Text className="text-xs mt-0.5" style={{ color: colors.text }}>
+                      <Text className="text-xs mt-0.5" numberOfLines={2} style={{ color: colors.text }}>
                         {req.remarks}
                       </Text>
                     </View>
@@ -210,7 +237,17 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
                   </Text>
                 </View>
               )}
-            </View>
+
+              {/* Tap to View Details Footer */}
+              <View className="mt-3 pt-2.5 border-t flex-row justify-between items-center" style={{ borderColor: `${colors.border}50` }}>
+                <Text className="text-[11px] font-bold text-primary">
+                  {req.status === 'approved'
+                    ? t('oos_action_view_and_clockin', 'View Details & Duty Attendance →')
+                    : t('oos_action_view_details', 'View Trip Details →')}
+                </Text>
+                <ChevronRight size={14} color={colors.primary} />
+              </View>
+            </TouchableOpacity>
           );
         })}
       </View>

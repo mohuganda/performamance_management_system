@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
 export const schema = appSchema({
-  version: 4,
+  version: 6,
   tables: [
     tableSchema({
       name: 'attendance_logs',
@@ -19,6 +19,7 @@ export const schema = appSchema({
         { name: 'location_label', type: 'string', isOptional: true },
         { name: 'verification_status', type: 'string', isOptional: true },
         { name: 'distance_from_destination_meters', type: 'number', isOptional: true },
+        { name: 'out_of_station_request_id', type: 'number', isOptional: true },
         { name: 'sync_error', type: 'string', isOptional: true },
       ],
     }),
@@ -122,6 +123,14 @@ export const schema = appSchema({
         { name: 'account_data', type: 'string' },
         { name: 'roles', type: 'string' },
         { name: 'permissions', type: 'string' },
+      ],
+    }),
+    tableSchema({
+      name: 'places_search_cache',
+      columns: [
+        { name: 'query', type: 'string', isIndexed: true },
+        { name: 'results_json', type: 'string' },
+        { name: 'cached_at', type: 'string' },
       ],
     }),
   ],

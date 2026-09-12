@@ -13,7 +13,24 @@ function getField<T>(row: any, ...keys: string[]): T | undefined {
 
 export const attendanceService = {
   async clock(payload: ClockRequest): Promise<ClockResponse> {
-    const res = await apiClient.post<any>('/mobile/attendance/clock', payload);
+    const clockType = payload.clock_type || payload.action || 'in';
+    const body: Record<string, any> = {
+      clock_type: clockType,
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+      accuracy_meters: payload.accuracy_meters ?? 0,
+      location_label: payload.location_label || '',
+    };
+
+    if (payload.out_of_station_request_id !== undefined && payload.out_of_station_request_id !== null) {
+      body.out_of_station_request_id = payload.out_of_station_request_id;
+    }
+
+    if (payload.notes) {
+      body.notes = payload.notes;
+    }
+
+    const res = await apiClient.post<any>('/mobile/attendance/clock', body);
     const row = res.data;
     const status = String(getField<string>(row, 'verification_status', 'VerificationStatus') ?? 'pending').toLowerCase();
     
@@ -30,6 +47,7 @@ export const attendanceService = {
       distance_from_destination_meters: getField<number>(row, 'distance_from_destination_meters', 'DistanceFromDestinationMeters'),
       verified: status === 'verified_oos' || status === 'at_duty_station',
       within_geofence: status === 'verified_oos',
+      out_of_station_request_id: getField<number>(row, 'out_of_station_request_id', 'OutOfStationRequestID', 'OutOfStationRequestId') ?? payload.out_of_station_request_id ?? null,
     };
   },
 
@@ -54,6 +72,7 @@ export const attendanceService = {
         distance_from_destination_meters: getField<number>(row, 'distance_from_destination_meters', 'DistanceFromDestinationMeters'),
         verified: status === 'verified_oos' || status === 'at_duty_station',
         within_geofence: status === 'verified_oos',
+        out_of_station_request_id: getField<number>(row, 'out_of_station_request_id', 'OutOfStationRequestID', 'OutOfStationRequestId') ?? null,
       };
     });
   },

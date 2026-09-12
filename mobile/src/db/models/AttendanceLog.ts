@@ -17,5 +17,6 @@ export default class AttendanceLog extends Model {
   @field('location_label') locationLabel!: string | null;
   @field('verification_status') verificationStatus!: string | null;
   @field('distance_from_destination_meters') distanceFromDestinationMeters!: number | null;
+  @field('out_of_station_request_id') outOfStationRequestId!: number | null;
   @field('sync_error') syncError!: string | null;
 }

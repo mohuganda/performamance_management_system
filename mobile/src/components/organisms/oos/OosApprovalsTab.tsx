@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useOosPendingApprovalsQuery, useApproveOosMutation } from '../../../app/hooks/useOos';
 import { useTheme } from '../../../app/hooks/useTheme';
 import { Check, X, User, MapPin, Calendar, ClipboardList } from 'lucide-react-native';
+import { formatDateRange } from '../../../utils/date';
 import { Toaster } from '../../../utils/toast';
 import { getApiErrorMessage } from '../../../api/client';
 
@@ -89,7 +90,7 @@ export function OosApprovalsTab() {
               <View className="flex-row items-center gap-2">
                 <Calendar size={14} color={colors.muted} />
                 <Text className="text-xs font-medium" style={{ color: colors.text }}>
-                  {row.reason_name} · {row.start_date} to {row.end_date}
+                  {row.reason_name} · {formatDateRange(row.start_date, row.end_date)}
                 </Text>
               </View>
               <View className="flex-row items-center gap-2">

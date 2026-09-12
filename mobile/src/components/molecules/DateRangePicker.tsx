@@ -3,7 +3,8 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { Calendar as CalendarIcon } from 'lucide-react-native';
 import { useTheme } from '../../app/hooks/useTheme';
-import { formatDisplayDate, parseISODate } from '../../utils/leavePolicy';
+import { parseISODate } from '../../utils/leavePolicy';
+import { formatDate } from '../../utils/date';
 
 interface DateRangePickerProps {
   startDate: string | null; // ISO YYYY-MM-DD
@@ -51,7 +52,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           className={`bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-none px-4 py-3 flex-row items-center justify-between ${startError ? 'border-[#D90000] dark:border-red-500' : ''}`}
         >
           <Text className="text-sm" style={{ color: startDate ? colors.text : colors.muted }}>
-            {startDate ? formatDisplayDate(parseISODate(startDate)) : 'Select Date'}
+            {startDate ? formatDate(startDate) : 'Select Date'}
           </Text>
           <CalendarIcon size={16} color={colors.muted} />
         </TouchableOpacity>
@@ -75,7 +76,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           className={`bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-none px-4 py-3 flex-row items-center justify-between ${endError ? 'border-[#D90000] dark:border-red-500' : ''}`}
         >
           <Text className="text-sm" style={{ color: endDate ? colors.text : colors.muted }}>
-            {endDate ? formatDisplayDate(parseISODate(endDate)) : 'Select Date'}
+            {endDate ? formatDate(endDate) : 'Select Date'}
           </Text>
           <CalendarIcon size={16} color={colors.muted} />
         </TouchableOpacity>

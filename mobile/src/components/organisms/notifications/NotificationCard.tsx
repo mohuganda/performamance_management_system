@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../app/hooks/useTheme';
 import { Card } from '../../atoms/Card';
 import { NotificationRow } from '../../../api/notifications/types';
-import { formatDisplayDate, parseISODate } from '../../../utils/leavePolicy';
+import { formatDate } from '../../../utils/date';
 import { Bell, Info, AlertTriangle, CheckCircle, XCircle } from 'lucide-react-native';
 
 interface NotificationCardProps {
@@ -65,7 +65,7 @@ export function NotificationCard({ item, onMarkRead }: NotificationCardProps) {
             </Text>
             <View className="flex-row justify-between items-center mt-1">
               <Text className="text-[10px] text-gray-400 font-medium">
-                {formatDisplayDate(parseISODate(item.created_at))}
+                {formatDate(item.created_at)}
               </Text>
               {item.action_url && (
                 <Text className="text-[10px] font-bold">

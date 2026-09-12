@@ -1,11 +1,13 @@
 export interface ClockRequest {
-  action: 'in' | 'out';
+  action?: 'in' | 'out';
+  clock_type?: 'in' | 'out';
   latitude: number;
   longitude: number;
   accuracy_meters?: number;
   notes?: string;
   clocked_at?: string;
   location_label?: string;
+  out_of_station_request_id?: number | null;
 }
 
 export interface ClockResponse {
@@ -22,6 +24,7 @@ export interface ClockResponse {
   location_label?: string;
   verification_status?: string;
   distance_from_destination_meters?: number;
+  out_of_station_request_id?: number | null;
 }
 
 export interface ClockListParams {

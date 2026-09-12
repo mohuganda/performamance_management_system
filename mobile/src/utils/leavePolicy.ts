@@ -23,12 +23,10 @@ const addDays = (d: Date, days: number): Date => {
   return date;
 };
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-export const formatDisplayDate = (d: Date): string => {
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = MONTHS[d.getMonth()];
-  const year = d.getFullYear();
-  return `${day} ${month} ${year}`;
+import { formatDate } from './date';
+
+export const formatDisplayDate = (d: Date | string): string => {
+  return formatDate(d, 'MMM DD, YYYY');
 };
 
 export const parseISODate = (str: string): Date => {

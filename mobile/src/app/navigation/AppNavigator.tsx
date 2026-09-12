@@ -8,6 +8,7 @@ import { LeaveRequestScreen } from '../../modules/leave/LeaveRequestScreen';
 import { LeaveHistoryScreen } from '../../modules/leave/LeaveHistoryScreen';
 import { SyncIssuesScreen } from '../../modules/sync/SyncIssuesScreen';
 import { OosScreen } from '../../modules/out-of-station/OosScreen';
+import { OosDetailsScreen } from '../../modules/out-of-station/OosDetailsScreen';
 import { AttendanceScreen } from '../../modules/attendance/AttendanceScreen';
 import { ApprovalsScreen } from '../../modules/approvals/ApprovalsScreen';
 import { NotificationsScreen } from '../../modules/notifications/NotificationsScreen';
@@ -113,13 +114,21 @@ function MainTabNavigator() {
 }
 
 export function AppNavigator() {
+  const { colors } = useTheme();
+
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    >
       <Stack.Screen name="MainTabs" component={MainTabNavigator} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="OutOfStation" component={OosScreen} />
+      <Stack.Screen name="OutOfStationDetails" component={OosDetailsScreen} />
       <Stack.Screen name="LeaveRequest" component={LeaveRequestScreen} />
       <Stack.Screen name="LeaveHistory" component={LeaveHistoryScreen} />
       <Stack.Screen name="SyncIssues" component={SyncIssuesScreen} />
