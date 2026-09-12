@@ -14,8 +14,18 @@ export function setAuthToken(token: string | null) {
   authToken = token;
 }
 
+const DEFAULT_API_BASE_URL = 'http://45.10.154.35:8081/api/v1';
+
+export const getBaseUrl = (): string => {
+  const url = Config?.API_BASE_URL;
+  if (url && typeof url === 'string' && url.trim().length > 0 && !url.includes('localhost')) {
+    return url.trim();
+  }
+  return DEFAULT_API_BASE_URL;
+};
+
 const apiClient = axios.create({
-  baseURL: Config.API_BASE_URL || 'http://localhost:3030/api/v1',
+  baseURL: getBaseUrl(),
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
@@ -24,6 +34,10 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
+  // Dynamically ensure the active baseURL is always applied
+  if (!config.baseURL || config.baseURL.includes('localhost')) {
+    config.baseURL = getBaseUrl();
+  }
   const token = authToken || useAuthStore.getState().token;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -90,7 +104,7 @@ apiClient.interceptors.response.use(
 
         const newToken = data.token;
         setAuthToken(newToken);
-        
+
         // Update Zustand store token state
         useAuthStore.setState({ token: newToken });
 

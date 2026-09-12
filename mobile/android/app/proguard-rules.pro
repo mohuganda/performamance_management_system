@@ -8,3 +8,8 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Add any project specific keep options here:
+-keep class ug.go.moh.pms.BuildConfig { *; }
+-keepclassmembers class ug.go.moh.pms.BuildConfig {
+    public static final java.lang.String *;
+}
+-keep class com.lugg.RNCConfig.** { *; }

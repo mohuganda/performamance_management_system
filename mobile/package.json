@@ -1,6 +1,6 @@
 {
   "name": "ug.go.moh.pms",
-  "version": "1.0.2",
+  "version": "1.0.10",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -9,13 +9,13 @@
     "start": "react-native start",
     "start:reset": "react-native start --reset-cache",
     "test": "jest",
-    "prebuild": "./scripts/bump-version.sh",
-    "clean:android": "cd android && ./gradlew clean",
-    "build:debug": "npm run prebuild && cd android && ./gradlew assembleDebug",
-    "build:apk": "npm run prebuild && cd android && ./gradlew assembleRelease",
-    "build:aab": "npm run prebuild && cd android && ./gradlew bundleRelease",
+    "prebuild": "node ./scripts/bump-version.js",
+    "clean:android": "node ./scripts/gradle.js clean",
+    "build:debug": "npm run prebuild && node ./scripts/gradle.js assembleDebug",
+    "build:apk": "npm run prebuild && node ./scripts/gradle.js assembleRelease",
+    "build:aab": "npm run prebuild && node ./scripts/gradle.js bundleRelease",
     "create-appicon": "iconset create ./assets/app_logo.svg",
-    "signingReport": "cd android && ./gradlew signingReport"
+    "signingReport": "node ./scripts/gradle.js signingReport"
   },
   "dependencies": {
     "@nozbe/watermelondb": "^0.28.0",
