@@ -74,7 +74,6 @@ function includedLabels(sections: PerformanceDocumentPdfInput['sections']) {
 
 export async function exportPerformanceDocumentPdf(input: PerformanceDocumentPdfInput) {
   const referenceLine = [
-    input.staffName ? `Officer: ${input.staffName}` : null,
     input.ppaStatus ? `PPA status: ${input.ppaStatus.replace(/_/g, ' ')}` : null,
     input.copyKind === 'official' ? 'Official verified copy' : 'Working copy',
   ]
@@ -92,7 +91,10 @@ export async function exportPerformanceDocumentPdf(input: PerformanceDocumentPdf
     copyKind: input.copyKind,
   })
 
-  const { doc, contentTop, contentBottomMargin, marginX } = pdf
+  const { doc, contentTop, contentBottomMargin, marginX, logo } = pdf
+  if (!logo) {
+    console.warn('MoH coat of arms could not be rasterised for the PDF header')
+  }
   let cursorY = contentTop
 
   const ensureSpace = (neededMm: number) => {
