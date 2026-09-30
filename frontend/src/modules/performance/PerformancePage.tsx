@@ -1058,7 +1058,7 @@ export function PerformancePage() {
                       onClick={() => openPrint('ppa')}
                     >
                       <Printer className="h-4 w-4" />
-                      Print PPA / PDF
+                      Download PPA PDF
                     </Button>
                   </div>
                 </Card>
@@ -1072,7 +1072,7 @@ export function PerformancePage() {
                     onClick={() => openPrint('ppa')}
                   >
                     <Printer className="h-4 w-4" />
-                    Print draft PPA
+                    Download PPA PDF
                   </Button>
                 </div>
               ) : null}
@@ -1224,7 +1224,7 @@ export function PerformancePage() {
                         onClick={() => openPrint('current_period')}
                       >
                         <Printer className="h-4 w-4" />
-                        Print {reportType.toUpperCase()}
+                        Download {reportType.toUpperCase()} PDF
                       </Button>
                       <Button
                         {...mt}
@@ -1234,7 +1234,7 @@ export function PerformancePage() {
                         onClick={() => openPrint('endterm_pack')}
                       >
                         <Printer className="h-4 w-4" />
-                        Full pack (PPA + all periods)
+                        Full pack PDF
                       </Button>
                       <Button
                         {...mt}
@@ -1243,7 +1243,7 @@ export function PerformancePage() {
                         className="rounded-sm normal-case text-moh-green"
                         onClick={() => openPrint('custom')}
                       >
-                        Customise print…
+                        Customise PDF…
                       </Button>
                     </div>
                   ) : null}
@@ -1435,7 +1435,7 @@ export function PerformancePage() {
                         onClick={() => openPrint('current_period')}
                       >
                         <Printer className="h-4 w-4" />
-                        {reportType === 'endterm' ? 'Print appraisal pack' : `Print ${reportType.toUpperCase()}`}
+                        {reportType === 'endterm' ? 'Download appraisal PDF' : `Download ${reportType.toUpperCase()} PDF`}
                       </Button>
                     </div>
                   ) : reportStatus === 'returned' ? (

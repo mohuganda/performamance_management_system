@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import coatOfArms from '@/assets/uganda-coat-of-arms.svg'
+import { svgToPngDataUrl } from '@/utils/officialPdf'
 
 export type PeriodScore = {
   report_type: string
@@ -53,31 +54,6 @@ function statusLabel(submission?: string, approval?: string) {
 function scoreCell(p?: PeriodScore) {
   if (!p?.has_entries && !(p && p.normalized_score > 0)) return '—'
   return `${p.normalized_score}% (${p.raw_weighted_score} raw)`
-}
-
-async function svgToPngDataUrl(svgUrl: string, size = 96): Promise<string | null> {
-  try {
-    const res = await fetch(svgUrl)
-    const svgText = await res.text()
-    const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const img = new Image()
-    img.src = url
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve()
-      img.onerror = () => reject(new Error('logo load failed'))
-    })
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return null
-    ctx.drawImage(img, 0, 0, size, size)
-    URL.revokeObjectURL(url)
-    return canvas.toDataURL('image/png')
-  } catch {
-    return null
-  }
 }
 
 export function exportPerformanceReportExcel(report: PerformanceStatusReport, rows = report.rows) {
