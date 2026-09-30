@@ -122,7 +122,7 @@ export async function exportPerformanceDocumentPdf(input: PerformanceDocumentPdf
   ensureSpace(22)
   doc.setDrawColor(200, 200, 200)
   doc.setFillColor(250, 250, 250)
-  doc.roundedRect(marginX, cursorY, doc.internal.pageSize.getWidth() - marginX * 2, 18, 1, 1, 'FD')
+  doc.rect(marginX, cursorY, doc.internal.pageSize.getWidth() - marginX * 2, 18, 'FD')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(100, 100, 100)
@@ -322,5 +322,16 @@ export async function exportPerformanceDocumentPdf(input: PerformanceDocumentPdf
   pdf.applyChrome()
 
   const fy = (input.financialYear || 'fy').replace(/\s+/g, '_')
-  doc.save(`MoH_PMS_${slugifyFilename(input.documentTitle)}_${fy}.pdf`)
+  const filename = `MoH_PMS_${slugifyFilename(input.documentTitle)}_${fy}.pdf`
+  // Open in a new tab for browser preview (user can still save from the viewer).
+  const blob = doc.output('blob')
+  const url = URL.createObjectURL(blob)
+  const preview = window.open(url, '_blank', 'noopener,noreferrer')
+  if (!preview) {
+    // Popup blocked — fall back to download
+    doc.save(filename)
+  } else {
+    // Revoke after the tab has a chance to load the blob
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  }
 }

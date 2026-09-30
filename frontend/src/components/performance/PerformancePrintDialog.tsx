@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { Button, Typography } from '@material-tailwind/react'
-import { Download, X } from 'lucide-react'
+import { Eye, X } from 'lucide-react'
 import { documentsService, type DocumentType } from '@/api/services/documents'
 import { performanceService } from '@/api/services/mobile'
 import { useLetterhead } from '@/hooks/useLetterhead'
@@ -311,7 +311,7 @@ export function PerformancePrintDialog({
         periodReports,
         appraisal,
       })
-      toast.success('PDF downloaded.', 'Performance PDF')
+      toast.success('PDF opened in a new tab for preview.', 'Performance PDF')
       onClose()
     } catch (error) {
       notifyApiError(error, 'Could not generate PDF')
@@ -333,10 +333,10 @@ export function PerformancePrintDialog({
         <div className="flex items-start justify-between gap-3 border-b border-ui-border px-4 py-3">
           <div>
             <Typography {...mt} className="text-sm font-bold uppercase text-ui-text">
-              Download PDF
+              Preview PDF
             </Typography>
             <Typography {...mt} className="mt-1 text-sm text-ui-muted">
-              Generated with jsPDF · MoH coat of arms in the footer
+              Opens in your browser · MoH letterhead · square corners
             </Typography>
           </div>
           <button
@@ -412,8 +412,8 @@ export function PerformancePrintDialog({
           </div>
 
           <p className="text-xs text-ui-muted">
-            Downloads a real PDF (jsPDF). Footer includes the Uganda coat of arms, MoH contact
-            details, and a verification QR when the document is approved.
+            Opens a PDF preview in a new browser tab (jsPDF). You can print or save from there.
+            Approved documents include a verification QR when available.
           </p>
         </div>
 
@@ -427,8 +427,8 @@ export function PerformancePrintDialog({
             disabled={!anySelected || loadingExtra || generating}
             onClick={handleDownloadPdf}
           >
-            <Download className="h-4 w-4" />
-            {loadingExtra ? 'Loading…' : generating ? 'Generating PDF…' : 'Download PDF'}
+            <Eye className="h-4 w-4" />
+            {loadingExtra ? 'Loading…' : generating ? 'Preparing…' : 'Preview PDF'}
           </Button>
         </div>
       </div>
