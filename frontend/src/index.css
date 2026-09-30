@@ -532,4 +532,14 @@ html.dark .to-moh-background\/40 {
   .print\:hidden {
     display: none !important;
   }
+  .official-print-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .official-print-section + .official-print-section {
+    break-before: page;
+    page-break-before: always;
+    margin-top: 0;
+    padding-top: 0;
+  }
 }

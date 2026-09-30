@@ -12,7 +12,7 @@ import {
   Textarea,
   Typography,
 } from '@material-tailwind/react'
-import { BarChart3, ClipboardList, LayoutDashboard, TrendingUp, UserCheck } from 'lucide-react'
+import { BarChart3, ClipboardList, LayoutDashboard, Printer, TrendingUp, UserCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { performanceService } from '@/api/services/mobile'
 import {
@@ -20,7 +20,10 @@ import {
   useAppraisalFormState,
   type AppraisalBundle,
 } from '@/components/performance/PerformanceAppraisalSections'
-import { OfficialDocumentPrintButton } from '@/components/organisms/OfficialDocumentPrintButton'
+import {
+  PerformancePrintDialog,
+  type PerformancePrintPreset,
+} from '@/components/performance/PerformancePrintDialog'
 import { PageHeader } from '@/components/organisms/PageHeader'
 import { ProcessGuide } from '@/components/organisms/ProcessGuide'
 import { QueryState } from '@/components/organisms/QueryState'
@@ -437,7 +440,7 @@ function KpiReportRow({
 }
 
 export function PerformancePage() {
-  const { quarter, staffId } = useAuthStore()
+  const { quarter, staffId, displayName } = useAuthStore()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('overview')
   const [reportType, setReportType] = useState('q1')
@@ -453,6 +456,13 @@ export function PerformancePage() {
   const [planAlert, setPlanAlert] = useState<{ type: FormStatusType; message: string; title?: string } | null>(
     null,
   )
+  const [printOpen, setPrintOpen] = useState(false)
+  const [printPreset, setPrintPreset] = useState<PerformancePrintPreset>('custom')
+
+  const openPrint = (preset: PerformancePrintPreset) => {
+    setPrintPreset(preset)
+    setPrintOpen(true)
+  }
 
   const summaryQuery = useQuery({
     queryKey: ['performance', 'summary'],
@@ -600,20 +610,6 @@ export function PerformancePage() {
       setPlanAlert({ type: 'error', title: 'Submission failed', message: msg })
       notifyApiError(error, 'Could not submit performance plan')
     },
-  })
-
-  const saveAppraisalMutation = useMutation({
-    mutationFn: () =>
-      performanceService.saveAppraisal({
-        report_type: 'endterm',
-        action_plans: actionPlans,
-        appraisee_comments: appraiseeComments,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['performance'] })
-      toast.success('Appraisal sections saved.', 'Saved')
-    },
-    onError: (error: unknown) => notifyApiError(error, 'Could not save appraisal'),
   })
 
   const submitReportMutation = useMutation({
@@ -1054,18 +1050,31 @@ export function PerformancePage() {
                         Weights and targets can no longer be changed for this financial year.
                       </Typography>
                     </div>
-                    <OfficialDocumentPrintButton
-                      documentType="ppa"
-                      refId={ppaId}
-                      enabled={ppaApproved && ppaId > 0}
-                      documentTitle="Performance plan (PPA)"
-                      subtitle={summaryQuery.data?.financial_year}
-                      referenceLine={`Status: approved · Total weight ${summaryQuery.data?.ppa?.total_weight ?? 0}%`}
+                    <Button
+                      {...mt}
+                      size="sm"
+                      variant="outlined"
+                      className="flex items-center gap-1.5 rounded-sm normal-case"
+                      onClick={() => openPrint('ppa')}
                     >
-                      <PrintKpiPlanTable groups={groups} planWeights={planWeights} />
-                    </OfficialDocumentPrintButton>
+                      <Printer className="h-4 w-4" />
+                      Print PPA / PDF
+                    </Button>
                   </div>
                 </Card>
+              ) : ppaId > 0 ? (
+                <div className="mb-4 flex justify-end">
+                  <Button
+                    {...mt}
+                    size="sm"
+                    variant="outlined"
+                    className="flex items-center gap-1.5 rounded-sm normal-case"
+                    onClick={() => openPrint('ppa')}
+                  >
+                    <Printer className="h-4 w-4" />
+                    Print draft PPA
+                  </Button>
+                </div>
               ) : null}
               {ppaStatus === 'supervisor_review' ? (
                 <Card {...mt} className="mb-4 rounded-sm border border-amber-200 bg-amber-50 p-4">
@@ -1199,11 +1208,46 @@ export function PerformancePage() {
                     status: {reportFormQuery.data?.ppa_status ?? ppaStatus}
                   </Typography>
                 </div>
-                <ReportPeriodPicker
-                  reportType={reportType}
-                  quarterWindows={quarterWindows}
-                  onSelect={setReportType}
-                />
+                <div className="flex w-full flex-col gap-3 lg:w-auto lg:items-end">
+                  <ReportPeriodPicker
+                    reportType={reportType}
+                    quarterWindows={quarterWindows}
+                    onSelect={setReportType}
+                  />
+                  {ppaApproved ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        {...mt}
+                        size="sm"
+                        variant="outlined"
+                        className="flex items-center gap-1.5 rounded-sm normal-case"
+                        onClick={() => openPrint('current_period')}
+                      >
+                        <Printer className="h-4 w-4" />
+                        Print {reportType.toUpperCase()}
+                      </Button>
+                      <Button
+                        {...mt}
+                        size="sm"
+                        variant="outlined"
+                        className="flex items-center gap-1.5 rounded-sm normal-case"
+                        onClick={() => openPrint('endterm_pack')}
+                      >
+                        <Printer className="h-4 w-4" />
+                        Full pack (PPA + all periods)
+                      </Button>
+                      <Button
+                        {...mt}
+                        size="sm"
+                        variant="text"
+                        className="rounded-sm normal-case text-moh-green"
+                        onClick={() => openPrint('custom')}
+                      >
+                        Customise print…
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
               {reportingConfig?.test_override ? (
@@ -1373,44 +1417,26 @@ export function PerformancePage() {
                       appraiseeComments={appraiseeComments}
                       onActionPlansChange={setActionPlans}
                       onAppraiseeCommentsChange={setAppraiseeComments}
-                      onSaveDraft={
-                        appraisalBundle.can_edit_action_plan
-                          ? () => saveAppraisalMutation.mutate()
-                          : undefined
-                      }
-                      savingDraft={saveAppraisalMutation.isPending}
                     />
-                    {saveAppraisalMutation.isSuccess ? (
-                      <Typography {...mt} className="mt-2 text-sm text-moh-green">
-                        Appraisal sections saved.
-                      </Typography>
-                    ) : null}
                   </div>
                 ) : null}
 
                 <div className="mt-6 rounded-sm border border-ui-border bg-ui-subtle/30 p-4">
                   {reportApproved ? (
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                       <Typography {...mt} className="text-sm font-medium text-moh-success">
                         This report is approved and locked.
                       </Typography>
-                      <OfficialDocumentPrintButton
-                        documentType={reportType === 'endterm' ? 'appraisal' : 'quarterly_report'}
-                        refId={reportId}
-                        enabled={reportApproved && reportId > 0}
-                        documentTitle={
-                          reportType === 'endterm'
-                            ? 'Final appraisal'
-                            : `Performance report — ${reportType.toUpperCase()}`
-                        }
-                        subtitle={reportFormQuery.data?.financial_year}
-                        referenceLine={`Period: ${reportType.toUpperCase()} · Status: approved`}
-                        buttonLabel={
-                          reportType === 'endterm' ? 'Print appraisal' : 'Print official report'
-                        }
+                      <Button
+                        {...mt}
+                        size="sm"
+                        variant="outlined"
+                        className="flex items-center gap-1.5 rounded-sm normal-case"
+                        onClick={() => openPrint('current_period')}
                       >
-                        <PrintReportTable groups={reportGroups} />
-                      </OfficialDocumentPrintButton>
+                        <Printer className="h-4 w-4" />
+                        {reportType === 'endterm' ? 'Print appraisal pack' : `Print ${reportType.toUpperCase()}`}
+                      </Button>
                     </div>
                   ) : reportStatus === 'returned' ? (
                     <Typography {...mt} className="mb-3 text-sm text-moh-warning">
@@ -1568,88 +1594,27 @@ export function PerformancePage() {
           ) : null}
         </>
       )}
-    </div>
-  )
-}
 
-function PrintKpiPlanTable({
-  groups,
-  planWeights,
-}: {
-  groups: SubjectGroup[]
-  planWeights: Record<number, number>
-}) {
-  return (
-    <div className="space-y-4">
-      {groups.map((group) => {
-        const kpis = asArray<KpiItem>(group.kpis).filter(
-          (k) => k.in_current_ppa || Number(planWeights[k.id] ?? 0) > 0,
-        )
-        if (kpis.length === 0) return null
-        return (
-          <div key={group.subject_area_name}>
-            <p className="mb-1 text-xs font-bold uppercase tracking-wide">{group.subject_area_name}</p>
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-black/30 text-left">
-                  <th className="py-1 pr-2">Code</th>
-                  <th className="py-1 pr-2">Indicator</th>
-                  <th className="py-1 pr-2 text-right">Weight %</th>
-                  <th className="py-1 text-right">Target</th>
-                </tr>
-              </thead>
-              <tbody>
-                {kpis.map((kpi) => (
-                  <tr key={kpi.id} className="border-b border-black/10 align-top">
-                    <td className="whitespace-nowrap py-1.5 pr-2">{kpi.code}</td>
-                    <td className="py-1.5 pr-2">{kpi.name}</td>
-                    <td className="py-1.5 pr-2 text-right">
-                      {Number(planWeights[kpi.id] ?? kpi.weight_percentage ?? 0)}
-                    </td>
-                    <td className="py-1.5 text-right">{kpi.target_value ?? kpi.default_target ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function PrintReportTable({ groups }: { groups: ReportGroup[] }) {
-  return (
-    <div className="space-y-4">
-      {groups.map((group) => {
-        const kpis = asArray<ReportKpi>(group.kpis)
-        if (kpis.length === 0) return null
-        return (
-          <div key={group.subject_area_name}>
-            <p className="mb-1 text-xs font-bold uppercase tracking-wide">{group.subject_area_name}</p>
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-black/30 text-left">
-                  <th className="py-1 pr-2">Code</th>
-                  <th className="py-1 pr-2">Indicator</th>
-                  <th className="py-1 pr-2 text-right">Target</th>
-                  <th className="py-1 text-right">Actual</th>
-                </tr>
-              </thead>
-              <tbody>
-                {kpis.map((kpi) => (
-                  <tr key={kpi.ppa_kpi_id} className="border-b border-black/10 align-top">
-                    <td className="whitespace-nowrap py-1.5 pr-2">{kpi.code}</td>
-                    <td className="py-1.5 pr-2">{kpi.name}</td>
-                    <td className="py-1.5 pr-2 text-right">{kpi.target_value ?? '—'}</td>
-                    <td className="py-1.5 text-right">{kpi.actual_value ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )
-      })}
+      <PerformancePrintDialog
+        open={printOpen}
+        onClose={() => setPrintOpen(false)}
+        preset={printPreset}
+        currentPeriod={reportType}
+        financialYear={
+          String(reportFormQuery.data?.financial_year ?? summaryQuery.data?.financial_year ?? '')
+        }
+        staffName={displayName}
+        ppaId={ppaId}
+        ppaStatus={ppaStatus}
+        ppaApproved={ppaApproved}
+        planGroups={groups}
+        planWeights={planWeights}
+        planTargets={planTargets}
+        currentReportGroups={reportGroups}
+        currentReportId={reportId}
+        currentReportStatus={reportStatus}
+        appraisal={appraisalBundle}
+      />
     </div>
   )
 }

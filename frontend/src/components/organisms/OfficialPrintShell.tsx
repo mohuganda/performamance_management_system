@@ -34,12 +34,17 @@ export function OfficialPrintShell({
         className,
       )}
     >
-      <header className="official-print-header border-b border-black/20 pb-4 text-center">
-        <img
-          src={coatOfArms}
-          alt="Republic of Uganda coat of arms"
-          className="mx-auto h-20 w-20 object-contain print:h-16 print:w-16"
-        />
+      <header className="official-print-header border-b-2 border-black pb-4 text-center">
+        <div className="flex flex-col items-center gap-2">
+          <img
+            src={coatOfArms}
+            alt="Republic of Uganda coat of arms"
+            className="mx-auto h-20 w-20 object-contain print:h-[18mm] print:w-[18mm]"
+          />
+          <div className="h-1 w-24 bg-[#D90000]" aria-hidden />
+          <div className="h-1 w-24 bg-[#FCDC04]" aria-hidden />
+          <div className="h-1 w-24 bg-black" aria-hidden />
+        </div>
         <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-black/70">
           Republic of Uganda
         </p>

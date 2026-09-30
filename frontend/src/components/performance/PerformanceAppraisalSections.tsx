@@ -52,7 +52,6 @@ const ROLE_LABELS: Record<string, string> = {
   appraisee: 'Comments of the Appraisee (Staff)',
   appraiser: 'Comments of the Appraiser',
   countersigning: 'Comments of the Countersigning Officer / Supervisor of Appraiser',
-  responsible_officer: 'Comments of the Responsible Officer',
 }
 
 function formatTrailAction(action: string) {
@@ -76,8 +75,6 @@ type Props = {
   appraiseeComments: string
   onActionPlansChange: (rows: ActionPlanRow[]) => void
   onAppraiseeCommentsChange: (value: string) => void
-  onSaveDraft?: () => void
-  savingDraft?: boolean
   reviewMode?: boolean
   reviewDrafts?: Record<string, { comments: string; job_title: string }>
   onReviewDraftChange?: (key: string, patch: Partial<{ comments: string; job_title: string }>) => void
@@ -98,8 +95,6 @@ export function PerformanceAppraisalSections({
   appraiseeComments,
   onActionPlansChange,
   onAppraiseeCommentsChange,
-  onSaveDraft,
-  savingDraft,
   reviewMode,
   reviewDrafts,
   onReviewDraftChange,
@@ -359,7 +354,10 @@ export function PerformanceAppraisalSections({
         ) : null}
 
         {otherComments
-          .filter((c) => c.comment_role !== 'appraisee')
+          .filter(
+            (c) =>
+              c.comment_role !== 'appraisee' && c.comment_role !== 'responsible_officer',
+          )
           .map((row) => {
             const key = commentKey(row)
             return (
@@ -371,7 +369,6 @@ export function PerformanceAppraisalSections({
                 comments={reviewDrafts?.[key]?.comments ?? row.comments}
                 jobTitle={reviewDrafts?.[key]?.job_title ?? row.job_title}
                 onCommentsChange={(v) => onReviewDraftChange?.(key, { comments: v })}
-                onJobTitleChange={(v) => onReviewDraftChange?.(key, { job_title: v })}
                 onApprove={
                   row.can_edit && reviewMode
                     ? () => onReviewSubmit?.(key, row.comment_role, 'approve')
@@ -382,20 +379,6 @@ export function PerformanceAppraisalSections({
             )
           })}
       </section>
-
-      {onSaveDraft && appraisal.can_edit_action_plan ? (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            {...mt}
-            variant="outlined"
-            className="rounded-sm normal-case"
-            disabled={savingDraft}
-            onClick={onSaveDraft}
-          >
-            Save appraisal sections
-          </Button>
-        </div>
-      ) : null}
     </div>
   )
 }

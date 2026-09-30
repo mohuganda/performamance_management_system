@@ -175,11 +175,21 @@ func (s *PerformanceService) buildCommentRows(
 		byKey[key] = c
 	}
 
-	rows := make([]AppraisalCommentRow, 0, 4+len(supervisors))
+	rows := make([]AppraisalCommentRow, 0, 3+len(supervisors))
 
-	// Appraisee
+	// Appraisee — always the staff who owns / submits the report
 	appraisee := byKey["appraisee:"]
-	rows = append(rows, s.commentRowFromModel(appraisee, "appraisee", nil, report, viewerStaffID))
+	appraiseeRow := s.commentRowFromModel(appraisee, "appraisee", nil, report, viewerStaffID)
+	if appraiseeRow.AuthorStaffID == 0 {
+		appraiseeRow.AuthorStaffID = report.StaffID
+	}
+	if appraiseeRow.AuthorName == "" {
+		appraiseeRow.AuthorName = staffDisplayNameFromID(report.StaffID)
+	}
+	if appraiseeRow.JobTitle == "" {
+		appraiseeRow.JobTitle = staffJobTitleFromID(report.StaffID)
+	}
+	rows = append(rows, appraiseeRow)
 
 	// One section per appraiser supervisor
 	for _, sup := range supervisors {
@@ -188,6 +198,16 @@ func (s *PerformanceService) buildCommentRows(
 		row := s.commentRowFromModel(byKey[key], "appraiser", &seq, report, viewerStaffID)
 		if row.AuthorName == "" {
 			row.AuthorName = sup.SupervisorName
+		}
+		if row.JobTitle == "" {
+			if sup.SupervisorJobTitle != "" {
+				row.JobTitle = sup.SupervisorJobTitle
+			} else {
+				row.JobTitle = staffJobTitleFromID(sup.SupervisorStaffID)
+			}
+		}
+		if row.AuthorStaffID == 0 {
+			row.AuthorStaffID = sup.SupervisorStaffID
 		}
 		if row.CanEdit && sup.SupervisorStaffID != viewerStaffID {
 			row.CanEdit = false
@@ -198,19 +218,44 @@ func (s *PerformanceService) buildCommentRows(
 		rows = append(rows, row)
 	}
 
-	// Countersigning officer
+	// Countersigning officer — assigned supervisor (prefer secondary sequence, else primary)
 	counter := byKey["countersigning:"]
 	counterRow := s.commentRowFromModel(counter, "countersigning", nil, report, viewerStaffID)
 	counterRow.CanEdit = s.canCountersign(report, viewerStaffID, supervisors)
+	if counterSup := countersigningSupervisor(supervisors); counterSup != nil {
+		if counterRow.AuthorStaffID == 0 {
+			counterRow.AuthorStaffID = counterSup.SupervisorStaffID
+		}
+		if counterRow.AuthorName == "" {
+			counterRow.AuthorName = counterSup.SupervisorName
+			if counterRow.AuthorName == "" {
+				counterRow.AuthorName = staffDisplayNameFromID(counterSup.SupervisorStaffID)
+			}
+		}
+		if counterRow.JobTitle == "" {
+			if counterSup.SupervisorJobTitle != "" {
+				counterRow.JobTitle = counterSup.SupervisorJobTitle
+			} else {
+				counterRow.JobTitle = staffJobTitleFromID(counterSup.SupervisorStaffID)
+			}
+		}
+	}
 	rows = append(rows, counterRow)
 
-	// Responsible officer
-	resp := byKey["responsible_officer:"]
-	respRow := s.commentRowFromModel(resp, "responsible_officer", nil, report, viewerStaffID)
-	respRow.CanEdit = s.canResponsibleOfficer(report, viewerStaffID)
-	rows = append(rows, respRow)
-
 	return rows
+}
+
+// countersigningSupervisor prefers a higher-sequence supervisor; falls back to the primary.
+func countersigningSupervisor(supervisors []SupervisorAssignment) *SupervisorAssignment {
+	if len(supervisors) == 0 {
+		return nil
+	}
+	for i := range supervisors {
+		if supervisors[i].Sequence > 1 {
+			return &supervisors[i]
+		}
+	}
+	return &supervisors[0]
 }
 
 func appraisalCommentKey(role string, seq *uint8) string {
@@ -344,7 +389,15 @@ func (s *PerformanceService) SaveAppraisalDraft(staffID uint, input AppraisalSav
 		return AppraisalBundle{}, err
 	}
 
-	if err := s.upsertAppraisalComment(report.ID, staffID, "appraisee", nil, input.AppraiseeComments, "", false); err != nil {
+	if err := s.upsertAppraisalComment(
+		report.ID,
+		staffID,
+		"appraisee",
+		nil,
+		input.AppraiseeComments,
+		staffJobTitleFromID(staffID),
+		false,
+	); err != nil {
 		return AppraisalBundle{}, err
 	}
 
@@ -431,6 +484,24 @@ func staffDisplayNameFromID(staffID uint) string {
 		return ""
 	}
 	return staffDisplayName(staff)
+}
+
+func staffJobTitleFromID(staffID uint) string {
+	if staffID == 0 {
+		return ""
+	}
+	var contract models.StaffContract
+	if err := facades.Orm().Query().
+		Where("staff_id", staffID).
+		Where("contract_status", "active").
+		First(&contract); err != nil || contract.ID == 0 || contract.JobID == 0 {
+		return ""
+	}
+	var job models.JobTitle
+	if err := facades.Orm().Query().Where("id", contract.JobID).First(&job); err != nil || job.ID == 0 {
+		return ""
+	}
+	return job.JobTitle
 }
 
 func (s *PerformanceService) appendTrail(reportID, actorStaffID uint, action, role, comments string) error {
