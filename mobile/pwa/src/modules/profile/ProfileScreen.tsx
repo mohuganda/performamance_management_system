@@ -1,8 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MapContainer, TileLayer, Marker, Circle } from 'react-leaflet';
-import L from 'leaflet';
-import { Camera, MapPin, Image as ImageIcon } from 'lucide-react';
+import { GoogleMap, Marker, Circle, useJsApiLoader } from '@react-google-maps/api';
+import { Camera, MapPin, Image as ImageIcon, AlertTriangle, RefreshCw } from 'lucide-react';
 import { MainTemplate } from '../../components/templates';
 import { Card } from '../../components/atoms/Card';
 import { Badge } from '../../components/atoms/Badge';
@@ -10,26 +9,19 @@ import { Button } from '../../components/atoms/Button';
 import { UserAvatar } from '../../components/atoms/UserAvatar';
 import { SignaturePadModal } from '../../components/molecules/SignaturePadModal';
 import { useAuthStore } from '../../stores/authStore';
+import { useThemeStore } from '../../stores/themeStore';
+import { config } from '../../config';
 import { Toaster } from '../../utils/toast';
 import { getApiErrorMessage } from '../../api/client';
 import { useProfileQuery, useUpdateProfileMutation } from '../../hooks/useProfile';
 import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage';
 import { formatDateTime } from '../../utils/date';
+import {
+  GOOGLE_MAPS_SCRIPT_ID,
+  getMapOptions,
+  getDutyStationPinIcon,
+} from '../../utils/googleMaps';
 import { StaffDetail, AuthUser, AccountInfo } from '../../api/auth/types';
-
-const dutyStationPinIcon = L.divIcon({
-  className: 'custom-duty-station-pin',
-  html: `
-    <div style="display:flex; flex-direction:column; align-items:center; transform: translate(-50%, -100%);">
-      <div style="width:28px; height:28px; border-radius:50%; background:#059669; border:2px solid #FFFFFF; box-shadow:0 2px 4px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-      </div>
-      <div style="width:8px; height:8px; background:#059669; transform:rotate(45deg); margin-top:-4px;"></div>
-    </div>
-  `,
-  iconSize: [28, 32],
-  iconAnchor: [14, 32],
-});
 
 const cleanPrefix = (str?: string | null): string => {
   if (!str) return '—';
@@ -133,6 +125,17 @@ export const ProfileScreen: React.FC = () => {
   const radiusMeters = staff?.effective_duty_station?.radius_meters || 500;
   const dutyStationLabel =
     staff?.effective_duty_station?.label || staff?.facility_name || t('profile_duty_station');
+
+  const { isDark } = useThemeStore();
+  const { isLoaded: isMapLoaded, loadError: mapLoadError } = useJsApiLoader({
+    id: GOOGLE_MAPS_SCRIPT_ID,
+    googleMapsApiKey: config.googleMapsApiKey,
+  });
+  const mapOptions = useMemo(() => getMapOptions(isDark), [isDark]);
+  const dutyStationIcon = useMemo(
+    () => (isMapLoaded ? getDutyStationPinIcon() : undefined),
+    [isMapLoaded]
+  );
 
   return (
     <MainTemplate title={t('profile_title')} showBack>
@@ -320,32 +323,48 @@ export const ProfileScreen: React.FC = () => {
                 </div>
 
                 <div className="h-52 w-full rounded-none overflow-hidden border border-gray-200 dark:border-zinc-700 relative z-0">
-                  <MapContainer
-                    key={`${dutyStationLat}-${dutyStationLng}`}
-                    center={[dutyStationLat!, dutyStationLng!]}
-                    zoom={15}
-                    scrollWheelZoom={false}
-                    className="h-full w-full"
-                  >
-                    <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-                    <Marker
-                      position={[dutyStationLat!, dutyStationLng!]}
-                      icon={dutyStationPinIcon}
-                    />
-                    <Circle
-                      center={[dutyStationLat!, dutyStationLng!]}
-                      radius={radiusMeters}
-                      pathOptions={{
-                        fillColor: '#10B981',
-                        fillOpacity: 0.2,
-                        color: '#059669',
-                        weight: 2,
-                      }}
-                    />
-                  </MapContainer>
+                  {!config.googleMapsApiKey ? (
+                    <div className="h-full w-full flex flex-col items-center justify-center bg-zinc-100 dark:bg-zinc-800/60 text-zinc-500 text-xs p-4 text-center">
+                      <AlertTriangle size={24} className="text-amber-500 mb-2" />
+                      <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                        {t('maps_missing_key')}
+                      </span>
+                    </div>
+                  ) : mapLoadError ? (
+                    <div className="h-full w-full flex flex-col items-center justify-center bg-zinc-100 dark:bg-zinc-800/60 text-zinc-500 text-xs p-4 text-center">
+                      <AlertTriangle size={24} className="text-red-500 mb-2" />
+                      <span className="font-medium text-red-600 dark:text-red-400">
+                        {t('maps_load_error')}
+                      </span>
+                    </div>
+                  ) : !isMapLoaded ? (
+                    <div className="h-full w-full flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-800/40 text-zinc-400 text-xs gap-2">
+                      <RefreshCw size={20} className="animate-spin text-primary" />
+                      <span>{t('maps_loading')}</span>
+                    </div>
+                  ) : (
+                    <GoogleMap
+                      mapContainerStyle={{ width: '100%', height: '100%' }}
+                      center={{ lat: dutyStationLat!, lng: dutyStationLng! }}
+                      zoom={15}
+                      options={mapOptions}
+                    >
+                      <Marker
+                        position={{ lat: dutyStationLat!, lng: dutyStationLng! }}
+                        icon={dutyStationIcon}
+                      />
+                      <Circle
+                        center={{ lat: dutyStationLat!, lng: dutyStationLng! }}
+                        radius={radiusMeters}
+                        options={{
+                          fillColor: '#10B981',
+                          fillOpacity: 0.2,
+                          strokeColor: '#059669',
+                          strokeWeight: 2,
+                        }}
+                      />
+                    </GoogleMap>
+                  )}
                 </div>
                 <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2 italic">
                   {t('profile_geofence_legend')}

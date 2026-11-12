@@ -5,6 +5,7 @@ import { UpdateProfilePayload, MeResponse } from '../../api/auth/types';
 import { Toaster } from '../../utils/toast';
 import i18n from '../i18n';
 import { ProfileDbService } from '../../db/services/ProfileDbService';
+import { invalidateImageCache } from './useAuthenticatedImage';
 
 export function useProfileSync() {
   return useQuery({
@@ -64,7 +65,9 @@ export function useUpdateProfileMutation() {
       }
       Toaster.error(i18n.t('profile_update_failed_desc'), i18n.t('profile_update_failed'));
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      if (variables?.profile_photo) invalidateImageCache();
+      if (variables?.signature_image) invalidateImageCache();
       Toaster.success(i18n.t('profile_update_success_desc'), i18n.t('profile_update_success'));
     },
   });

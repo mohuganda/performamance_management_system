@@ -172,9 +172,9 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
                 <View className={`flex-row items-center gap-1 px-2.5 py-1 border ${statusStyle.bg} ${statusStyle.border}`}>
                   <StatusIcon size={12} color={statusStyle.color} />
                   <Text className={`text-[10px] font-bold capitalize ${statusStyle.text}`}>
-                    {req.status === 'pending_sync' ? t('oos_pending_sync_status', 'Pending Sync') : 
-                     req.status === 'sync_failed' ? t('oos_sync_failed_status', 'Sync Failed') :
-                     t(`oos_${req.status}_status`, { defaultValue: req.status })}
+                    {req.status === 'pending_sync' ? t('oos_pending_sync_status', 'Pending Sync') :
+                      req.status === 'sync_failed' ? t('oos_sync_failed_status', 'Sync Failed') :
+                        t(`oos_${req.status}_status`, { defaultValue: req.status })}
                   </Text>
                 </View>
               </View>
@@ -202,33 +202,6 @@ const BaseOosHistoryTab: React.FC<OosHistoryTabProps> = ({ requests }) => {
                 </View>
               </View>
 
-              {/* Deliverables / Remarks details */}
-              {(req.expectedDeliverables || req.remarks) && (
-                <View className="mt-2 pt-2 border-t space-y-1.5" style={{ borderColor: `${colors.border}60` }}>
-                  {req.expectedDeliverables && (
-                    <View>
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colors.muted }}>
-                        {t('oos_form_deliverables')}
-                      </Text>
-                      <Text className="text-xs mt-0.5" numberOfLines={2} style={{ color: colors.text }}>
-                        {req.expectedDeliverables}
-                      </Text>
-                    </View>
-                  )}
-                  
-                  {req.remarks && (
-                    <View>
-                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colors.muted }}>
-                        {t('oos_form_remarks')}
-                      </Text>
-                      <Text className="text-xs mt-0.5" numberOfLines={2} style={{ color: colors.text }}>
-                        {req.remarks}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-              
               {isSyncFailed && req.syncError && (
                 <View className="bg-red-50 dark:bg-red-900/20 p-2 rounded mt-3 flex-row items-start">
                   <AlertTriangle size={14} color="#ef4444" style={{ marginTop: 2, marginRight: 6 }} />

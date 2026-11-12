@@ -15,12 +15,6 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Custom leaflet marker pin overrides */
-.leaflet-div-icon {
-  background: transparent !important;
-  border: none !important;
-}
-
 /* Custom fade in animation */
 @keyframes fadeIn {
   from { opacity: 0; }

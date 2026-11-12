@@ -7,6 +7,7 @@ export interface OosReason {
 export interface OosRequest {
   id: number;
   reason_id: number;
+  reason_name?: string;
   start_date: string;
   end_date: string;
   remarks?: string;

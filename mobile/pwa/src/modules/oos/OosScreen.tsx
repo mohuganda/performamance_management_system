@@ -1,24 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { MapPin, FileText, CheckSquare, Search, RefreshCw, Calendar, ChevronRight } from 'lucide-react';
+import {
+  MapPin,
+  FileText,
+  CheckSquare,
+  Search,
+  Calendar,
+  ChevronRight,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  RefreshCw,
+  User,
+  Check,
+  X,
+  ClipboardList,
+} from 'lucide-react';
 import { MainTemplate } from '../../components/templates';
 import { Card } from '../../components/atoms/Card';
-import { Badge } from '../../components/atoms/Badge';
 import { Button } from '../../components/atoms/Button';
 import { Input } from '../../components/atoms/Input';
 import { DateRangePicker } from '../../components/molecules/DateRangePicker';
 import { AttachmentPicker, AttachmentFile } from '../../components/molecules/AttachmentPicker';
-import { MapCard } from '../../components/molecules/MapCard';
+import { OosLocationPickerMap } from '../../components/molecules/OosLocationPickerMap';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuthStore } from '../../stores/authStore';
 import { Toaster } from '../../utils/toast';
 import { getApiErrorMessage } from '../../api/client';
-import { useOosReasonsQuery, useOosRequestsQuery, useCreateOosMutation } from '../../hooks/useOos';
+import {
+  useOosReasonsQuery,
+  useOosRequestsQuery,
+  useCreateOosMutation,
+  useOosPendingApprovalsQuery,
+  useApproveOosMutation,
+} from '../../hooks/useOos';
 import { usePlacesSearch } from '../../hooks/usePlacesSearch';
 import { OosSubmissionPayload } from '../../api/oos/types';
-import { GooglePlacePrediction } from '../../api/maps/types';
 import { formatDate } from '../../utils/date';
+
+function formatDateRange(start: string, end: string) {
+  if (!start) return '';
+  if (!end || start === end) return formatDate(start);
+  return `${formatDate(start)} to ${formatDate(end)}`;
+}
 
 export const OosScreen: React.FC = () => {
   const { t } = useTranslation();
@@ -29,11 +54,13 @@ export const OosScreen: React.FC = () => {
   const canApprove = hasPermission('oos.requests.approve');
   const [activeTab, setActiveTab] = useState<'history' | 'apply' | 'approvals'>('history');
 
-  // TanStack Query custom hooks offload all OOS data queries, caching, and mutation queueing
+  // TanStack Query custom hooks
   const { data: reasons = [], isLoading: isLoadingReasons } = useOosReasonsQuery();
   const { data: requests = [], isLoading: isLoadingRequests, refetch: refetchRequests } = useOosRequestsQuery();
-  const isLoading = isLoadingReasons || isLoadingRequests;
+  const { data: pendingApprovals = [], isLoading: isLoadingPending } = useOosPendingApprovalsQuery();
+
   const createMutation = useCreateOosMutation();
+  const approveMutation = useApproveOosMutation();
 
   // Form State
   const [selectedReasonId, setSelectedReasonId] = useState<number | null>(null);
@@ -42,10 +69,12 @@ export const OosScreen: React.FC = () => {
   const [destinationName, setDestinationName] = useState('');
   const [destinationAddress, setDestinationAddress] = useState('');
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
   const [expectedDeliverables, setExpectedDeliverables] = useState('');
   const [remarks, setRemarks] = useState('');
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [approvalComments, setApprovalComments] = useState<Record<number, string>>({});
 
   // Places Search custom hook
   const {
@@ -53,6 +82,7 @@ export const OosScreen: React.FC = () => {
     setSearchQuery,
     predictions,
     selectPrediction,
+    reverseGeocode,
     clearSearch,
   } = usePlacesSearch({
     onPlaceSelected: (res) => {
@@ -60,7 +90,49 @@ export const OosScreen: React.FC = () => {
       setDestinationAddress(res.formatted_address);
       setCoords({ latitude: res.latitude, longitude: res.longitude });
     },
+    onReverseGeocoded: (res) => {
+      setDestinationName(res.name);
+      setDestinationAddress(res.formatted_address);
+    },
   });
+
+  const reasonsMap = useMemo(() => {
+    const map = new Map<number, string>();
+    reasons.forEach((r) => map.set(r.id, r.reason));
+    return map;
+  }, [reasons]);
+
+  const sortedRequests = useMemo(() => {
+    return [...requests].sort((a, b) => {
+      const dateA = new Date(a.start_date).getTime();
+      const dateB = new Date(b.start_date).getTime();
+      return dateB - dateA;
+    });
+  }, [requests]);
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      Toaster.error('Geolocation is not supported by your browser.');
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const newCoords = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        };
+        setCoords(newCoords);
+        setIsLocating(false);
+        reverseGeocode(newCoords.latitude, newCoords.longitude);
+      },
+      (err) => {
+        setIsLocating(false);
+        Toaster.error('Unable to retrieve current coordinates. Please select manually on the map.');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +144,14 @@ export const OosScreen: React.FC = () => {
     if (!startDate) errors.startDate = 'Start date is required';
     if (!endDate) errors.endDate = 'End date is required';
     if (!coords) errors.coords = 'Please choose a destination location';
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (startDate && startDate < todayStr) {
+      errors.startDate = t('oos_error_past_dates', 'Out-of-station requests cannot use past dates.');
+    }
+    if (startDate && endDate && endDate < startDate) {
+      errors.endDate = t('oos_error_end_date_before_start', 'End date cannot be before the start date.');
+    }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -86,6 +166,7 @@ export const OosScreen: React.FC = () => {
       end_date: endDate!,
       destination_latitude: coords!.latitude,
       destination_longitude: coords!.longitude,
+      geofence_radius_meters: 500,
       expected_deliverables: expectedDeliverables.trim() || undefined,
       remarks: remarks.trim() || undefined,
       attachment_url: attachments.length > 0 ? attachments[0].dataUrl : undefined,
@@ -95,9 +176,9 @@ export const OosScreen: React.FC = () => {
     createMutation.mutate(payload, {
       onSuccess: (data) => {
         if (data?.offline) {
-          Toaster.info(t('oos_sync_offline', 'Travel request saved offline. Will sync when reconnected.'));
+          Toaster.info(t('oos_success_queued', 'Offline mode: Travel request queued locally. Will sync automatically.'));
         } else {
-          Toaster.success(t('oos_submit_success', 'Travel request submitted successfully!'));
+          Toaster.success(t('oos_success_submit', 'Travel request submitted for approval.'));
         }
 
         // Reset
@@ -119,21 +200,89 @@ export const OosScreen: React.FC = () => {
     });
   };
 
-  const getStatusBadge = (status: string) => {
+  const handleApprovalAction = (approvalId: number, approve: boolean) => {
+    const commentText = approvalComments[approvalId]?.trim() || '';
+    approveMutation.mutate(
+      { id: approvalId, approve, comments: commentText },
+      {
+        onSuccess: () => {
+          Toaster.success(approve ? 'Travel request approved.' : 'Travel request rejected.', 'Success');
+          setApprovalComments((prev) => {
+            const copy = { ...prev };
+            delete copy[approvalId];
+            return copy;
+          });
+        },
+        onError: (err) => {
+          Toaster.error(getApiErrorMessage(err, 'Could not process travel approval.'));
+        },
+      }
+    );
+  };
+
+  const getStatusStyles = (status: string) => {
     switch (status) {
       case 'approved':
-        return <Badge label={t('status_approved', 'Approved')} variant="success" />;
+        return {
+          bg: 'bg-green-500/10 dark:bg-green-500/20',
+          border: 'border-green-500/30',
+          text: 'text-green-700 dark:text-green-400',
+          Icon: CheckCircle2,
+          color: colors.success,
+          label: t('oos_approved_status', 'Approved'),
+        };
       case 'rejected':
-        return <Badge label={t('status_rejected', 'Rejected')} variant="error" />;
+        return {
+          bg: 'bg-red-500/10 dark:bg-red-500/20',
+          border: 'border-red-500/30',
+          text: 'text-red-700 dark:text-red-400',
+          Icon: AlertTriangle,
+          color: colors.error,
+          label: t('oos_rejected_status', 'Rejected'),
+        };
+      case 'pending_sync':
+        return {
+          bg: 'bg-blue-500/10 dark:bg-blue-500/20',
+          border: 'border-blue-500/30',
+          text: 'text-blue-700 dark:text-blue-400',
+          Icon: RefreshCw,
+          color: '#3B82F6',
+          label: t('oos_pending_sync_status', 'Pending Sync'),
+        };
+      case 'sync_failed':
+        return {
+          bg: 'bg-red-500/10 dark:bg-red-500/20',
+          border: 'border-red-500/30',
+          text: 'text-red-700 dark:text-red-400',
+          Icon: AlertTriangle,
+          color: colors.error,
+          label: t('oos_sync_failed_status', 'Sync Failed'),
+        };
+      case 'draft':
+        return {
+          bg: 'bg-gray-500/10 dark:bg-gray-500/20',
+          border: 'border-gray-500/30',
+          text: 'text-gray-700 dark:text-gray-400',
+          Icon: Clock,
+          color: colors.muted,
+          label: t('oos_draft_status', 'Draft'),
+        };
       default:
-        return <Badge label={t('status_pending', 'Pending Approval')} variant="warning" />;
+        return {
+          bg: 'bg-amber-500/10 dark:bg-amber-500/20',
+          border: 'border-amber-500/30',
+          text: 'text-amber-700 dark:text-amber-400',
+          Icon: Clock,
+          color: colors.warning,
+          label: t('oos_pending_status', 'Pending'),
+        };
     }
   };
 
   return (
-    <MainTemplate title={t('oos_title', 'Out of Station Duty')} showBack>
+    <MainTemplate title={t('oos_title', 'Out of Station')} showBack>
       <div className="flex flex-col">
-        {/* Tab Selection Bar */}
+        {/* Tab Selection Bar matching Mobile OosScreen */}
         <div
           className="flex border-b justify-around items-center sticky top-14 z-30 transition-colors"
           style={{
@@ -144,40 +293,40 @@ export const OosScreen: React.FC = () => {
           {/* History Tab */}
           <button
             onClick={() => setActiveTab('history')}
-            className="flex-1 py-4 flex items-center justify-center gap-1.5 border-b-2 text-xs font-bold transition-colors"
+            className="flex-1 py-4 flex items-center justify-center gap-1.5 border-b-2 text-xs font-bold transition-colors cursor-pointer"
             style={{
               borderBottomColor: activeTab === 'history' ? colors.primary : 'transparent',
               color: activeTab === 'history' ? colors.primary : colors.muted,
             }}
           >
-            <FileText size={16} />
+            <FileText size={16} color={activeTab === 'history' ? colors.primary : colors.muted} />
             <span>{t('oos_tab_history', 'History')}</span>
           </button>
 
           {/* New Application Tab */}
           <button
             onClick={() => setActiveTab('apply')}
-            className="flex-1 py-4 flex items-center justify-center gap-1.5 border-b-2 text-xs font-bold transition-colors"
+            className="flex-1 py-4 flex items-center justify-center gap-1.5 border-b-2 text-xs font-bold transition-colors cursor-pointer"
             style={{
               borderBottomColor: activeTab === 'apply' ? colors.primary : 'transparent',
               color: activeTab === 'apply' ? colors.primary : colors.muted,
             }}
           >
-            <MapPin size={16} />
-            <span>{t('oos_tab_apply', 'New Request')}</span>
+            <MapPin size={16} color={activeTab === 'apply' ? colors.primary : colors.muted} />
+            <span>{t('oos_tab_apply', 'New Application')}</span>
           </button>
 
-          {/* Approvals Tab */}
+          {/* Approvals Tab (Only if supervisor has approvals permission) */}
           {canApprove && (
             <button
               onClick={() => setActiveTab('approvals')}
-              className="flex-1 py-4 flex items-center justify-center gap-1.5 border-b-2 text-xs font-bold transition-colors"
+              className="flex-1 py-4 flex items-center justify-center gap-1.5 border-b-2 text-xs font-bold transition-colors cursor-pointer"
               style={{
                 borderBottomColor: activeTab === 'approvals' ? colors.primary : 'transparent',
                 color: activeTab === 'approvals' ? colors.primary : colors.muted,
               }}
             >
-              <CheckSquare size={16} />
+              <CheckSquare size={16} color={activeTab === 'approvals' ? colors.primary : colors.muted} />
               <span>{t('oos_tab_approvals', 'Approvals')}</span>
             </button>
           )}
@@ -186,79 +335,126 @@ export const OosScreen: React.FC = () => {
         {/* Tab Contents */}
         <div className="p-4 space-y-4">
           {activeTab === 'history' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span
-                  className="text-xs font-bold uppercase tracking-wider"
-                  style={{ color: colors.muted }}
-                >
-                  Out-of-Station Travel Duties
-                </span>
-                <button
-                  onClick={() => refetchRequests()}
-                  disabled={isLoading}
-                  className="text-xs flex items-center gap-1 hover:opacity-80 transition-opacity"
-                  style={{ color: colors.muted }}
-                >
-                  <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
-                  Refresh
-                </button>
-              </div>
+            <div className="space-y-4 pb-6">
+              <span
+                className="text-xs font-bold uppercase tracking-wider block"
+                style={{ color: colors.muted }}
+              >
+                {t('oos_history_title', 'Travel History')}
+              </span>
 
-              {requests.length === 0 ? (
-                <Card className="p-6 text-center text-xs" style={{ color: colors.muted }}>
-                  No travel duty assignments on record.
-                </Card>
+              {isLoadingRequests && requests.length === 0 ? (
+                <div className="py-12 flex flex-col items-center justify-center text-xs" style={{ color: colors.muted }}>
+                  <RefreshCw size={20} className="animate-spin mb-2" style={{ color: colors.primary }} />
+                  <span>{t('oos_history_loading', 'Loading travel requests...')}</span>
+                </div>
+              ) : requests.length === 0 ? (
+                <div className="py-12 px-4 flex flex-col items-center justify-center text-center">
+                  <FileText size={32} className="mb-4" style={{ color: colors.border }} />
+                  <p className="text-sm font-medium" style={{ color: colors.text }}>
+                    {t('oos_history_empty_title', 'No travel requests found.')}
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: colors.muted }}>
+                    {t('oos_history_empty_subtitle', "Tap 'New Application' to submit an out of station request.")}
+                  </p>
+                </div>
               ) : (
-                <div className="space-y-2.5">
-                  {requests.map((item) => (
-                    <Card
-                      key={item.id}
-                      onClick={() => navigate(`/oos/${item.id}`)}
-                      className="p-4 space-y-2 cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-sm font-bold" style={{ color: colors.text }}>
-                          <MapPin size={16} className="text-blue-500 flex-shrink-0" />
-                          <span className="truncate">{item.destination_name}</span>
-                        </div>
-                        {getStatusBadge(item.status)}
-                      </div>
+                <div className="space-y-4">
+                  {sortedRequests.map((req) => {
+                    const statusStyle = getStatusStyles(req.status);
+                    const StatusIcon = statusStyle.Icon;
+                    const reasonLabel = req.reason_name || reasonsMap.get(req.reason_id) || 'Travel Assignment';
+                    const isSyncFailed = req.status === 'sync_failed';
 
-                      <div className="flex items-center justify-between text-xs" style={{ color: colors.muted }}>
-                        <div className="flex items-center gap-1">
-                          <Calendar size={13} />
-                          <span>
-                            {formatDate(item.start_date)} - {formatDate(item.end_date)}
+                    return (
+                      <div
+                        key={req.id}
+                        onClick={() => navigate(`/oos/${req.id}`)}
+                        className={`p-4 border shadow-sm rounded-none cursor-pointer transition-colors ${
+                          isSyncFailed ? 'border-l-4 border-l-red-500' : ''
+                        }`}
+                        style={{
+                          backgroundColor: colors.surface,
+                          borderColor: isSyncFailed ? '#ef4444' : colors.border,
+                        }}
+                      >
+                        {/* Header: Reason & Status */}
+                        <div className="flex justify-between items-start mb-3">
+                          <h3 className="text-base font-bold flex-1 mr-2" style={{ color: colors.text }}>
+                            {reasonLabel}
+                          </h3>
+                          <div
+                            className={`flex items-center gap-1 px-2.5 py-1 border ${statusStyle.bg} ${statusStyle.border}`}
+                          >
+                            <StatusIcon size={12} color={statusStyle.color} />
+                            <span className={`text-[10px] font-bold capitalize ${statusStyle.text}`}>
+                              {statusStyle.label}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Travel Period */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <Calendar size={14} style={{ color: colors.muted }} />
+                          <span className="text-xs font-medium" style={{ color: colors.text }}>
+                            {formatDate(req.start_date)} to {formatDate(req.end_date)}
                           </span>
                         </div>
-                        <ChevronRight size={16} />
+
+                        {/* Destination */}
+                        <div className="flex items-start gap-2 mb-3">
+                          <MapPin size={14} style={{ color: colors.muted }} className="mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-xs font-bold" style={{ color: colors.text }}>
+                              {req.destination_name}
+                            </p>
+                            {req.destination_address && (
+                              <p className="text-[11px] mt-0.5" style={{ color: colors.muted }}>
+                                {req.destination_address}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Tap to View Details Footer matching Mobile */}
+                        <div
+                          className="mt-3 pt-2.5 border-t flex justify-between items-center"
+                          style={{ borderColor: `${colors.border}60` }}
+                        >
+                          <span className="text-[11px] font-bold" style={{ color: colors.primary }}>
+                            {req.status === 'approved'
+                              ? t('oos_action_view_and_clockin', 'View Details & Duty Attendance →')
+                              : t('oos_action_view_details', 'View Trip Details →')}
+                          </span>
+                          <ChevronRight size={14} style={{ color: colors.primary }} />
+                        </div>
                       </div>
-                    </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
           )}
 
           {activeTab === 'apply' && (
-            <Card className="p-5">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Reason Select */}
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={{ color: colors.text }}>
-                    Official Reason / Purpose
+            <div className="pb-12 max-w-2xl mx-auto w-full">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Reason Select Option */}
+                <div className="space-y-1">
+                  <label className="block text-sm font-semibold" style={{ color: colors.text }}>
+                    {t('oos_form_reason', 'Travel Reason')}
                   </label>
                   <select
                     value={selectedReasonId || ''}
                     onChange={(e) => setSelectedReasonId(Number(e.target.value))}
-                    className="w-full border rounded-none px-4 py-3 bg-white dark:bg-[#1E1E1E] text-base outline-none"
+                    className="w-full border rounded-none px-4 py-3 text-sm outline-none"
                     style={{
+                      backgroundColor: colors.surface,
                       borderColor: formErrors.reason ? colors.error : colors.border,
                       color: colors.text,
                     }}
                   >
-                    <option value="">Select official purpose...</option>
+                    <option value="">{t('oos_form_reason_placeholder', 'Select travel reason...')}</option>
                     {reasons.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.reason}
@@ -272,26 +468,48 @@ export const OosScreen: React.FC = () => {
                   )}
                 </div>
 
-                {/* Places Search */}
+                {/* Travel Period Selector */}
                 <div>
-                  <label className="block text-sm font-medium mb-1" style={{ color: colors.text }}>
-                    Destination Facility / Location
+                  <DateRangePicker
+                    startDate={startDate}
+                    endDate={endDate}
+                    onStartDateChange={(s: string) => setStartDate(s)}
+                    onEndDateChange={(e: string) => setEndDate(e)}
+                    startLabel={t('oos_form_start_date', 'Start Date')}
+                    endLabel={t('oos_form_end_date', 'End Date')}
+                    startError={formErrors.startDate}
+                    endError={formErrors.endDate}
+                  />
+                </div>
+
+                {/* Destination Search with Autocomplete */}
+                <div className="space-y-1">
+                  <label className="block text-sm font-semibold" style={{ color: colors.text }}>
+                    {t('oos_form_destination_name', 'Destination Facility/Name')}
                   </label>
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder="Search facility name, district or hospital..."
+                      placeholder={t('oos_form_destination_name_placeholder', 'e.g., Mbale Regional Referral Hospital')}
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full border rounded-none px-4 py-3 bg-white dark:bg-[#1E1E1E] text-base outline-none"
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setDestinationName(e.target.value);
+                        if (!e.target.value) {
+                          setDestinationAddress('');
+                          setCoords(null);
+                        }
+                      }}
+                      className="w-full border rounded-none px-4 py-3 text-sm outline-none"
                       style={{
+                        backgroundColor: colors.surface,
                         borderColor: formErrors.destinationName ? colors.error : colors.border,
                         color: colors.text,
                       }}
                     />
                     <Search
                       size={16}
-                      className="absolute right-3.5 top-3.5"
+                      className="absolute right-3.5 top-3.5 pointer-events-none"
                       style={{ color: colors.muted }}
                     />
                   </div>
@@ -309,7 +527,7 @@ export const OosScreen: React.FC = () => {
                           key={idx}
                           type="button"
                           onClick={() => selectPrediction(p)}
-                          className="w-full p-2.5 text-left text-xs border-b last:border-b-0 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                          className="w-full p-2.5 text-left text-xs border-b last:border-b-0 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
                           style={{
                             borderColor: colors.border,
                             color: colors.text,
@@ -322,100 +540,240 @@ export const OosScreen: React.FC = () => {
                     </div>
                   )}
 
-                  {destinationName && (
-                    <div
-                      className="mt-2 p-2.5 rounded-none border text-xs flex items-center justify-between"
-                      style={{
-                        backgroundColor: `${colors.primary}08`,
-                        borderColor: colors.primary,
-                      }}
-                    >
-                      <div>
-                        <p className="font-bold" style={{ color: colors.text }}>
-                          {destinationName}
-                        </p>
-                        {destinationAddress && (
-                          <p style={{ color: colors.muted }}>{destinationAddress}</p>
-                        )}
-                      </div>
-                      <span className="text-[10px] font-bold text-emerald-600 uppercase">Selected</span>
-                    </div>
+                  {formErrors.destinationName && (
+                    <p className="text-xs font-medium mt-1" style={{ color: colors.error }}>
+                      {formErrors.destinationName}
+                    </p>
                   )}
                 </div>
 
-                {/* Map Preview */}
+                {/* Destination Address — auto-populated, editable */}
+                {destinationAddress.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="block text-sm font-semibold" style={{ color: colors.text }}>
+                      {t('oos_form_destination_address', 'Destination Address')}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={t('oos_form_destination_address_placeholder', 'e.g., Pallisa Road, Mbale')}
+                      value={destinationAddress}
+                      onChange={(e) => setDestinationAddress(e.target.value)}
+                      className="w-full border rounded-none px-4 py-3 text-sm outline-none"
+                      style={{
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                        color: colors.text,
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Fine-tune Location on Map matching Mobile */}
                 {coords && (
-                  <MapCard
+                  <OosLocationPickerMap
                     coords={coords}
-                    targetCoords={coords}
-                    isLocating={false}
-                    geoError={null}
-                    heightClass="h-40"
+                    onLocationChange={(newCoords) => {
+                      setCoords(newCoords);
+                      reverseGeocode(newCoords.latitude, newCoords.longitude);
+                    }}
+                    onUseCurrentLocation={handleUseCurrentLocation}
+                    isLocating={isLocating}
+                    error={formErrors.coords}
                   />
                 )}
 
-                {/* Date Range */}
-                <div>
-                  <DateRangePicker
-                    startDate={startDate}
-                    endDate={endDate}
-                    onStartDateChange={(s: string) => setStartDate(s)}
-                    onEndDateChange={(e: string) => setEndDate(e)}
-                    startError={formErrors.startDate}
-                    endError={formErrors.endDate}
-                  />
-                </div>
-
                 {/* Expected Deliverables */}
-                <div>
-                  <Input
-                    label="Key Deliverables / Assignment Terms"
-                    multiline
-                    rows={2}
-                    placeholder="Specific outcomes expected upon completion..."
+                <div className="space-y-1">
+                  <label className="block text-sm font-semibold" style={{ color: colors.text }}>
+                    {t('oos_form_deliverables', 'Expected Deliverables')}
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder={t(
+                      'oos_form_deliverables_placeholder',
+                      'Describe outputs or reports expected from this travel assignment...'
+                    )}
                     value={expectedDeliverables}
                     onChange={(e) => setExpectedDeliverables(e.target.value)}
+                    className="w-full border rounded-none px-4 py-3 text-sm outline-none"
+                    style={{
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    }}
                   />
                 </div>
 
                 {/* Remarks */}
-                <div>
-                  <Input
-                    label="Additional Remarks (Optional)"
-                    multiline
+                <div className="space-y-1">
+                  <label className="block text-sm font-semibold" style={{ color: colors.text }}>
+                    {t('oos_form_remarks', 'Remarks')}
+                  </label>
+                  <textarea
                     rows={2}
-                    placeholder="Any notes or logistical details..."
+                    placeholder={t('oos_form_remarks_placeholder', 'Any additional information or details...')}
                     value={remarks}
                     onChange={(e) => setRemarks(e.target.value)}
+                    className="w-full border rounded-none px-4 py-3 text-sm outline-none"
+                    style={{
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    }}
                   />
                 </div>
 
-                {/* Attachments */}
-                <div>
+                {/* Supporting Travel Documents */}
+                <div className="space-y-1">
+                  <label className="block text-sm font-semibold mb-2" style={{ color: colors.text }}>
+                    {t('oos_form_supporting_docs', 'Supporting Travel Documents')}
+                  </label>
                   <AttachmentPicker
-                    label="Letter of Invitation / Memo"
+                    label=""
                     attachments={attachments}
                     onAttachmentsChange={setAttachments}
                     allowMultiple={false}
                   />
                 </div>
 
+                {/* Submit Button matching Mobile */}
                 <div className="pt-2">
-                  <Button
+                  <button
                     type="submit"
-                    title="Submit Travel Request"
-                    loading={createMutation.isPending}
-                    className="py-4"
-                  />
+                    disabled={createMutation.isPending}
+                    className="w-full py-3.5 px-4 text-white font-bold text-sm rounded-none transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
+                    style={{ backgroundColor: '#15803D' }}
+                  >
+                    {createMutation.isPending ? 'Submitting...' : t('oos_form_submit', 'Submit for Supervisor Approval')}
+                  </button>
                 </div>
               </form>
-            </Card>
+            </div>
           )}
 
-          {activeTab === 'approvals' && (
-            <Card className="p-6 text-center text-xs" style={{ color: colors.muted }}>
-              Manage supervisor reviews directly via the Approvals Inbox tab.
-            </Card>
+          {activeTab === 'approvals' && canApprove && (
+            <div className="space-y-4 pb-6 max-w-2xl mx-auto w-full">
+              <span
+                className="text-xs font-bold uppercase tracking-wider block"
+                style={{ color: colors.muted }}
+              >
+                {t('oos_approvals_title', 'Pending Travel Approvals')}
+              </span>
+
+              {isLoadingPending ? (
+                <div className="py-12 flex flex-col items-center justify-center text-xs" style={{ color: colors.muted }}>
+                  <RefreshCw size={20} className="animate-spin mb-2" style={{ color: colors.primary }} />
+                </div>
+              ) : pendingApprovals.length === 0 ? (
+                <div className="py-12 px-6 flex flex-col items-center justify-center text-center">
+                  <ClipboardList size={40} className="mb-3 opacity-50" style={{ color: colors.muted }} />
+                  <p className="text-sm font-semibold" style={{ color: colors.muted }}>
+                    {t('oos_approvals_empty', 'No travel requests waiting for your approval.')}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pendingApprovals.map((row: any) => {
+                    const approvalId = Number(row.approval_id || row.id);
+                    return (
+                      <div
+                        key={approvalId}
+                        className="p-4 border shadow-sm rounded-none"
+                        style={{
+                          backgroundColor: colors.surface,
+                          borderColor: colors.border,
+                        }}
+                      >
+                        {/* Applicant Name */}
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                            <User size={14} style={{ color: colors.text }} />
+                          </div>
+                          <span className="text-base font-bold flex-1" style={{ color: colors.text }}>
+                            {row.staff_name}
+                          </span>
+                        </div>
+
+                        {/* Travel Details */}
+                        <div className="space-y-1.5 mb-3">
+                          <div className="flex items-center gap-2">
+                            <Calendar size={14} style={{ color: colors.muted }} />
+                            <span className="text-xs font-medium" style={{ color: colors.text }}>
+                              {row.reason_name} · {formatDateRange(row.start_date, row.end_date)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <MapPin size={14} style={{ color: colors.muted }} />
+                            <span className="text-xs font-medium" style={{ color: colors.text }}>
+                              Destination: {row.destination}
+                            </span>
+                          </div>
+                        </div>
+
+                        {row.expected_deliverables && (
+                          <div className="mb-3 p-3 bg-zinc-50 dark:bg-zinc-900 border" style={{ borderColor: colors.border }}>
+                            <span className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: colors.muted }}>
+                              {t('oos_form_deliverables', 'Expected Deliverables')}
+                            </span>
+                            <p className="text-xs" style={{ color: colors.text }}>
+                              {row.expected_deliverables}
+                            </p>
+                          </div>
+                        )}
+
+                        {row.remarks && (
+                          <p className="text-xs italic mb-4" style={{ color: colors.muted }}>
+                            Remarks: "{row.remarks}"
+                          </p>
+                        )}
+
+                        {/* Supervisor Decision Comments */}
+                        <div className="mb-4">
+                          <input
+                            type="text"
+                            value={approvalComments[approvalId] || ''}
+                            onChange={(e) =>
+                              setApprovalComments((prev) => ({ ...prev, [approvalId]: e.target.value }))
+                            }
+                            placeholder={t('oos_comment_placeholder', 'Enter decision comments...')}
+                            className="w-full px-3 py-2 border text-sm outline-none rounded-none"
+                            style={{
+                              backgroundColor: colors.surface,
+                              borderColor: colors.border,
+                              color: colors.text,
+                            }}
+                          />
+                        </div>
+
+                        {/* Approve / Reject Buttons matching Mobile */}
+                        <div className="flex gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleApprovalAction(approvalId, true)}
+                            disabled={approveMutation.isPending}
+                            className="flex-1 py-2.5 rounded-none flex justify-center items-center gap-1.5 text-white font-bold text-xs cursor-pointer transition-colors"
+                            style={{ backgroundColor: colors.success }}
+                          >
+                            <Check size={14} color="#FFFFFF" />
+                            <span>{t('oos_approve_action', 'Approve')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleApprovalAction(approvalId, false)}
+                            disabled={approveMutation.isPending}
+                            className="flex-1 py-2.5 rounded-none flex justify-center items-center gap-1.5 text-white font-bold text-xs cursor-pointer transition-colors"
+                            style={{ backgroundColor: colors.error }}
+                          >
+                            <X size={14} color="#FFFFFF" />
+                            <span>{t('oos_reject_action', 'Reject')}</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

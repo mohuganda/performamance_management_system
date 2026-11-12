@@ -58,12 +58,26 @@ export default defineConfig(({ mode }) => {
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
           runtimeCaching: [
             {
-              urlPattern: /^https:\/\/.*tile\.openstreetmap\.org\/.*/i,
+              urlPattern: /^https:\/\/maps\.googleapis\.com\/.*/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'google-maps-api-cache',
+                expiration: {
+                  maxEntries: 50,
+                  maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              urlPattern: /^https:\/\/maps\.gstatic\.com\/.*/i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'osm-tiles-cache',
+                cacheName: 'google-maps-static-cache',
                 expiration: {
-                  maxEntries: 500,
+                  maxEntries: 100,
                   maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
                 },
                 cacheableResponse: {
@@ -101,7 +115,7 @@ export default defineConfig(({ mode }) => {
           manualChunks: {
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
             'vendor-query': ['@tanstack/react-query', 'axios', 'zustand'],
-            'vendor-leaflet': ['leaflet', 'react-leaflet'],
+            'vendor-maps': ['@react-google-maps/api'],
           }
         }
       }

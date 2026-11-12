@@ -1,8 +1,15 @@
-import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Circle, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import { Navigation, RefreshCw } from 'lucide-react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import { GoogleMap, Marker, Circle, useJsApiLoader } from '@react-google-maps/api';
+import { Navigation, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { config } from '../../config';
+import { useThemeStore } from '../../stores/themeStore';
+import {
+  GOOGLE_MAPS_SCRIPT_ID,
+  getMapOptions,
+  getUserPinIcon,
+  getDestinationPinIcon,
+} from '../../utils/googleMaps';
 
 interface MapCardProps {
   coords: { latitude: number; longitude: number; accuracy?: number } | null;
@@ -16,44 +23,6 @@ interface MapCardProps {
 
 const DEFAULT_COORDS = { latitude: 0.3476, longitude: 32.5825 }; // Kampala
 
-// Custom self-contained HTML marker for user position
-const userPinIcon = L.divIcon({
-  className: 'custom-user-pin',
-  html: `
-    <div style="display:flex; flex-direction:column; align-items:center; transform: translate(-50%, -100%);">
-      <div style="width:24px; height:24px; border-radius:50%; background:#D90000; border:2px solid #FFFFFF; box-shadow:0 2px 4px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center;">
-        <div style="width:8px; height:8px; border-radius:50%; background:#FFFFFF;"></div>
-      </div>
-      <div style="width:8px; height:8px; background:#D90000; transform:rotate(45deg); margin-top:-4px;"></div>
-    </div>
-  `,
-  iconSize: [24, 28],
-  iconAnchor: [12, 28],
-});
-
-// Custom destination marker
-const destinationPinIcon = L.divIcon({
-  className: 'custom-destination-pin',
-  html: `
-    <div style="display:flex; flex-direction:column; align-items:center; transform: translate(-50%, -100%);">
-      <div style="width:28px; height:28px; border-radius:50%; background:#15803D; border:2px solid #FFFFFF; box-shadow:0 2px 4px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-      </div>
-      <div style="width:8px; height:8px; background:#15803D; transform:rotate(45deg); margin-top:-4px;"></div>
-    </div>
-  `,
-  iconSize: [28, 32],
-  iconAnchor: [14, 32],
-});
-
-function MapRecenter({ coords }: { coords: { latitude: number; longitude: number } }) {
-  const map = useMap();
-  useEffect(() => {
-    map.setView([coords.latitude, coords.longitude], map.getZoom());
-  }, [coords, map]);
-  return null;
-}
-
 export const MapCard: React.FC<MapCardProps> = ({
   coords,
   targetCoords,
@@ -64,8 +33,49 @@ export const MapCard: React.FC<MapCardProps> = ({
   heightClass = 'h-48',
 }) => {
   const { t } = useTranslation();
+  const { isDark } = useThemeStore();
+  const mapRef = useRef<google.maps.Map | null>(null);
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: GOOGLE_MAPS_SCRIPT_ID,
+    googleMapsApiKey: config.googleMapsApiKey,
+  });
 
   const centerCoords = coords || targetCoords || DEFAULT_COORDS;
+
+  const mapCenter = useMemo(
+    () => ({
+      lat: centerCoords.latitude,
+      lng: centerCoords.longitude,
+    }),
+    [centerCoords.latitude, centerCoords.longitude]
+  );
+
+  const mapOptions = useMemo(() => getMapOptions(isDark), [isDark]);
+
+  const userIcon = useMemo(() => (isLoaded ? getUserPinIcon() : undefined), [isLoaded]);
+  const destinationIcon = useMemo(
+    () => (isLoaded ? getDestinationPinIcon() : undefined),
+    [isLoaded]
+  );
+
+  const onLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+  }, []);
+
+  const onUnmount = useCallback(() => {
+    mapRef.current = null;
+  }, []);
+
+  // Smoothly pan to new coordinates when user moves or target changes
+  useEffect(() => {
+    if (mapRef.current) {
+      mapRef.current.panTo({
+        lat: centerCoords.latitude,
+        lng: centerCoords.longitude,
+      });
+    }
+  }, [centerCoords.latitude, centerCoords.longitude]);
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden mb-4">
@@ -77,7 +87,9 @@ export const MapCard: React.FC<MapCardProps> = ({
             className={coords ? 'text-green-600' : 'text-zinc-400 animate-pulse'}
           />
           <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-            {coords ? t('attendance_gps_locked', 'GPS Signal Acquired') : t('attendance_gps_searching', 'Searching GPS Signal...')}
+            {coords
+              ? t('attendance_gps_locked', 'GPS Signal Acquired')
+              : t('attendance_gps_searching', 'Searching GPS Signal...')}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -101,59 +113,77 @@ export const MapCard: React.FC<MapCardProps> = ({
 
       {/* Map Body */}
       <div className={`${heightClass} w-full relative z-0`}>
-        <MapContainer
-          center={[centerCoords.latitude, centerCoords.longitude]}
-          zoom={16}
-          scrollWheelZoom={false}
-          className="h-full w-full"
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-
-          <MapRecenter coords={centerCoords} />
-
-          {/* User Location Marker & Accuracy Circle */}
-          {coords && (
-            <>
-              <Marker position={[coords.latitude, coords.longitude]} icon={userPinIcon} />
-              <Circle
-                center={[coords.latitude, coords.longitude]}
-                radius={coords.accuracy || 15}
-                pathOptions={{
-                  fillColor: '#3B82F6',
-                  fillOpacity: 0.15,
-                  color: '#3B82F6',
-                  weight: 1.5,
-                }}
-              />
-            </>
-          )}
-
-          {/* Target / Destination Marker & Geofence Perimeter */}
-          {targetCoords && (
-            <>
-              <Marker
-                position={[targetCoords.latitude, targetCoords.longitude]}
-                icon={destinationPinIcon}
-              />
-              {geofenceRadius && (
+        {!config.googleMapsApiKey ? (
+          <div className="h-full w-full flex flex-col items-center justify-center bg-zinc-100 dark:bg-zinc-800/60 text-zinc-500 text-xs p-4 text-center">
+            <AlertTriangle size={24} className="text-amber-500 mb-2" />
+            <span className="font-medium text-zinc-700 dark:text-zinc-300">
+              {t('maps_missing_key')}
+            </span>
+          </div>
+        ) : loadError ? (
+          <div className="h-full w-full flex flex-col items-center justify-center bg-zinc-100 dark:bg-zinc-800/60 text-zinc-500 text-xs p-4 text-center">
+            <AlertTriangle size={24} className="text-red-500 mb-2" />
+            <span className="font-medium text-red-600 dark:text-red-400">
+              {t('maps_load_error')}
+            </span>
+          </div>
+        ) : !isLoaded ? (
+          <div className="h-full w-full flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-800/40 text-zinc-400 text-xs gap-2">
+            <RefreshCw size={20} className="animate-spin text-primary" />
+            <span>{t('maps_loading')}</span>
+          </div>
+        ) : (
+          <GoogleMap
+            mapContainerStyle={{ width: '100%', height: '100%' }}
+            center={mapCenter}
+            zoom={16}
+            options={mapOptions}
+            onLoad={onLoad}
+            onUnmount={onUnmount}
+          >
+            {/* User Location Marker & Accuracy Circle */}
+            {coords && (
+              <>
+                <Marker
+                  position={{ lat: coords.latitude, lng: coords.longitude }}
+                  icon={userIcon}
+                />
                 <Circle
-                  center={[targetCoords.latitude, targetCoords.longitude]}
-                  radius={geofenceRadius}
-                  pathOptions={{
-                    fillColor: '#22C55E',
+                  center={{ lat: coords.latitude, lng: coords.longitude }}
+                  radius={coords.accuracy || 15}
+                  options={{
+                    fillColor: '#3B82F6',
                     fillOpacity: 0.15,
-                    color: '#15803D',
-                    weight: 2,
-                    dashArray: '4, 4',
+                    strokeColor: '#3B82F6',
+                    strokeWeight: 1.5,
                   }}
                 />
-              )}
-            </>
-          )}
-        </MapContainer>
+              </>
+            )}
+
+            {/* Target / Destination Marker & Geofence Perimeter */}
+            {targetCoords && (
+              <>
+                <Marker
+                  position={{ lat: targetCoords.latitude, lng: targetCoords.longitude }}
+                  icon={destinationIcon}
+                />
+                {geofenceRadius && (
+                  <Circle
+                    center={{ lat: targetCoords.latitude, lng: targetCoords.longitude }}
+                    radius={geofenceRadius}
+                    options={{
+                      fillColor: '#22C55E',
+                      fillOpacity: 0.15,
+                      strokeColor: '#15803D',
+                      strokeWeight: 2,
+                    }}
+                  />
+                )}
+              </>
+            )}
+          </GoogleMap>
+        )}
 
         {/* Loading Overlay */}
         {isLocating && (
@@ -183,4 +213,3 @@ export const MapCard: React.FC<MapCardProps> = ({
     </div>
   );
 };
-

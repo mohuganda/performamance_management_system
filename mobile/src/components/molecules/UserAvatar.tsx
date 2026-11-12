@@ -1,74 +1,63 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Image, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { User } from 'lucide-react-native';
 import { useTheme } from '../../app/hooks/useTheme';
-import { useAuthStore } from '../../stores/authStore';
-import { resolveFileUrl } from '../../utils/fileUrl';
+import { useAuthenticatedImage } from '../../app/hooks/useAuthenticatedImage';
 
 export interface UserProfilePictureProps {
-    uri?: string | null;
-    size?: number;
-    style?: StyleProp<ViewStyle>;
-    accessibilityLabel?: string;
+  uri?: string | null;
+  size?: number;
+  style?: StyleProp<ViewStyle>;
+  accessibilityLabel?: string;
 }
 
 export const UserProfilePicture: React.FC<UserProfilePictureProps> = ({
-    uri,
-    size = 32,
-    style,
-    accessibilityLabel,
+  uri,
+  size = 32,
+  style,
+  accessibilityLabel,
 }) => {
-    const { colors } = useTheme();
-    const token = useAuthStore((s) => s.token);
-    const [failed, setFailed] = useState(false);
-    const trimmed = uri?.trim() ?? '';
-    const resolvedUrl = resolveFileUrl(trimmed);
-    const showImage = Boolean(resolvedUrl && !failed);
+  const { colors } = useTheme();
+  const { src, hasError } = useAuthenticatedImage(uri);
+  const showImage = Boolean(src && !hasError);
 
-    useEffect(() => {
-        setFailed(false);
-    }, [trimmed]);
+  const dimension = { width: size, height: size, borderRadius: size / 2 };
+  const iconSize = Math.round(size * 0.45);
 
-    const dimension = { width: size, height: size, borderRadius: size / 2 };
-    const iconSize = Math.round(size * 0.45);
-
-    return (
-        <View
-            accessibilityRole="image"
-            accessibilityLabel={accessibilityLabel}
-            style={[
-                styles.wrapper,
-                dimension,
-                {
-                    backgroundColor: colors.border + '55',
-                    borderWidth: 1.5,
-                    borderColor: colors.primary + '80', // Mild primary color border
-                },
-                style,
-            ]}>
-            {showImage ? (
-                <Image
-                    source={{
-                        uri: resolvedUrl!,
-                        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-                    }}
-                    style={StyleSheet.absoluteFill}
-                    resizeMode="cover"
-                    onError={() => setFailed(true)}
-                />
-            ) : (
-                <View className="flex-1 items-center justify-center">
-                    <User size={iconSize} color={colors.text} />
-                </View>
-            )}
+  return (
+    <View
+      accessibilityRole="image"
+      accessibilityLabel={accessibilityLabel}
+      style={[
+        styles.wrapper,
+        dimension,
+        {
+          backgroundColor: colors.border + '55',
+          borderWidth: 1.5,
+          borderColor: colors.primary + '80', // Mild primary color border
+        },
+        style,
+      ]}
+    >
+      {showImage ? (
+        <Image
+          source={{ uri: src! }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+      ) : (
+        <View className="flex-1 items-center justify-center">
+          <User size={iconSize} color={colors.text} />
         </View>
-    );
+      )}
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-    wrapper: {
-        overflow: 'hidden',
-    },
+  wrapper: {
+    overflow: 'hidden',
+  },
 });
 
 export default UserProfilePicture;

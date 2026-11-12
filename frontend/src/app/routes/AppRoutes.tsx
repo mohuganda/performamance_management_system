@@ -18,6 +18,7 @@ import { ApprovalDetailPage } from '@/modules/approvals/ApprovalDetailPage'
 import { LeavePage } from '@/modules/leave/LeavePage'
 import { LeavePlanPage } from '@/modules/leave/LeavePlanPage'
 import { OutOfStationPage } from '@/modules/out-of-station/OutOfStationPage'
+import { OutOfStationDetailPage } from '@/modules/out-of-station/OutOfStationDetailPage'
 import { AttendancePage } from '@/modules/attendance/AttendancePage'
 import { PerformancePage } from '@/modules/performance/PerformancePage'
 import { PerformanceReportsPage } from '@/modules/performance/PerformanceReportsPage'
@@ -134,6 +135,14 @@ function AuthenticatedApp() {
           element={
             <RequirePermission permission="oos.requests.view">
               <OutOfStationPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="out-of-station/:id"
+          element={
+            <RequirePermission permission="oos.requests.view">
+              <OutOfStationDetailPage />
             </RequirePermission>
           }
         />

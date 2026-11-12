@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Image, View } from 'react-native';
 import { User } from 'lucide-react-native';
-import { useAuthStore } from '../../stores/authStore';
-import { resolveFileUrl } from '../../utils/fileUrl';
+import { useAuthenticatedImage } from '../../app/hooks/useAuthenticatedImage';
 
 interface UserAvatarProps {
   photoUrl?: string | null;
@@ -17,12 +16,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   size = 'md',
   className = '',
 }) => {
-  const token = useAuthStore((state) => state.token);
-  const [hasError, setHasError] = useState(false);
-
-  useEffect(() => {
-    setHasError(false);
-  }, [photoUrl]);
+  const { src, hasError } = useAuthenticatedImage(photoUrl);
 
   let sizeClass = 'w-10 h-10';
   let iconSize = 20;
@@ -38,21 +32,15 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
     iconSize = 48;
   }
 
-  const resolvedUrl = resolveFileUrl(photoUrl);
-
   return (
     <View
       className={`rounded-full overflow-hidden items-center justify-center bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 ${sizeClass} ${className}`}
     >
-      {resolvedUrl && !hasError ? (
+      {src && !hasError ? (
         <Image
-          source={{
-            uri: resolvedUrl,
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          }}
+          source={{ uri: src }}
           className="w-full h-full"
           resizeMode="cover"
-          onError={() => setHasError(true)}
         />
       ) : (
         <User size={iconSize} color="#9CA3AF" />
@@ -60,3 +48,5 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
     </View>
   );
 };
+
+export default UserAvatar;

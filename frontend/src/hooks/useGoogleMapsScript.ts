@@ -16,14 +16,31 @@ declare global {
           fitBounds: (b: unknown, padding?: number) => void
           setCenter: (c: { lat: number; lng: number }) => void
           setZoom: (z: number) => void
+          addListener: (event: string, handler: (e?: any) => void) => void
         }
-        Marker: new (opts: Record<string, unknown>) => { setMap: (m: unknown) => void }
-        Circle: new (opts: Record<string, unknown>) => { setMap: (m: unknown) => void }
+        Marker: new (opts: Record<string, unknown>) => {
+          setMap: (m: unknown) => void
+          setPosition: (p: { lat: number; lng: number }) => void
+          getPosition: () => { lat: () => number; lng: () => number } | null
+          addListener: (event: string, handler: () => void) => void
+        }
+        Circle: new (opts: Record<string, unknown>) => {
+          setMap: (m: unknown) => void
+          setCenter: (c: { lat: number; lng: number }) => void
+          setRadius: (r: number) => void
+          setOptions: (opts: Record<string, unknown>) => void
+        }
         LatLngBounds: new () => {
           extend: (c: { lat: number; lng: number }) => void
           isEmpty: () => boolean
         }
         SymbolPath: { CIRCLE: unknown }
+        Geocoder?: new () => {
+          geocode: (
+            request: { location?: { lat: number; lng: number }; address?: string },
+            callback: (results: Array<{ formatted_address: string }> | null, status: string) => void,
+          ) => void
+        }
       }
     }
     __mohPmsMapsLoader?: Promise<void>

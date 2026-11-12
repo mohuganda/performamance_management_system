@@ -106,7 +106,8 @@ android {
 
         // Inject manifest placeholders for AndroidManifest.xml
         manifestPlaceholders = [
-            googleMapsApiKey: project.env.get("GOOGLE_MAPS_API_KEY") ?: ""
+            googleMapsApiKey: project.env.get("GOOGLE_MAPS_API_KEY") ?: "",
+            usesCleartextTraffic: "true"
         ]
     }
 

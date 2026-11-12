@@ -17,7 +17,7 @@ import withObservables from '@nozbe/with-observables';
 import { database } from '../../db/index';
 import ProfileModel from '../../db/models/ProfileModel';
 import { formatDateTime } from '../../utils/date';
-import { resolveFileUrl } from '../../utils/fileUrl';
+import { useAuthenticatedImage } from '../../app/hooks/useAuthenticatedImage';
 import { StaffDetail, AuthUser, AccountInfo } from '../../api/auth/types';
 
 const fileUriToBase64 = async (uri: string): Promise<string> => {
@@ -69,7 +69,6 @@ function BaseProfileScreen({ dbProfile }: { dbProfile?: ProfileModel[] }) {
   const { user, token } = useAuthStore();
   const { colors, isDark } = useTheme();
   const [signatureModalVisible, setSignatureModalVisible] = useState(false);
-  const [signatureError, setSignatureError] = useState(false);
 
   // Background sync trigger
   const { data: syncData, isLoading, refetch, isFetching } = useProfileSync();
@@ -117,13 +116,11 @@ function BaseProfileScreen({ dbProfile }: { dbProfile?: ProfileModel[] }) {
   const currentUser: any = dbUser || syncData?.user || user;
   const roles: string[] = dbRoles || syncData?.roles || (currentUser?.Role ? [currentUser.Role] : []);
 
+  const { src: signatureSrc, hasError: signatureError } = useAuthenticatedImage(currentUser?.SignatureImage);
+
   const displayName = staff?.name || currentUser?.Name || t('profile_title');
   const userEmail = currentUser?.Email || staff?.email || '—';
   const isActive = account?.is_active ?? currentUser?.IsActive;
-
-  useEffect(() => {
-    setSignatureError(false);
-  }, [currentUser?.SignatureImage]);
 
   // Geofence Map Coordinates
   const dutyStationLat = staff?.effective_duty_station?.latitude ?? staff?.facility_latitude;
@@ -205,15 +202,11 @@ function BaseProfileScreen({ dbProfile }: { dbProfile?: ProfileModel[] }) {
             </Text>
 
             <View className="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-none p-4 items-center justify-center min-h-[120px]">
-              {currentUser?.SignatureImage && !signatureError ? (
+              {signatureSrc && !signatureError ? (
                 <Image
-                  source={{
-                    uri: resolveFileUrl(currentUser.SignatureImage)!,
-                    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-                  }}
+                  source={{ uri: signatureSrc }}
                   style={{ width: '100%', height: 100 }}
                   resizeMode="contain"
-                  onError={() => setSignatureError(true)}
                 />
               ) : (
                 <View className="items-center justify-center py-4">

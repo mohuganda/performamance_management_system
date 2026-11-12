@@ -97,7 +97,28 @@ export function usePlacesSearch(options: UsePlacesSearchOptions = {}) {
     [options]
   );
 
+  const reverseGeocode = useCallback(async (lat: number, lng: number) => {
+    setIsGeocoding(true);
+    try {
+      const res = await mapsService.reverseGeocode(lat, lng);
+      if (res) {
+        skipNextSearchRef.current = true;
+        setPredictions([]);
+        setSearchQuery(res.name);
+        options.onReverseGeocoded?.(res);
+        return res;
+      }
+      return null;
+    } catch (err) {
+      console.error('[usePlacesSearch] reverseGeocode error:', err);
+      return null;
+    } finally {
+      setIsGeocoding(false);
+    }
+  }, [options]);
+
   const clearSearch = useCallback(() => {
+    skipNextSearchRef.current = true;
     setSearchQuery('');
     setPredictions([]);
   }, []);
@@ -108,6 +129,7 @@ export function usePlacesSearch(options: UsePlacesSearchOptions = {}) {
     predictions,
     isGeocoding,
     selectPrediction,
+    reverseGeocode,
     clearSearch,
   };
 }
