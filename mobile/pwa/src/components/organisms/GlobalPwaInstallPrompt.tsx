@@ -24,7 +24,7 @@ export const GlobalPwaInstallPrompt: React.FC = () => {
             </div>
             <div>
               <h3 className="text-sm font-bold tracking-tight text-zinc-900 dark:text-white">
-                Install PMS - iHRISS App
+                Install PMS iHRIS App
               </h3>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-tight mt-0.5">
                 Uganda Ministry of Health

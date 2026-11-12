@@ -3,7 +3,7 @@ import { View, Text } from 'react-native';
 
 interface BadgeProps {
   label: string;
-  variant?: 'success' | 'warning' | 'error' | 'info' | 'gray';
+  variant?: 'success' | 'warning' | 'error' | 'info' | 'gray' | 'neutral';
   className?: string;
 }
 
