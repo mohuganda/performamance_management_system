@@ -6,4 +6,5 @@ export interface QueuedMutation {
   method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   localRecordId?: string;
   modelTable?: string;
+  userId?: number | string | null;
 }

@@ -5,31 +5,35 @@ import { useAuthStore } from '../stores/authStore';
 
 export const NOTIFICATION_QUERY_KEYS = {
   all: ['notifications'] as const,
-  unreadCount: () => [...NOTIFICATION_QUERY_KEYS.all, 'unread-count'] as const,
-  list: (unreadOnly?: boolean) => [...NOTIFICATION_QUERY_KEYS.all, 'list', unreadOnly] as const,
+  unreadCount: (userId?: number | string | null) =>
+    [...NOTIFICATION_QUERY_KEYS.all, userId ?? 'anonymous', 'unread-count'] as const,
+  list: (userId?: number | string | null, unreadOnly?: boolean) =>
+    [...NOTIFICATION_QUERY_KEYS.all, userId ?? 'anonymous', 'list', unreadOnly] as const,
 };
 
 export function useUnreadCountQuery() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const userId = useAuthStore((s) => s.user?.id || s.staffId);
 
   return useQuery<number, Error>({
-    queryKey: NOTIFICATION_QUERY_KEYS.unreadCount(),
+    queryKey: NOTIFICATION_QUERY_KEYS.unreadCount(userId),
     queryFn: () => notificationsService.unreadCount(),
-    enabled: isAuthenticated,
+    enabled: Boolean(isAuthenticated && userId),
     refetchInterval: 60 * 1000,
   });
 }
 
 export function useNotificationsQuery(unreadOnly = false) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const userId = useAuthStore((s) => s.user?.id || s.staffId);
 
   return useQuery<NotificationRow[], Error>({
-    queryKey: NOTIFICATION_QUERY_KEYS.list(unreadOnly),
+    queryKey: NOTIFICATION_QUERY_KEYS.list(userId, unreadOnly),
     queryFn: async () => {
       const res = await notificationsService.list({ unread_only: unreadOnly });
       return res.data;
     },
-    enabled: isAuthenticated,
+    enabled: Boolean(isAuthenticated && userId),
     staleTime: 60 * 1000,
   });
 }

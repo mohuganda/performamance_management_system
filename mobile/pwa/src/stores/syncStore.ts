@@ -17,6 +17,7 @@ interface SyncState {
   addMutation: (mutation: Omit<QueuedMutation, 'id'>) => void;
   processQueue: () => Promise<void>;
   clearFailedQueue: () => void;
+  clearAllQueues: () => void;
   removeFromFailedQueue: (id: string) => void;
   discardFailedMutation: (id: string) => Promise<void>;
 }
@@ -89,6 +90,7 @@ export const useSyncStore = create<SyncState>()(
       },
 
       clearFailedQueue: () => set({ failedQueue: [] }),
+      clearAllQueues: () => set({ queue: [], failedQueue: [], isSyncing: false }),
       removeFromFailedQueue: (id) =>
         set((state) => ({ failedQueue: state.failedQueue.filter((m) => m.id !== id) })),
 

@@ -5,16 +5,18 @@ import { useAuthStore } from '../stores/authStore';
 
 export const PROFILE_QUERY_KEYS = {
   all: ['profile'] as const,
-  me: () => [...PROFILE_QUERY_KEYS.all, 'me'] as const,
+  me: (userId?: number | string | null) =>
+    [...PROFILE_QUERY_KEYS.all, userId ?? 'anonymous', 'me'] as const,
 };
 
 export function useProfileQuery() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const userId = useAuthStore((s) => s.user?.id || s.staffId);
 
   return useQuery<MeResponse, Error>({
-    queryKey: PROFILE_QUERY_KEYS.me(),
+    queryKey: PROFILE_QUERY_KEYS.me(userId),
     queryFn: () => authService.me(),
-    enabled: isAuthenticated,
+    enabled: Boolean(isAuthenticated && userId),
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -22,13 +24,14 @@ export function useProfileQuery() {
 export function useUpdateProfileMutation() {
   const queryClient = useQueryClient();
   const refreshProfile = useAuthStore((s) => s.refreshProfile);
+  const userId = useAuthStore((s) => s.user?.id || s.staffId);
 
   return useMutation<MeResponse, Error, UpdateProfilePayload>({
     mutationFn: async (payload: UpdateProfilePayload) => {
       return await authService.updateProfile(payload);
     },
     onSuccess: (updatedData) => {
-      queryClient.setQueryData(PROFILE_QUERY_KEYS.me(), updatedData);
+      queryClient.setQueryData(PROFILE_QUERY_KEYS.me(userId), updatedData);
       refreshProfile();
     },
   });

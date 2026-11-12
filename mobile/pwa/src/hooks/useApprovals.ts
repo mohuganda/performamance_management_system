@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, UseQueryResult } from '@tanstack/react-query';
 import approvalsService from '../api/approvals/service';
 import {
   ApprovalInboxItem,
@@ -9,34 +9,36 @@ import {
   ReviewPpaPayload,
 } from '../api/approvals/types';
 import { useSyncStore } from '../stores/syncStore';
+import { useAuthStore } from '../stores/authStore';
+import { getUserCache, setUserCache } from '../utils/userCache';
 
 export const APPROVALS_QUERY_KEYS = {
   all: ['approvals'] as const,
-  inbox: () => [...APPROVALS_QUERY_KEYS.all, 'inbox'] as const,
+  inbox: (userId?: number | string | null) =>
+    [...APPROVALS_QUERY_KEYS.all, userId ?? 'anonymous', 'inbox'] as const,
 };
 
-export function useApprovalsInboxQuery(enabled = true) {
-  return useQuery<ApprovalsInboxResponse, Error>({
-    queryKey: APPROVALS_QUERY_KEYS.inbox(),
+export function useApprovalsInboxQuery(enabled = true): UseQueryResult<ApprovalsInboxResponse, Error> {
+  const userId = useAuthStore((s) => s.user?.id || s.staffId);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  return useQuery({
+    queryKey: APPROVALS_QUERY_KEYS.inbox(userId),
     queryFn: async () => {
       const res = await approvalsService.inbox();
-      if (res) {
-        localStorage.setItem('moh-pms-approvals-inbox', JSON.stringify(res));
+      if (res && userId) {
+        setUserCache('approvals-inbox', userId, res);
         if (res.stats) {
-          localStorage.setItem('moh-pms-approvals-stats', JSON.stringify(res.stats));
+          setUserCache('approvals-stats', userId, res.stats);
         }
       }
       return res;
     },
     initialData: () => {
-      try {
-        const cached = localStorage.getItem('moh-pms-approvals-inbox');
-        return cached ? JSON.parse(cached) : undefined;
-      } catch {
-        return undefined;
-      }
+      if (!userId) return undefined;
+      return getUserCache<ApprovalsInboxResponse>('approvals-inbox', userId);
     },
-    enabled,
+    enabled: Boolean(enabled && isAuthenticated && userId),
     staleTime: 60 * 1000,
   });
 }
@@ -50,6 +52,7 @@ export interface ActApprovalParams {
 export function useActApprovalMutation() {
   const queryClient = useQueryClient();
   const addMutation = useSyncStore((state) => state.addMutation);
+  const userId = useAuthStore((state) => state.user?.id || state.staffId);
 
   return useMutation<any, Error, ActApprovalParams>({
     mutationFn: async ({ item, approve, comments }) => {
@@ -86,6 +89,7 @@ export function useActApprovalMutation() {
 
       if (!navigator.onLine) {
         addMutation({
+          userId,
           type: 'APPROVAL_ACTION',
           endpoint,
           method: 'POST',
@@ -93,7 +97,7 @@ export function useActApprovalMutation() {
         });
 
         // Optimistically remove from inbox cache
-        queryClient.setQueryData<ApprovalsInboxResponse>(APPROVALS_QUERY_KEYS.inbox(), (old) => {
+        queryClient.setQueryData<ApprovalsInboxResponse>(APPROVALS_QUERY_KEYS.inbox(userId), (old) => {
           if (!old) return old;
           return {
             ...old,
@@ -121,7 +125,7 @@ export function useActApprovalMutation() {
       }
 
       // Optimistically remove from inbox cache
-      queryClient.setQueryData<ApprovalsInboxResponse>(APPROVALS_QUERY_KEYS.inbox(), (old) => {
+      queryClient.setQueryData<ApprovalsInboxResponse>(APPROVALS_QUERY_KEYS.inbox(userId), (old) => {
         if (!old) return old;
         return {
           ...old,

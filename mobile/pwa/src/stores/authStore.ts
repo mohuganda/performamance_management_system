@@ -4,6 +4,9 @@ import { idbStorage } from '../utils/storage';
 import apiClient, { setAuthToken } from '../api/client';
 import authService from '../api/auth/service';
 import { AuthUser } from '../api/auth/types';
+import { queryClient } from '../queryClient';
+import { clearUserCache } from '../utils/userCache';
+import { useSyncStore } from './syncStore';
 
 interface AuthState {
   token: string | null;
@@ -46,6 +49,16 @@ export const useAuthStore = create<AuthState>()(
       },
 
       completeLogin: (token, data) => {
+        const prevUserId = get().user?.id || get().staffId;
+        const newUserId = data.user?.id || data.staff_id;
+
+        if (prevUserId && newUserId && String(prevUserId) !== String(newUserId)) {
+          // If switching accounts without explicit logout: purge old user cache
+          queryClient.clear();
+          clearUserCache(prevUserId);
+          useSyncStore.getState().clearAllQueues();
+        }
+
         setAuthToken(token);
         set({
           token,
@@ -81,11 +94,23 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
+        const currentUserId = get().user?.id || get().staffId;
+
         apiClient.post('/auth/logout', {}, { skipAuthHandler: true }).catch((err) => {
           console.warn('Background logout call failed:', err);
         });
 
         setAuthToken(null);
+
+        // Wipe query cache so no user data remains in memory
+        queryClient.clear();
+
+        // Clear user-scoped local storage cache & legacy caches
+        clearUserCache(currentUserId);
+
+        // Clear any pending sync mutations belonging to this session
+        useSyncStore.getState().clearAllQueues();
+
         set({
           token: null,
           user: null,

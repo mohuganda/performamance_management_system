@@ -94,7 +94,7 @@ export const HomeScreen: React.FC = () => {
           <div className="mt-6">
             <AttendanceHistory
               title={t('attendance_recent_title', 'Recent Attendance')}
-              isLoading={isLoadingClocks && !clocks?.length}
+              isLoading={isLoadingClocks && sortedClocks.length === 0}
               sortedClocks={sortedClocks}
               limit={5}
               onPressItem={(log) =>
