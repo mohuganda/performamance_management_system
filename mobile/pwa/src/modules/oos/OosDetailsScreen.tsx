@@ -9,7 +9,9 @@ import { Button } from '../../components/atoms/Button';
 import { Input } from '../../components/atoms/Input';
 import { MapCard } from '../../components/molecules/MapCard';
 import { Toaster } from '../../utils/toast';
-import apiClient, { getApiErrorMessage } from '../../api/client';
+import { getApiErrorMessage } from '../../api/client';
+import oosService from '../../api/oos/service';
+import attendanceService from '../../api/attendance/service';
 import { OosRequest } from '../../api/oos/types';
 import { ClockRequest, ClockResponse } from '../../api/attendance/types';
 import { getDistanceMeters } from '../../utils/haversine';
@@ -35,12 +37,26 @@ export const OosDetailsScreen: React.FC = () => {
 
   const fetchRequestDetails = useCallback(async () => {
     setIsLoading(true);
+    // Try local cache first
+    const cachedRequests = localStorage.getItem('moh-pms-oos-requests');
+    if (cachedRequests) {
+      try {
+        const list: OosRequest[] = JSON.parse(cachedRequests);
+        const match = list.find((item) => String(item.id) === String(id));
+        if (match) {
+          setRequest(match);
+        }
+      } catch {}
+    }
+
     try {
-      const res = await apiClient.get<OosRequest>(`/oos/requests/${id}`);
-      setRequest(res.data);
+      const list = await oosService.listRequests();
+      const match = list.find((item) => String(item.id) === String(id));
+      if (match) {
+        setRequest(match);
+      }
     } catch (err) {
       console.warn('Failed to fetch OOS request details:', err);
-      // Fallback: check cached list
     } finally {
       setIsLoading(false);
     }
@@ -131,7 +147,7 @@ export const OosDetailsScreen: React.FC = () => {
     };
 
     try {
-      await apiClient.post('/attendance/clock', payload);
+      await attendanceService.clock(payload);
       setIsClockedIn(clockType === 'in');
       Toaster.success(
         clockType === 'in'

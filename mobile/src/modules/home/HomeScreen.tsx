@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
 import { useTheme } from '../../app/hooks/useTheme';
 import { LayoutTemplate } from '../../components/templates/LayoutTemplate';
-import { Clock, Calendar, MapPin, CheckSquare, Activity } from 'lucide-react-native';
+import { Clock, Calendar, MapPin, CheckSquare, Activity, FileText } from 'lucide-react-native';
 import { HomeHeader } from '../../components/organisms/home/HomeHeader';
 import { ActionCard } from '../../components/organisms/home/ActionCard';
 import { StatCard } from '../../components/organisms/common/StatCard';
@@ -65,6 +65,13 @@ export function HomeScreen() {
             icon={<MapPin size={20} color="#3B82F6" />}
             iconBgClass="bg-blue-50 dark:bg-blue-950/30"
             onPress={() => navigation.navigate('OutOfStation', { initialTab: 'apply' })}
+          />
+          <ActionCard
+            title={t('home_action_leave_history')}
+            subtitle={t('home_action_leave_history_sub')}
+            icon={<FileText size={20} color="#8B5CF6" />}
+            iconBgClass="bg-purple-50 dark:bg-purple-950/30"
+            onPress={() => navigation.navigate('LeaveHistory')}
           />
         </View>
 

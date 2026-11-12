@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  moh-pms-pwa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: moh_pms_pwa_gateway
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production

@@ -1,6 +1,6 @@
 {
   "name": "ug.go.moh.pms",
-  "version": "1.0.2",
+  "version": "1.0.5",
   "private": true,
   "scripts": {
     "android": "react-native run-android",

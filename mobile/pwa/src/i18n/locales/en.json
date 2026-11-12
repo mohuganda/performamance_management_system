@@ -52,6 +52,8 @@
   "home_action_leave_sub": "Leave planner",
   "home_action_oos": "Request Out-of-Station",
   "home_action_oos_sub": "request approval for off-site duty",
+  "home_action_leave_history": "Leave History",
+  "home_action_leave_history_sub": "View past requests",
   "home_announcement_title": "Mid-term appraisal cycle closing soon",
   "home_announcement_description": "Please ensure all your targets and updates are fully synced.",
   "leave_management_title": "Leave Management",

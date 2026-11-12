@@ -10,7 +10,8 @@ import { AttachmentPicker, AttachmentFile } from '../../components/molecules/Att
 import { useTheme } from '../../hooks/useTheme';
 import { useSyncStore } from '../../stores/syncStore';
 import { Toaster } from '../../utils/toast';
-import apiClient, { getApiErrorMessage } from '../../api/client';
+import { getApiErrorMessage } from '../../api/client';
+import { leaveService } from '../../api/leave/service';
 import { LeaveType, LeaveSubmissionPayload } from '../../api/leave/types';
 
 export const LeaveRequestScreen: React.FC = () => {
@@ -30,10 +31,21 @@ export const LeaveRequestScreen: React.FC = () => {
   const addMutation = useSyncStore((state) => state.addMutation);
 
   useEffect(() => {
-    apiClient
-      .get<LeaveType[]>('/leave/types')
-      .then((res) => {
-        if (res.data) setLeaveTypes(res.data);
+    // Offline cached types
+    const cachedTypes = localStorage.getItem('moh-pms-leave-types');
+    if (cachedTypes) {
+      try {
+        setLeaveTypes(JSON.parse(cachedTypes));
+      } catch {}
+    }
+
+    leaveService
+      .listTypes()
+      .then((types) => {
+        if (types && types.length > 0) {
+          setLeaveTypes(types);
+          localStorage.setItem('moh-pms-leave-types', JSON.stringify(types));
+        }
       })
       .catch((err) => console.warn('Failed to load leave types', err));
   }, []);
@@ -68,13 +80,13 @@ export const LeaveRequestScreen: React.FC = () => {
       if (!navigator.onLine) {
         addMutation({
           type: 'LEAVE_REQUEST',
-          endpoint: '/leave/requests',
+          endpoint: '/mobile/leave/requests',
           method: 'POST',
           payload,
         });
         Toaster.info(t('leave_sync_offline', 'Leave application stored offline. Will sync once online.'));
       } else {
-        await apiClient.post('/leave/requests', payload);
+        await leaveService.createRequest(payload);
         Toaster.success(t('leave_submitted_success', 'Leave application submitted successfully!'));
       }
       navigate('/leave/history');

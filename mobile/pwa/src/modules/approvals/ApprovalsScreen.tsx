@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, X, Clock, Calendar, MapPin, Activity, RefreshCw } from 'lucide-react';
 import { MainTemplate } from '../../components/templates';
@@ -7,9 +7,11 @@ import { Badge } from '../../components/atoms/Badge';
 import { Button } from '../../components/atoms/Button';
 import { Input } from '../../components/atoms/Input';
 import { useTheme } from '../../hooks/useTheme';
+import { useSyncStore } from '../../stores/syncStore';
 import { Toaster } from '../../utils/toast';
-import apiClient, { getApiErrorMessage } from '../../api/client';
-import { ApprovalInboxItem, ApproveLeavePayload } from '../../api/approvals/types';
+import { getApiErrorMessage } from '../../api/client';
+import approvalsService from '../../api/approvals/service';
+import { ApprovalInboxItem, ApprovalInboxStats, ApproveLeavePayload } from '../../api/approvals/types';
 import { formatDate } from '../../utils/date';
 
 type FilterTab = 'all' | 'leave' | 'oos' | 'performance';
@@ -31,9 +33,10 @@ function getModuleStyles(module: string) {
 
 export const ApprovalsScreen: React.FC = () => {
   const { t } = useTranslation();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   const [tasks, setTasks] = useState<ApprovalInboxItem[]>([]);
+  const [stats, setStats] = useState<ApprovalInboxStats | null>(null);
   const [filter, setFilter] = useState<FilterTab>('all');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -43,11 +46,26 @@ export const ApprovalsScreen: React.FC = () => {
   const [remarks, setRemarks] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const addMutation = useSyncStore((state) => state.addMutation);
+
   const fetchTasks = async () => {
     setIsLoading(true);
+    const cached = localStorage.getItem('moh-pms-approvals-inbox');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.pending) setTasks(parsed.pending);
+        if (parsed.stats) setStats(parsed.stats);
+      } catch {}
+    }
+
     try {
-      const res = await apiClient.get<ApprovalInboxItem[]>('/approvals/tasks');
-      setTasks(res.data);
+      const res = await approvalsService.inbox();
+      if (res) {
+        setTasks(res.pending || []);
+        if (res.stats) setStats(res.stats);
+        localStorage.setItem('moh-pms-approvals-inbox', JSON.stringify(res));
+      }
     } catch (err) {
       console.warn('Failed to fetch approval tasks:', err);
     } finally {
@@ -58,6 +76,13 @@ export const ApprovalsScreen: React.FC = () => {
   useEffect(() => {
     fetchTasks();
   }, []);
+
+  const tabCounts = useMemo(() => ({
+    all: stats?.pending_total ?? tasks.length,
+    leave: stats?.leave_pending ?? tasks.filter((t) => t.module === 'leave').length,
+    oos: stats?.oos_pending ?? tasks.filter((t) => t.module === 'oos').length,
+    performance: (stats?.performance_pending ?? 0) + (stats?.ppa_pending ?? 0) || tasks.filter((t) => t.module === 'performance' || t.module === 'ppa').length,
+  }), [stats, tasks]);
 
   const filteredTasks = tasks.filter((item) => {
     if (filter === 'all') return true;
@@ -76,14 +101,52 @@ export const ApprovalsScreen: React.FC = () => {
     if (!selectedTask || !actionType) return;
     setIsSubmitting(true);
 
-    const payload: ApproveLeavePayload = {
-      approve: actionType === 'approved',
-      comments: remarks.trim() || undefined,
-    };
+    const approve = actionType === 'approved';
+    const comments = remarks.trim() || undefined;
 
     try {
-      await apiClient.post(`/approvals/tasks/${selectedTask.id}/action`, payload);
-      Toaster.success(t('approvals_action_success', `Request ${actionType === 'approved' ? 'Approved' : 'Rejected'} successfully!`));
+      if (!navigator.onLine) {
+        let endpoint = '';
+        if (selectedTask.module === 'leave' && selectedTask.approval_id) {
+          endpoint = `/mobile/leave/approvals/${selectedTask.approval_id}`;
+        } else if (selectedTask.module === 'oos' && selectedTask.approval_id) {
+          endpoint = `/mobile/out-of-station/approvals/${selectedTask.approval_id}`;
+        } else if (selectedTask.module === 'ppa' && selectedTask.ppa_id) {
+          endpoint = `/mobile/performance/ppa/review`;
+        } else if (selectedTask.module === 'performance' && selectedTask.report_id) {
+          endpoint = `/mobile/performance/appraisal/review`;
+        }
+        if (endpoint) {
+          addMutation({
+            type: 'APPROVAL_ACTION',
+            endpoint,
+            method: 'POST',
+            payload: { approve, comments },
+          });
+        }
+        Toaster.info(t('approvals_queued', 'Offline mode: Approval decision saved locally. Will sync automatically.'));
+      } else {
+        if (selectedTask.module === 'leave' && selectedTask.approval_id) {
+          await approvalsService.approveLeave(selectedTask.approval_id, { approve, comments });
+        } else if (selectedTask.module === 'oos' && selectedTask.approval_id) {
+          await approvalsService.approveOos(selectedTask.approval_id, { approve, comments });
+        } else if (selectedTask.module === 'ppa' && selectedTask.ppa_id) {
+          await approvalsService.reviewPpa({ ppa_id: selectedTask.ppa_id, approve, comments });
+        } else if (selectedTask.module === 'performance' && selectedTask.report_id) {
+          await approvalsService.reviewAppraisal({
+            report_id: selectedTask.report_id,
+            decision: approve ? 'approve' : 'return',
+            comments: comments || (approve ? 'Approved' : 'Returned for revision'),
+            comment_role:
+              selectedTask.status === 'countersigning'
+                ? 'countersigning'
+                : selectedTask.status === 'responsible_review'
+                ? 'responsible_officer'
+                : 'appraiser',
+          });
+        }
+        Toaster.success(t('approvals_action_success', `Request ${approve ? 'Approved' : 'Rejected'} successfully!`));
+      }
       setSelectedTask(null);
       setActionType(null);
       fetchTasks();
@@ -106,6 +169,7 @@ export const ApprovalsScreen: React.FC = () => {
       >
         {(['all', 'leave', 'oos', 'performance'] as const).map((tab) => {
           const isActive = filter === tab;
+          const count = tabCounts[tab];
           const label =
             tab === 'all'
               ? 'All'
@@ -119,19 +183,54 @@ export const ApprovalsScreen: React.FC = () => {
             <button
               key={tab}
               onClick={() => setFilter(tab)}
-              className="flex-1 py-4 text-center border-b-2 text-xs font-bold transition-colors"
+              className="flex-1 py-3.5 text-center border-b-2 text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
               style={{
                 borderBottomColor: isActive ? colors.primary : 'transparent',
                 color: isActive ? colors.primary : colors.muted,
               }}
             >
-              {label}
+              <span>{label}</span>
+              {count > 0 && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                  style={{
+                    backgroundColor: isActive ? `${colors.primary}20` : colors.border,
+                    color: isActive ? colors.primary : colors.muted,
+                  }}
+                >
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
       <div className="p-4 space-y-3">
+        {stats && (
+          <Card className="p-4 border border-emerald-500/20 shadow-sm">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
+                  <Clock size={20} className="text-emerald-600" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-emerald-600">
+                    {t('approvals_your_performance', 'Your Approval Performance')}
+                  </h4>
+                  <p className="text-xs" style={{ color: colors.muted }}>
+                    {t('approvals_avg_time_desc', 'Average time to act on requests assigned to you')}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xl font-bold" style={{ color: colors.text }}>
+                  {stats.avg_approval_label || 'Fast'}
+                </span>
+              </div>
+            </div>
+          </Card>
+        )}
         <div className="flex items-center justify-between">
           <span
             className="text-xs font-bold uppercase tracking-wider"

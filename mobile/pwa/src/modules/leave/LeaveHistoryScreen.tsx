@@ -5,7 +5,7 @@ import { MainTemplate } from '../../components/templates';
 import { Card } from '../../components/atoms/Card';
 import { Badge } from '../../components/atoms/Badge';
 import { useTheme } from '../../hooks/useTheme';
-import apiClient from '../../api/client';
+import { leaveService } from '../../api/leave/service';
 import { LeaveRequest, LeaveType } from '../../api/leave/types';
 import { formatDate } from '../../utils/date';
 import { parseISODate } from '../../utils/leavePolicy';
@@ -20,13 +20,35 @@ export const LeaveHistoryScreen: React.FC = () => {
 
   useEffect(() => {
     setIsLoading(true);
+    // Instant offline cache load
+    const cachedReqs = localStorage.getItem('moh-pms-leave-requests');
+    const cachedTypes = localStorage.getItem('moh-pms-leave-types');
+    if (cachedReqs) {
+      try {
+        setRequests(JSON.parse(cachedReqs));
+      } catch {}
+    }
+    if (cachedTypes) {
+      try {
+        setLeaveTypes(JSON.parse(cachedTypes));
+      } catch {}
+    }
+
+    // Remote API fetch using normalized leaveService
     Promise.all([
-      apiClient.get<LeaveRequest[]>('/leave/requests').catch(() => ({ data: [] })),
-      apiClient.get<LeaveType[]>('/leave/types').catch(() => ({ data: [] })),
+      leaveService.listRequests(),
+      leaveService.listTypes(),
     ])
       .then(([reqRes, typeRes]) => {
-        if (reqRes.data) setRequests(reqRes.data);
-        if (typeRes.data) setLeaveTypes(typeRes.data);
+        setRequests(reqRes);
+        localStorage.setItem('moh-pms-leave-requests', JSON.stringify(reqRes));
+        if (typeRes && typeRes.length > 0) {
+          setLeaveTypes(typeRes);
+          localStorage.setItem('moh-pms-leave-types', JSON.stringify(typeRes));
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load leave history:', err);
       })
       .finally(() => setIsLoading(false));
   }, []);

@@ -7,7 +7,7 @@ import { MainTemplate } from '../../components/templates';
 import { LeaveBalances } from '../../components/organisms/LeaveBalances';
 import { LeaveGuideModal } from '../../components/organisms/LeaveGuideModal';
 import { QuickActionCard } from '../../components/organisms/QuickActionCard';
-import apiClient from '../../api/client';
+import { leaveService } from '../../api/leave/service';
 import { LeaveBalance, LeaveType } from '../../api/leave/types';
 
 export const LeaveScreen: React.FC = () => {
@@ -22,13 +22,35 @@ export const LeaveScreen: React.FC = () => {
 
   useEffect(() => {
     setIsLoading(true);
+    // Instant offline cache load
+    const cachedBal = localStorage.getItem('moh-pms-leave-balances');
+    const cachedTypes = localStorage.getItem('moh-pms-leave-types');
+    if (cachedBal) {
+      try {
+        setBalances(JSON.parse(cachedBal));
+      } catch {}
+    }
+    if (cachedTypes) {
+      try {
+        setLeaveTypes(JSON.parse(cachedTypes));
+      } catch {}
+    }
+
+    // Fetch from remote API via normalized leaveService (/mobile/leave/balances & /mobile/leave/types)
     Promise.all([
-      apiClient.get<LeaveBalance[]>('/leave/balances').catch(() => ({ data: [] })),
-      apiClient.get<LeaveType[]>('/leave/types').catch(() => ({ data: [] })),
+      leaveService.listBalances(),
+      leaveService.listTypes(),
     ])
       .then(([balRes, typeRes]) => {
-        if (balRes.data) setBalances(balRes.data);
-        if (typeRes.data) setLeaveTypes(typeRes.data);
+        setBalances(balRes);
+        localStorage.setItem('moh-pms-leave-balances', JSON.stringify(balRes));
+        if (typeRes && typeRes.length > 0) {
+          setLeaveTypes(typeRes);
+          localStorage.setItem('moh-pms-leave-types', JSON.stringify(typeRes));
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load leave data from API:', err);
       })
       .finally(() => setIsLoading(false));
   }, []);

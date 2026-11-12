@@ -14,7 +14,8 @@ import { useTheme } from '../../hooks/useTheme';
 import { useAuthStore } from '../../stores/authStore';
 import { Toaster } from '../../utils/toast';
 import { useSyncStore } from '../../stores/syncStore';
-import apiClient, { getApiErrorMessage } from '../../api/client';
+import { getApiErrorMessage } from '../../api/client';
+import oosService from '../../api/oos/service';
 import mapsService from '../../api/maps/service';
 import { OosReason, OosRequest, OosSubmissionPayload } from '../../api/oos/types';
 import { GooglePlacePrediction } from '../../api/maps/types';
@@ -54,13 +55,29 @@ export const OosScreen: React.FC = () => {
 
   const fetchData = async () => {
     setIsLoading(true);
+    // Instant offline cache load
+    const cachedReasons = localStorage.getItem('moh-pms-oos-reasons');
+    const cachedRequests = localStorage.getItem('moh-pms-oos-requests');
+    if (cachedReasons) {
+      try {
+        setReasons(JSON.parse(cachedReasons));
+      } catch {}
+    }
+    if (cachedRequests) {
+      try {
+        setRequests(JSON.parse(cachedRequests));
+      } catch {}
+    }
+
     try {
       const [reasonsRes, requestsRes] = await Promise.all([
-        apiClient.get<OosReason[]>('/oos/reasons').catch(() => ({ data: [] })),
-        apiClient.get<OosRequest[]>('/oos/requests').catch(() => ({ data: [] })),
+        oosService.listReasons(),
+        oosService.listRequests(),
       ]);
-      if (reasonsRes.data) setReasons(reasonsRes.data);
-      if (requestsRes.data) setRequests(requestsRes.data);
+      setReasons(reasonsRes);
+      localStorage.setItem('moh-pms-oos-reasons', JSON.stringify(reasonsRes));
+      setRequests(requestsRes);
+      localStorage.setItem('moh-pms-oos-requests', JSON.stringify(requestsRes));
     } catch (err) {
       console.warn('Failed to load OOS data:', err);
     } finally {
@@ -132,13 +149,13 @@ export const OosScreen: React.FC = () => {
       if (!navigator.onLine) {
         addMutation({
           type: 'OOS_REQUEST',
-          endpoint: '/oos/requests',
+          endpoint: '/mobile/out-of-station/requests',
           method: 'POST',
           payload,
         });
         Toaster.info(t('oos_sync_offline', 'Travel request saved offline. Will sync when reconnected.'));
       } else {
-        await apiClient.post('/oos/requests', payload);
+        await oosService.createRequest(payload);
         Toaster.success(t('oos_submit_success', 'Travel request submitted successfully!'));
       }
 

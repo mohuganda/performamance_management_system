@@ -106,6 +106,19 @@ export default defineConfig({
         target: 'http://45.10.154.35:8081',
         changeOrigin: true,
         secure: false,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.error('[Vite Proxy Error]:', err.message);
+          });
+          proxy.on('proxyReq', (proxyReq, _req, _res) => {
+            proxyReq.setHeader('Host', '45.10.154.35:8081');
+          });
+          proxy.on('proxyRes', (proxyRes, _req, _res) => {
+            proxyRes.headers['access-control-allow-origin'] = '*';
+            proxyRes.headers['access-control-allow-methods'] = 'GET, POST, PUT, DELETE, PATCH, OPTIONS';
+            proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, Accept';
+          });
+        },
       },
     },
   },

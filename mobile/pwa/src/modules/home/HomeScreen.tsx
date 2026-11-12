@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Clock, Calendar, MapPin, CheckSquare, Activity } from 'lucide-react';
+import { Clock, Calendar, MapPin, CheckSquare, Activity, FileText } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useTheme } from '../../hooks/useTheme';
 import { LayoutTemplate } from '../../components/templates/LayoutTemplate';
@@ -10,7 +10,7 @@ import { ActionCard } from '../../components/organisms/ActionCard';
 import { StatCard } from '../../components/organisms/StatCard';
 import { AnnouncementBanner } from '../../components/organisms/AnnouncementBanner';
 import { PwaInstallBanner } from '../../components/organisms/PwaInstallBanner';
-import apiClient from '../../api/client';
+import approvalsService from '../../api/approvals/service';
 import { ApprovalInboxStats } from '../../api/approvals/types';
 
 export const HomeScreen: React.FC = () => {
@@ -31,21 +31,23 @@ export const HomeScreen: React.FC = () => {
 
   useEffect(() => {
     if (showApprovals) {
-      apiClient
-        .get<{ stats?: ApprovalInboxStats }>('/approvals/inbox')
+      const cached = localStorage.getItem('moh-pms-approvals-stats');
+      if (cached) {
+        try {
+          setStats(JSON.parse(cached));
+        } catch {}
+      }
+
+      approvalsService
+        .inbox()
         .then((res) => {
-          if (res.data?.stats) setStats(res.data.stats);
+          if (res?.stats) {
+            setStats(res.stats);
+            localStorage.setItem('moh-pms-approvals-stats', JSON.stringify(res.stats));
+          }
         })
         .catch(() => {
-          // Offline fallback
-          const cached = localStorage.getItem('moh-pms-approvals-stats');
-          if (cached) {
-            try {
-              setStats(JSON.parse(cached));
-            } catch {
-              // ignore
-            }
-          }
+          // Keep cached stats if available
         });
     }
   }, [showApprovals]);
@@ -83,15 +85,13 @@ export const HomeScreen: React.FC = () => {
             iconBgClass="bg-blue-50 dark:bg-blue-950/30"
             onClick={() => navigate('/oos')}
           />
-          {showApprovals && (
-            <ActionCard
-              title={t('approvals_title', 'Approvals Inbox')}
-              subtitle={t('approvals_waiting', 'Pending reviews')}
-              icon={<CheckSquare size={20} color="#8B5CF6" />}
-              iconBgClass="bg-purple-50 dark:bg-purple-950/30"
-              onClick={() => navigate('/approvals')}
-            />
-          )}
+          <ActionCard
+            title={t('home_action_leave_history', 'Leave History')}
+            subtitle={t('home_action_leave_history_sub', 'View past requests')}
+            icon={<FileText size={20} color="#8B5CF6" />}
+            iconBgClass="bg-purple-50 dark:bg-purple-950/30"
+            onClick={() => navigate('/leave/history')}
+          />
         </div>
 
         {/* Announcement Banner */}

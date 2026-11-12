@@ -12,7 +12,8 @@ import { showAlert } from '../../stores/alertStore';
 import { Toaster } from '../../utils/toast';
 import { attendanceNotesSchema } from '../../schemas/attendance';
 import { useSyncStore } from '../../stores/syncStore';
-import apiClient, { getApiErrorMessage } from '../../api/client';
+import { getApiErrorMessage } from '../../api/client';
+import attendanceService from '../../api/attendance/service';
 import { ClockResponse, ClockRequest } from '../../api/attendance/types';
 import { formatDate as formatUtilDate, formatTime as formatUtilTime } from '../../utils/date';
 
@@ -72,19 +73,18 @@ export const AttendanceScreen: React.FC = () => {
 
   const fetchClocks = useCallback(async () => {
     setIsLoadingClocks(true);
+    const cached = localStorage.getItem('moh-pms-attendance-cache');
+    if (cached) {
+      try {
+        setClocks(JSON.parse(cached));
+      } catch {}
+    }
     try {
-      const res = await apiClient.get<ClockResponse[]>('/attendance/clocks');
-      setClocks(res.data);
-      localStorage.setItem('moh-pms-attendance-cache', JSON.stringify(res.data));
-    } catch {
-      const cached = localStorage.getItem('moh-pms-attendance-cache');
-      if (cached) {
-        try {
-          setClocks(JSON.parse(cached));
-        } catch {
-          // ignore
-        }
-      }
+      const data = await attendanceService.listClocks();
+      setClocks(data);
+      localStorage.setItem('moh-pms-attendance-cache', JSON.stringify(data));
+    } catch (err) {
+      console.warn('Failed to load attendance list:', err);
     } finally {
       setIsLoadingClocks(false);
     }
@@ -158,7 +158,7 @@ export const AttendanceScreen: React.FC = () => {
           if (!navigator.onLine) {
             addMutation({
               type: 'CLOCK',
-              endpoint: '/attendance/clock',
+              endpoint: '/mobile/attendance/clock',
               method: 'POST',
               payload,
             });
@@ -177,9 +177,13 @@ export const AttendanceScreen: React.FC = () => {
             setClocks((prev) => [optimisticClock, ...prev]);
             Toaster.info(t('attendance_sync_offline', 'Attendance clocked offline. Will sync when reconnected.'));
           } else {
-            const res = await apiClient.post<ClockResponse>('/attendance/clock', payload);
-            setClocks((prev) => [res.data, ...prev]);
-            Toaster.success(t('attendance_sync_success', 'Successfully submitted attendance!'));
+            const newClock = await attendanceService.clock(payload);
+            setClocks((prev) => [newClock, ...prev]);
+            Toaster.success(
+              action === 'in'
+                ? t('attendance_success_clock_in', 'Clocked in successfully!')
+                : t('attendance_success_clock_out', 'Clocked out successfully!')
+            );
           }
           setNotes('');
         } catch (err) {
