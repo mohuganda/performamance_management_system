@@ -8,7 +8,9 @@ import { useThemeStore, ThemeMode } from '../../stores/themeStore';
 import { useTheme } from '../../hooks/useTheme';
 import { LayoutTemplate } from '../../components/templates/LayoutTemplate';
 import { Badge } from '../../components/atoms/Badge';
+import { UserAvatar } from '../../components/atoms/UserAvatar';
 import { QuickActionCard } from '../../components/organisms/QuickActionCard';
+import { useProfileQuery } from '../../hooks/useProfile';
 
 export const AccountScreen: React.FC = () => {
   const { t } = useTranslation();
@@ -16,6 +18,9 @@ export const AccountScreen: React.FC = () => {
   const { logout, user } = useAuthStore();
   const { themeMode, setThemeMode } = useThemeStore();
   const { colors } = useTheme();
+  const { data: profileData } = useProfileQuery();
+
+  const staffName = profileData?.staff?.name || user?.Name || 'Officer';
 
   const [themeModalVisible, setThemeModalVisible] = useState(false);
 
@@ -63,27 +68,16 @@ export const AccountScreen: React.FC = () => {
         }}
       >
         <div className="flex items-center gap-4 mt-2">
-          {user?.ProfilePhoto ? (
-            <img
-              src={user.ProfilePhoto}
-              alt={user.Name || 'User'}
-              className="w-16 h-16 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 flex-shrink-0"
-            />
-          ) : (
-            <div
-              className="w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0"
-              style={{
-                backgroundColor: colors.primary,
-                color: colors.surface,
-              }}
-            >
-              {user?.Name?.charAt(0) || 'U'}
-            </div>
-          )}
+          <UserAvatar
+            photoUrl={user?.ProfilePhoto}
+            name={staffName}
+            size="lg"
+            className="flex-shrink-0"
+          />
 
           <div className="flex-1 min-w-0">
             <h2 className="text-xl font-bold mb-0.5 truncate" style={{ color: colors.text }}>
-              {user?.Name || 'Officer'}
+              {staffName}
             </h2>
             <p className="text-sm mb-2 truncate" style={{ color: colors.muted }}>
               {user?.Email}

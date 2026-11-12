@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MapContainer, TileLayer, Marker, Circle } from 'react-leaflet';
 import L from 'leaflet';
-import { Camera, MapPin } from 'lucide-react';
+import { Camera, MapPin, Image as ImageIcon } from 'lucide-react';
 import { MainTemplate } from '../../components/templates';
 import { Card } from '../../components/atoms/Card';
 import { Badge } from '../../components/atoms/Badge';
@@ -13,6 +13,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { Toaster } from '../../utils/toast';
 import { getApiErrorMessage } from '../../api/client';
 import { useProfileQuery, useUpdateProfileMutation } from '../../hooks/useProfile';
+import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage';
 import { formatDateTime } from '../../utils/date';
 import { StaffDetail, AuthUser, AccountInfo } from '../../api/auth/types';
 
@@ -72,6 +73,18 @@ export const ProfileScreen: React.FC = () => {
   const [signatureModalVisible, setSignatureModalVisible] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const staff: StaffDetail | undefined = profileData?.staff;
+  const account: AccountInfo | undefined = profileData?.account;
+  const currentUser: AuthUser | null = profileData?.user || authUser;
+  const roles: string[] = profileData?.roles || authRoles || (currentUser?.Role ? [currentUser.Role] : []);
+
+  const displayName = staff?.name || currentUser?.Name || t('profile_title');
+  const userEmail = currentUser?.Email || staff?.email || '—';
+  const isActive = account?.is_active ?? currentUser?.IsActive;
+
+  // Authenticated signature image
+  const { src: signatureSrc, hasError: signatureError } = useAuthenticatedImage(currentUser?.SignatureImage);
+
   const handleSignatureSave = async (signatureDataUrl: string) => {
     updateProfileMutation.mutate(
       { signature_image: signatureDataUrl },
@@ -107,15 +120,6 @@ export const ProfileScreen: React.FC = () => {
     };
     reader.readAsDataURL(file);
   };
-
-  const staff: StaffDetail | undefined = profileData?.staff;
-  const account: AccountInfo | undefined = profileData?.account;
-  const currentUser: AuthUser | null = profileData?.user || authUser;
-  const roles: string[] = profileData?.roles || authRoles || (currentUser?.Role ? [currentUser.Role] : []);
-
-  const displayName = staff?.name || currentUser?.Name || t('profile_title');
-  const userEmail = currentUser?.Email || staff?.email || '—';
-  const isActive = account?.is_active ?? currentUser?.IsActive;
 
   // Geofence Map Coordinates
   const dutyStationLat = staff?.effective_duty_station?.latitude ?? staff?.facility_latitude;
@@ -187,16 +191,19 @@ export const ProfileScreen: React.FC = () => {
           </p>
 
           <div className="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-none p-4 flex items-center justify-center min-h-[120px]">
-            {currentUser?.SignatureImage ? (
+            {signatureSrc && !signatureError ? (
               <img
-                src={currentUser.SignatureImage}
+                src={signatureSrc}
                 alt="Electronic Signature"
                 className="w-full h-[100px] object-contain"
               />
             ) : (
-              <span className="text-gray-400 dark:text-gray-500 italic text-sm">
-                {t('profile_no_signature')}
-              </span>
+              <div className="flex flex-col items-center justify-center py-4 text-zinc-400 dark:text-zinc-500">
+                <ImageIcon size={40} className="mb-2" />
+                <span className="text-xs italic">
+                  {t('profile_no_signature')}
+                </span>
+              </div>
             )}
           </div>
 

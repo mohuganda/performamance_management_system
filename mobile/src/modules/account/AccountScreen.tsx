@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, Pressable, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Settings, Palette, LogOut, ChevronRight, Check } from 'lucide-react-native';
@@ -11,6 +11,9 @@ import { LayoutTemplate } from '../../components/templates/LayoutTemplate';
 import { UserProfilePicture } from '../../components/molecules/UserAvatar';
 import { Badge } from '../../components/atoms/Badge';
 import { QuickActionCard } from '../../components/organisms/home/QuickActionCard';
+import { useProfileSync } from '../../app/hooks/useProfile';
+import { database } from '../../db/index';
+import ProfileModel from '../../db/models/ProfileModel';
 
 export function AccountScreen() {
   const { t } = useTranslation();
@@ -20,6 +23,28 @@ export function AccountScreen() {
   const { colors } = useTheme();
 
   const [themeModalVisible, setThemeModalVisible] = useState(false);
+  const [dbStaffName, setDbStaffName] = useState<string | null>(null);
+  const { data: profileData } = useProfileSync();
+
+  useEffect(() => {
+    database.collections
+      .get<ProfileModel>('profiles')
+      .query()
+      .fetch()
+      .then((profiles) => {
+        if (profiles.length > 0 && profiles[0].staffData) {
+          try {
+            const parsed = JSON.parse(profiles[0].staffData);
+            if (parsed?.name) setDbStaffName(parsed.name);
+          } catch (e) {
+            // parsing error fallback
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const staffName = dbStaffName || profileData?.staff?.name || user?.Name || 'Officer';
 
   const handleLogout = () => {
     showAlert({
@@ -63,7 +88,7 @@ export function AccountScreen() {
             <UserProfilePicture uri={user?.ProfilePhoto} size={64} />
             <View className="ml-4 flex-1">
               <Text className="text-xl font-bold text-gray-900 mb-1" style={{ color: colors.text }}>
-                {user?.Name || 'Officer'}
+                {staffName}
               </Text>
               <Text className="text-sm text-gray-500 mb-2" style={{ color: colors.muted }}>
                 {user?.Email}

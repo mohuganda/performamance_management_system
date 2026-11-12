@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
 import { useTheme } from '../../hooks/useTheme';
 import { useUnreadCountQuery } from '../../hooks/useNotifications';
+import { UserAvatar } from '../atoms/UserAvatar';
 import { LOGO_SVG } from '../../assets/logoSvg';
 
 export const HomeHeader: React.FC = () => {
@@ -61,26 +62,15 @@ export const HomeHeader: React.FC = () => {
 
         <button
           onClick={() => navigate('/profile')}
-          className="rounded-full overflow-hidden border border-zinc-200 dark:border-zinc-700 flex-shrink-0"
+          className="rounded-full overflow-hidden flex-shrink-0 transition-opacity hover:opacity-90"
           aria-label="User Profile"
         >
-          {user?.ProfilePhoto ? (
-            <img
-              src={user.ProfilePhoto}
-              alt={user.Name || 'User'}
-              className="w-9 h-9 object-cover rounded-full"
-            />
-          ) : (
-            <div
-              className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs"
-              style={{
-                backgroundColor: colors.primary,
-                color: colors.surface,
-              }}
-            >
-              {user?.Name?.charAt(0) || 'U'}
-            </div>
-          )}
+          <UserAvatar
+            photoUrl={user?.ProfilePhoto}
+            name={user?.Name}
+            size="sm"
+            className="w-9 h-9"
+          />
         </button>
       </div>
     </header>

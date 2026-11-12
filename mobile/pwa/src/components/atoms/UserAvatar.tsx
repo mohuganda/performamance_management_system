@@ -1,4 +1,6 @@
 import React from 'react';
+import { User } from 'lucide-react';
+import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage';
 
 interface UserAvatarProps {
   photoUrl?: string | null;
@@ -13,27 +15,26 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   size = 'md',
   className = '',
 }) => {
+  const { src, hasError } = useAuthenticatedImage(photoUrl);
+
   const sizeClasses = {
-    sm: 'w-8 h-8 text-xs',
-    md: 'w-12 h-12 text-sm',
-    lg: 'w-16 h-16 text-lg',
-    xl: 'w-24 h-24 text-2xl',
+    sm: 'w-8 h-8',
+    md: 'w-12 h-12',
+    lg: 'w-16 h-16',
+    xl: 'w-24 h-24',
   }[size];
 
-  const getInitials = (n: string) => {
-    return n
-      .split(' ')
-      .map((part) => part[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase();
-  };
+  const iconSizes = {
+    sm: 16,
+    md: 20,
+    lg: 32,
+    xl: 48,
+  }[size];
 
-  if (photoUrl) {
+  if (src && !hasError) {
     return (
       <img
-        src={photoUrl}
+        src={src}
         alt={name}
         className={`${sizeClasses} rounded-full object-cover border border-zinc-200 dark:border-zinc-800 ${className}`}
       />
@@ -42,10 +43,11 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
 
   return (
     <div
-      className={`${sizeClasses} rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-bold flex items-center justify-center border border-zinc-300 dark:border-zinc-700 select-none ${className}`}
+      className={`${sizeClasses} rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 flex items-center justify-center border border-zinc-200 dark:border-zinc-700 select-none ${className}`}
     >
-      {getInitials(name)}
+      <User size={iconSizes} />
     </div>
   );
 };
 
+export default UserAvatar;

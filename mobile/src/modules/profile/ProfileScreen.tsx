@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import MapView, { Marker, Circle } from 'react-native-maps';
-import { Camera, MapPin } from 'lucide-react-native';
+import { Camera, MapPin, Image as ImageIcon } from 'lucide-react-native';
 import { useAuthStore } from '../../stores/authStore';
 import { Button } from '../../components/atoms/Button';
 import { Card } from '../../components/atoms/Card';
@@ -17,6 +17,7 @@ import withObservables from '@nozbe/with-observables';
 import { database } from '../../db/index';
 import ProfileModel from '../../db/models/ProfileModel';
 import { formatDateTime } from '../../utils/date';
+import { resolveFileUrl } from '../../utils/fileUrl';
 import { StaffDetail, AuthUser, AccountInfo } from '../../api/auth/types';
 
 const fileUriToBase64 = async (uri: string): Promise<string> => {
@@ -65,9 +66,10 @@ const InfoRow: React.FC<InfoRowProps> = ({ label, value, isLast = false }) => {
 
 function BaseProfileScreen({ dbProfile }: { dbProfile?: ProfileModel[] }) {
   const { t } = useTranslation();
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
   const { colors, isDark } = useTheme();
   const [signatureModalVisible, setSignatureModalVisible] = useState(false);
+  const [signatureError, setSignatureError] = useState(false);
 
   // Background sync trigger
   const { data: syncData, isLoading, refetch, isFetching } = useProfileSync();
@@ -118,6 +120,10 @@ function BaseProfileScreen({ dbProfile }: { dbProfile?: ProfileModel[] }) {
   const displayName = staff?.name || currentUser?.Name || t('profile_title');
   const userEmail = currentUser?.Email || staff?.email || '—';
   const isActive = account?.is_active ?? currentUser?.IsActive;
+
+  useEffect(() => {
+    setSignatureError(false);
+  }, [currentUser?.SignatureImage]);
 
   // Geofence Map Coordinates
   const dutyStationLat = staff?.effective_duty_station?.latitude ?? staff?.facility_latitude;
@@ -199,16 +205,23 @@ function BaseProfileScreen({ dbProfile }: { dbProfile?: ProfileModel[] }) {
             </Text>
 
             <View className="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-none p-4 items-center justify-center min-h-[120px]">
-              {currentUser?.SignatureImage ? (
+              {currentUser?.SignatureImage && !signatureError ? (
                 <Image
-                  source={{ uri: currentUser.SignatureImage }}
+                  source={{
+                    uri: resolveFileUrl(currentUser.SignatureImage)!,
+                    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                  }}
                   style={{ width: '100%', height: 100 }}
                   resizeMode="contain"
+                  onError={() => setSignatureError(true)}
                 />
               ) : (
-                <Text className="text-gray-400 dark:text-gray-500 italic text-sm">
-                  {t('profile_no_signature')}
-                </Text>
+                <View className="items-center justify-center py-4">
+                  <ImageIcon size={40} color="#9CA3AF" />
+                  <Text className="text-gray-400 dark:text-gray-500 italic text-sm mt-2">
+                    {t('profile_no_signature')}
+                  </Text>
+                </View>
               )}
             </View>
 

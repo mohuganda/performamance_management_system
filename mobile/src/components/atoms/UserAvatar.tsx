@@ -1,10 +1,13 @@
-import React from 'react';
-import { Image, Text, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Image, View } from 'react-native';
+import { User } from 'lucide-react-native';
+import { useAuthStore } from '../../stores/authStore';
+import { resolveFileUrl } from '../../utils/fileUrl';
 
 interface UserAvatarProps {
   photoUrl?: string | null;
-  name: string;
-  size?: 'sm' | 'md' | 'lg';
+  name?: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 }
 
@@ -14,36 +17,45 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   size = 'md',
   className = '',
 }) => {
+  const token = useAuthStore((state) => state.token);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [photoUrl]);
+
   let sizeClass = 'w-10 h-10';
-  let textClass = 'text-sm font-semibold';
+  let iconSize = 20;
 
   if (size === 'sm') {
     sizeClass = 'w-8 h-8';
-    textClass = 'text-xs font-semibold';
+    iconSize = 16;
   } else if (size === 'lg') {
     sizeClass = 'w-16 h-16';
-    textClass = 'text-xl font-bold';
+    iconSize = 32;
+  } else if (size === 'xl') {
+    sizeClass = 'w-24 h-24';
+    iconSize = 48;
   }
 
-  const getInitials = (userName: string) => {
-    if (!userName) return 'MoH';
-    const parts = userName.split(' ');
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return userName.substring(0, 2).toUpperCase();
-  };
+  const resolvedUrl = resolveFileUrl(photoUrl);
 
   return (
-    <View className={`rounded-full overflow-hidden items-center justify-center bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 ${sizeClass} ${className}`}>
-      {photoUrl ? (
+    <View
+      className={`rounded-full overflow-hidden items-center justify-center bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 ${sizeClass} ${className}`}
+    >
+      {resolvedUrl && !hasError ? (
         <Image
-          source={{ uri: photoUrl }}
+          source={{
+            uri: resolvedUrl,
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          }}
           className="w-full h-full"
           resizeMode="cover"
+          onError={() => setHasError(true)}
         />
       ) : (
-        <Text className={`text-gray-800 dark:text-zinc-200 ${textClass}`}>{getInitials(name)}</Text>
+        <User size={iconSize} color="#9CA3AF" />
       )}
     </View>
   );

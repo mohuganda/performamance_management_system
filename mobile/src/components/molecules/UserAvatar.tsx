@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-
-import { User } from 'lucide-react-native';
 import { View, Image, StyleSheet, StyleProp, ViewStyle } from 'react-native';
-
+import { User } from 'lucide-react-native';
 import { useTheme } from '../../app/hooks/useTheme';
+import { useAuthStore } from '../../stores/authStore';
+import { resolveFileUrl } from '../../utils/fileUrl';
 
 export interface UserProfilePictureProps {
     uri?: string | null;
@@ -19,9 +19,11 @@ export const UserProfilePicture: React.FC<UserProfilePictureProps> = ({
     accessibilityLabel,
 }) => {
     const { colors } = useTheme();
+    const token = useAuthStore((s) => s.token);
     const [failed, setFailed] = useState(false);
     const trimmed = uri?.trim() ?? '';
-    const showImage = trimmed.length > 0 && !failed;
+    const resolvedUrl = resolveFileUrl(trimmed);
+    const showImage = Boolean(resolvedUrl && !failed);
 
     useEffect(() => {
         setFailed(false);
@@ -46,7 +48,10 @@ export const UserProfilePicture: React.FC<UserProfilePictureProps> = ({
             ]}>
             {showImage ? (
                 <Image
-                    source={{ uri: trimmed }}
+                    source={{
+                        uri: resolvedUrl!,
+                        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                    }}
                     style={StyleSheet.absoluteFill}
                     resizeMode="cover"
                     onError={() => setFailed(true)}
@@ -65,3 +70,5 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
 });
+
+export default UserProfilePicture;
