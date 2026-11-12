@@ -8,47 +8,25 @@ import { Input } from '../../components/atoms/Input';
 import { DateRangePicker } from '../../components/molecules/DateRangePicker';
 import { AttachmentPicker, AttachmentFile } from '../../components/molecules/AttachmentPicker';
 import { useTheme } from '../../hooks/useTheme';
-import { useSyncStore } from '../../stores/syncStore';
 import { Toaster } from '../../utils/toast';
 import { getApiErrorMessage } from '../../api/client';
-import { leaveService } from '../../api/leave/service';
-import { LeaveType, LeaveSubmissionPayload } from '../../api/leave/types';
+import { useLeaveTypesQuery, useCreateLeaveMutation } from '../../hooks/useLeave';
+import { LeaveSubmissionPayload } from '../../api/leave/types';
 
 export const LeaveRequestScreen: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { colors } = useTheme();
 
-  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const { data: leaveTypes = [] } = useLeaveTypesQuery();
+  const createMutation = useCreateLeaveMutation();
+
   const [selectedTypeId, setSelectedTypeId] = useState<string>('');
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const addMutation = useSyncStore((state) => state.addMutation);
-
-  useEffect(() => {
-    // Offline cached types
-    const cachedTypes = localStorage.getItem('moh-pms-leave-types');
-    if (cachedTypes) {
-      try {
-        setLeaveTypes(JSON.parse(cachedTypes));
-      } catch {}
-    }
-
-    leaveService
-      .listTypes()
-      .then((types) => {
-        if (types && types.length > 0) {
-          setLeaveTypes(types);
-          localStorage.setItem('moh-pms-leave-types', JSON.stringify(types));
-        }
-      })
-      .catch((err) => console.warn('Failed to load leave types', err));
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,8 +43,6 @@ export const LeaveRequestScreen: React.FC = () => {
       return;
     }
 
-    setIsSubmitting(true);
-
     const payload: LeaveSubmissionPayload = {
       leave_type_id: Number(selectedTypeId),
       start_date: startDate!,
@@ -76,25 +52,19 @@ export const LeaveRequestScreen: React.FC = () => {
       submit: true,
     };
 
-    try {
-      if (!navigator.onLine) {
-        addMutation({
-          type: 'LEAVE_REQUEST',
-          endpoint: '/mobile/leave/requests',
-          method: 'POST',
-          payload,
-        });
-        Toaster.info(t('leave_sync_offline', 'Leave application stored offline. Will sync once online.'));
-      } else {
-        await leaveService.createRequest(payload);
-        Toaster.success(t('leave_submitted_success', 'Leave application submitted successfully!'));
-      }
-      navigate('/leave/history');
-    } catch (err) {
-      Toaster.error(getApiErrorMessage(err, 'Failed to submit leave request.'));
-    } finally {
-      setIsSubmitting(false);
-    }
+    createMutation.mutate(payload, {
+      onSuccess: (data) => {
+        if (data?.offline) {
+          Toaster.info(t('leave_sync_offline', 'Leave application stored offline. Will sync once online.'));
+        } else {
+          Toaster.success(t('leave_submitted_success', 'Leave application submitted successfully!'));
+        }
+        navigate('/leave/history');
+      },
+      onError: (err) => {
+        Toaster.error(getApiErrorMessage(err, 'Failed to submit leave request.'));
+      },
+    });
   };
 
   return (
@@ -173,7 +143,7 @@ export const LeaveRequestScreen: React.FC = () => {
               <Button
                 type="submit"
                 title={t('leave_submit_btn', 'Submit Application')}
-                loading={isSubmitting}
+                loading={createMutation.isPending}
                 className="py-4"
               />
             </div>

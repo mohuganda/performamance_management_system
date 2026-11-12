@@ -8,6 +8,7 @@ import { LOGO_SVG } from '../../assets/logoSvg';
 import { loginSchema } from '../../schemas/auth';
 import { useAuthStore } from '../../stores/authStore';
 import { useTheme } from '../../hooks/useTheme';
+import { useLoginMutation } from '../../hooks/useAuthMutations';
 import { getApiErrorMessage } from '../../api/client';
 import { demoAccounts, DEMO_PASSWORD } from '../../constants/demoAccounts';
 import { AlertCircle } from 'lucide-react';
@@ -16,13 +17,12 @@ export const LoginScreen: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { colors } = useTheme();
-  const login = useAuthStore((state) => state.login);
+  const loginMutation = useLoginMutation();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [showDemoAccounts, setShowDemoAccounts] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -42,19 +42,23 @@ export const LoginScreen: React.FC = () => {
       return;
     }
 
-    setIsLoading(true);
-    try {
-      const result = await login(email.trim(), password);
-      if (result.requires_totp) {
-        setServerError(t('login_totp_error', 'Two-factor authentication required.'));
-      } else {
-        navigate('/');
+    loginMutation.mutate(
+      { email: email.trim(), password },
+      {
+        onSuccess: (result) => {
+          if (result.requires_totp) {
+            setServerError(t('login_totp_error', 'Two-factor authentication required.'));
+          } else {
+            navigate('/');
+          }
+        },
+        onError: (err) => {
+          setServerError(
+            getApiErrorMessage(err, t('login_failed_error', 'Failed to sign in. Please verify your credentials.'))
+          );
+        },
       }
-    } catch (err: unknown) {
-      setServerError(getApiErrorMessage(err, t('login_failed_error', 'Failed to sign in. Please verify your credentials.')));
-    } finally {
-      setIsLoading(false);
-    }
+    );
   };
 
   return (
@@ -117,7 +121,7 @@ export const LoginScreen: React.FC = () => {
             <Button
               type="submit"
               title={t('login_button', 'Sign In')}
-              loading={isLoading}
+              loading={loginMutation.isPending}
               className="mt-6"
             />
           </form>

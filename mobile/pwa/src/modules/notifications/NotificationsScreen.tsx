@@ -1,43 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bell } from 'lucide-react';
 import { MainTemplate } from '../../components/templates';
 import { Card } from '../../components/atoms/Card';
 import { useTheme } from '../../hooks/useTheme';
-import apiClient from '../../api/client';
-import { NotificationRow } from '../../api/notifications/types';
+import { useNotificationsQuery, useMarkAllReadMutation } from '../../hooks/useNotifications';
 import { formatDate } from '../../utils/date';
 
 export const NotificationsScreen: React.FC = () => {
   const { t } = useTranslation();
   const { colors } = useTheme();
 
-  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  // TanStack Query custom hooks offload notification fetching, caching, and read mutations
+  const { data: notifications = [], isLoading } = useNotificationsQuery();
+  const markAllReadMutation = useMarkAllReadMutation();
 
-  const fetchNotifications = async () => {
-    setIsLoading(true);
-    try {
-      const res = await apiClient.get<NotificationRow[]>('/notifications');
-      setNotifications(res.data);
-    } catch {
-      // ignore
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
-
-  const markAllAsRead = async () => {
-    try {
-      await apiClient.post('/notifications/read-all');
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    } catch {
-      // ignore
-    }
+  const markAllAsRead = () => {
+    markAllReadMutation.mutate();
   };
 
   return (

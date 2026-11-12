@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Mail, Shield, Building, Award, Phone, FileSignature, Camera } from 'lucide-react';
 import { MainTemplate } from '../../components/templates';
@@ -9,44 +9,34 @@ import { SignaturePadModal } from '../../components/molecules/SignaturePadModal'
 import { useAuthStore } from '../../stores/authStore';
 import { useTheme } from '../../hooks/useTheme';
 import { Toaster } from '../../utils/toast';
-import apiClient, { getApiErrorMessage } from '../../api/client';
-import { MeResponse } from '../../api/auth/types';
+import { getApiErrorMessage } from '../../api/client';
+import { useProfileQuery, useUpdateProfileMutation } from '../../hooks/useProfile';
 
 export const ProfileScreen: React.FC = () => {
   const { t } = useTranslation();
-  const { user, refreshProfile } = useAuthStore();
+  const { user } = useAuthStore();
   const { colors } = useTheme();
-  const [profileData, setProfileData] = useState<MeResponse | null>(null);
-  const [signatureModalVisible, setSignatureModalVisible] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
 
+  // TanStack Query custom hooks offload profile fetching and update mutations
+  const { data: profileData } = useProfileQuery();
+  const updateProfileMutation = useUpdateProfileMutation();
+  const isUpdating = updateProfileMutation.isPending;
+
+  const [signatureModalVisible, setSignatureModalVisible] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchProfile = async () => {
-    try {
-      const res = await apiClient.get<MeResponse>('/auth/me');
-      setProfileData(res.data);
-    } catch {
-      // ignore
-    }
-  };
-
-  useEffect(() => {
-    fetchProfile();
-  }, []);
-
   const handleSignatureSave = async (signatureDataUrl: string) => {
-    setIsUpdating(true);
-    try {
-      await apiClient.put('/auth/profile', { signature_image: signatureDataUrl });
-      Toaster.success('Official electronic signature saved successfully!');
-      fetchProfile();
-      refreshProfile();
-    } catch (err) {
-      Toaster.error(getApiErrorMessage(err, 'Failed to update electronic signature.'));
-    } finally {
-      setIsUpdating(false);
-    }
+    updateProfileMutation.mutate(
+      { signature_image: signatureDataUrl },
+      {
+        onSuccess: () => {
+          Toaster.success('Official electronic signature saved successfully!');
+        },
+        onError: (err) => {
+          Toaster.error(getApiErrorMessage(err, 'Failed to update electronic signature.'));
+        },
+      }
+    );
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,19 +44,19 @@ export const ProfileScreen: React.FC = () => {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = async () => {
+    reader.onload = () => {
       const base64 = reader.result as string;
-      setIsUpdating(true);
-      try {
-        await apiClient.put('/auth/profile', { profile_photo: base64 });
-        Toaster.success('Profile photo updated successfully!');
-        fetchProfile();
-        refreshProfile();
-      } catch (err) {
-        Toaster.error(getApiErrorMessage(err, 'Failed to upload profile photo.'));
-      } finally {
-        setIsUpdating(false);
-      }
+      updateProfileMutation.mutate(
+        { profile_photo: base64 },
+        {
+          onSuccess: () => {
+            Toaster.success('Profile photo updated successfully!');
+          },
+          onError: (err) => {
+            Toaster.error(getApiErrorMessage(err, 'Failed to upload profile photo.'));
+          },
+        }
+      );
     };
     reader.readAsDataURL(file);
   };

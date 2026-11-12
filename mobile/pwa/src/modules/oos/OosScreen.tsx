@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MapPin, FileText, CheckSquare, Search, RefreshCw, Calendar, ChevronRight } from 'lucide-react';
@@ -13,11 +13,10 @@ import { MapCard } from '../../components/molecules/MapCard';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuthStore } from '../../stores/authStore';
 import { Toaster } from '../../utils/toast';
-import { useSyncStore } from '../../stores/syncStore';
 import { getApiErrorMessage } from '../../api/client';
-import oosService from '../../api/oos/service';
-import mapsService from '../../api/maps/service';
-import { OosReason, OosRequest, OosSubmissionPayload } from '../../api/oos/types';
+import { useOosReasonsQuery, useOosRequestsQuery, useCreateOosMutation } from '../../hooks/useOos';
+import { usePlacesSearch } from '../../hooks/usePlacesSearch';
+import { OosSubmissionPayload } from '../../api/oos/types';
 import { GooglePlacePrediction } from '../../api/maps/types';
 import { formatDate } from '../../utils/date';
 
@@ -30,9 +29,11 @@ export const OosScreen: React.FC = () => {
   const canApprove = hasPermission('oos.requests.approve');
   const [activeTab, setActiveTab] = useState<'history' | 'apply' | 'approvals'>('history');
 
-  const [reasons, setReasons] = useState<OosReason[]>([]);
-  const [requests, setRequests] = useState<OosRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  // TanStack Query custom hooks offload all OOS data queries, caching, and mutation queueing
+  const { data: reasons = [], isLoading: isLoadingReasons } = useOosReasonsQuery();
+  const { data: requests = [], isLoading: isLoadingRequests, refetch: refetchRequests } = useOosRequestsQuery();
+  const isLoading = isLoadingReasons || isLoadingRequests;
+  const createMutation = useCreateOosMutation();
 
   // Form State
   const [selectedReasonId, setSelectedReasonId] = useState<number | null>(null);
@@ -44,74 +45,22 @@ export const OosScreen: React.FC = () => {
   const [expectedDeliverables, setExpectedDeliverables] = useState('');
   const [remarks, setRemarks] = useState('');
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Places Search Autocomplete
-  const [searchQuery, setSearchQuery] = useState('');
-  const [predictions, setPredictions] = useState<GooglePlacePrediction[]>([]);
-
-  const addMutation = useSyncStore((state) => state.addMutation);
-
-  const fetchData = async () => {
-    setIsLoading(true);
-    // Instant offline cache load
-    const cachedReasons = localStorage.getItem('moh-pms-oos-reasons');
-    const cachedRequests = localStorage.getItem('moh-pms-oos-requests');
-    if (cachedReasons) {
-      try {
-        setReasons(JSON.parse(cachedReasons));
-      } catch {}
-    }
-    if (cachedRequests) {
-      try {
-        setRequests(JSON.parse(cachedRequests));
-      } catch {}
-    }
-
-    try {
-      const [reasonsRes, requestsRes] = await Promise.all([
-        oosService.listReasons(),
-        oosService.listRequests(),
-      ]);
-      setReasons(reasonsRes);
-      localStorage.setItem('moh-pms-oos-reasons', JSON.stringify(reasonsRes));
-      setRequests(requestsRes);
-      localStorage.setItem('moh-pms-oos-requests', JSON.stringify(requestsRes));
-    } catch (err) {
-      console.warn('Failed to load OOS data:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleSearchPlaces = async (q: string) => {
-    setSearchQuery(q);
-    if (q.trim().length < 2) {
-      setPredictions([]);
-      return;
-    }
-    try {
-      const res = await mapsService.getPlacePredictions(q);
-      setPredictions(res);
-    } catch {
-      setPredictions([]);
-    }
-  };
-
-  const handleSelectPrediction = (item: GooglePlacePrediction) => {
-    setDestinationName(item.structured_formatting?.main_text || item.name || item.description);
-    setDestinationAddress(item.address || item.description);
-    if (item.latitude && item.longitude) {
-      setCoords({ latitude: item.latitude, longitude: item.longitude });
-    }
-    setSearchQuery('');
-    setPredictions([]);
-  };
+  // Places Search custom hook
+  const {
+    searchQuery,
+    setSearchQuery,
+    predictions,
+    selectPrediction,
+    clearSearch,
+  } = usePlacesSearch({
+    onPlaceSelected: (res) => {
+      setDestinationName(res.name);
+      setDestinationAddress(res.formatted_address);
+      setCoords({ latitude: res.latitude, longitude: res.longitude });
+    },
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,8 +78,6 @@ export const OosScreen: React.FC = () => {
       return;
     }
 
-    setIsSubmitting(true);
-
     const payload: OosSubmissionPayload = {
       reason_id: selectedReasonId!,
       destination_name: destinationName.trim(),
@@ -145,37 +92,31 @@ export const OosScreen: React.FC = () => {
       submit: true,
     };
 
-    try {
-      if (!navigator.onLine) {
-        addMutation({
-          type: 'OOS_REQUEST',
-          endpoint: '/mobile/out-of-station/requests',
-          method: 'POST',
-          payload,
-        });
-        Toaster.info(t('oos_sync_offline', 'Travel request saved offline. Will sync when reconnected.'));
-      } else {
-        await oosService.createRequest(payload);
-        Toaster.success(t('oos_submit_success', 'Travel request submitted successfully!'));
-      }
+    createMutation.mutate(payload, {
+      onSuccess: (data) => {
+        if (data?.offline) {
+          Toaster.info(t('oos_sync_offline', 'Travel request saved offline. Will sync when reconnected.'));
+        } else {
+          Toaster.success(t('oos_submit_success', 'Travel request submitted successfully!'));
+        }
 
-      // Reset
-      setSelectedReasonId(null);
-      setStartDate(null);
-      setEndDate(null);
-      setDestinationName('');
-      setDestinationAddress('');
-      setCoords(null);
-      setExpectedDeliverables('');
-      setRemarks('');
-      setAttachments([]);
-      setActiveTab('history');
-      fetchData();
-    } catch (err) {
-      Toaster.error(getApiErrorMessage(err, 'Failed to submit travel request.'));
-    } finally {
-      setIsSubmitting(false);
-    }
+        // Reset
+        setSelectedReasonId(null);
+        setStartDate(null);
+        setEndDate(null);
+        setDestinationName('');
+        setDestinationAddress('');
+        setCoords(null);
+        setExpectedDeliverables('');
+        setRemarks('');
+        setAttachments([]);
+        clearSearch();
+        setActiveTab('history');
+      },
+      onError: (err) => {
+        Toaster.error(getApiErrorMessage(err, 'Failed to submit travel request.'));
+      },
+    });
   };
 
   const getStatusBadge = (status: string) => {
@@ -254,7 +195,7 @@ export const OosScreen: React.FC = () => {
                   Out-of-Station Travel Duties
                 </span>
                 <button
-                  onClick={fetchData}
+                  onClick={() => refetchRequests()}
                   disabled={isLoading}
                   className="text-xs flex items-center gap-1 hover:opacity-80 transition-opacity"
                   style={{ color: colors.muted }}
@@ -341,7 +282,7 @@ export const OosScreen: React.FC = () => {
                       type="text"
                       placeholder="Search facility name, district or hospital..."
                       value={searchQuery}
-                      onChange={(e) => handleSearchPlaces(e.target.value)}
+                      onChange={(e) => setSearchQuery(e.target.value)}
                       className="w-full border rounded-none px-4 py-3 bg-white dark:bg-[#1E1E1E] text-base outline-none"
                       style={{
                         borderColor: formErrors.destinationName ? colors.error : colors.border,
@@ -367,7 +308,7 @@ export const OosScreen: React.FC = () => {
                         <button
                           key={idx}
                           type="button"
-                          onClick={() => handleSelectPrediction(p)}
+                          onClick={() => selectPrediction(p)}
                           className="w-full p-2.5 text-left text-xs border-b last:border-b-0 hover:bg-gray-50 dark:hover:bg-zinc-800"
                           style={{
                             borderColor: colors.border,
@@ -463,7 +404,7 @@ export const OosScreen: React.FC = () => {
                   <Button
                     type="submit"
                     title="Submit Travel Request"
-                    loading={isSubmitting}
+                    loading={createMutation.isPending}
                     className="py-4"
                   />
                 </div>

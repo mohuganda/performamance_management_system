@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, X, Clock, Calendar, MapPin, Activity, RefreshCw } from 'lucide-react';
 import { MainTemplate } from '../../components/templates';
@@ -7,11 +7,10 @@ import { Badge } from '../../components/atoms/Badge';
 import { Button } from '../../components/atoms/Button';
 import { Input } from '../../components/atoms/Input';
 import { useTheme } from '../../hooks/useTheme';
-import { useSyncStore } from '../../stores/syncStore';
 import { Toaster } from '../../utils/toast';
 import { getApiErrorMessage } from '../../api/client';
-import approvalsService from '../../api/approvals/service';
-import { ApprovalInboxItem, ApprovalInboxStats, ApproveLeavePayload } from '../../api/approvals/types';
+import { useApprovalsInboxQuery, useActApprovalMutation } from '../../hooks/useApprovals';
+import { ApprovalInboxItem } from '../../api/approvals/types';
 import { formatDate } from '../../utils/date';
 
 type FilterTab = 'all' | 'leave' | 'oos' | 'performance';
@@ -35,47 +34,18 @@ export const ApprovalsScreen: React.FC = () => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
 
-  const [tasks, setTasks] = useState<ApprovalInboxItem[]>([]);
-  const [stats, setStats] = useState<ApprovalInboxStats | null>(null);
+  // TanStack Query custom hooks offload inbox synchronization and action mutations
+  const { data: inboxData, isLoading, refetch: fetchTasks } = useApprovalsInboxQuery();
+  const tasks = inboxData?.pending || [];
+  const stats = inboxData?.stats || null;
+  const actMutation = useActApprovalMutation();
+
   const [filter, setFilter] = useState<FilterTab>('all');
-  const [isLoading, setIsLoading] = useState(false);
 
   // Action Modal State
   const [selectedTask, setSelectedTask] = useState<ApprovalInboxItem | null>(null);
   const [actionType, setActionType] = useState<'approved' | 'rejected' | null>(null);
   const [remarks, setRemarks] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const addMutation = useSyncStore((state) => state.addMutation);
-
-  const fetchTasks = async () => {
-    setIsLoading(true);
-    const cached = localStorage.getItem('moh-pms-approvals-inbox');
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (parsed.pending) setTasks(parsed.pending);
-        if (parsed.stats) setStats(parsed.stats);
-      } catch {}
-    }
-
-    try {
-      const res = await approvalsService.inbox();
-      if (res) {
-        setTasks(res.pending || []);
-        if (res.stats) setStats(res.stats);
-        localStorage.setItem('moh-pms-approvals-inbox', JSON.stringify(res));
-      }
-    } catch (err) {
-      console.warn('Failed to fetch approval tasks:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTasks();
-  }, []);
 
   const tabCounts = useMemo(() => ({
     all: stats?.pending_total ?? tasks.length,
@@ -99,62 +69,27 @@ export const ApprovalsScreen: React.FC = () => {
 
   const handleExecuteAction = async () => {
     if (!selectedTask || !actionType) return;
-    setIsSubmitting(true);
 
     const approve = actionType === 'approved';
     const comments = remarks.trim() || undefined;
 
-    try {
-      if (!navigator.onLine) {
-        let endpoint = '';
-        if (selectedTask.module === 'leave' && selectedTask.approval_id) {
-          endpoint = `/mobile/leave/approvals/${selectedTask.approval_id}`;
-        } else if (selectedTask.module === 'oos' && selectedTask.approval_id) {
-          endpoint = `/mobile/out-of-station/approvals/${selectedTask.approval_id}`;
-        } else if (selectedTask.module === 'ppa' && selectedTask.ppa_id) {
-          endpoint = `/mobile/performance/ppa/review`;
-        } else if (selectedTask.module === 'performance' && selectedTask.report_id) {
-          endpoint = `/mobile/performance/appraisal/review`;
-        }
-        if (endpoint) {
-          addMutation({
-            type: 'APPROVAL_ACTION',
-            endpoint,
-            method: 'POST',
-            payload: { approve, comments },
-          });
-        }
-        Toaster.info(t('approvals_queued', 'Offline mode: Approval decision saved locally. Will sync automatically.'));
-      } else {
-        if (selectedTask.module === 'leave' && selectedTask.approval_id) {
-          await approvalsService.approveLeave(selectedTask.approval_id, { approve, comments });
-        } else if (selectedTask.module === 'oos' && selectedTask.approval_id) {
-          await approvalsService.approveOos(selectedTask.approval_id, { approve, comments });
-        } else if (selectedTask.module === 'ppa' && selectedTask.ppa_id) {
-          await approvalsService.reviewPpa({ ppa_id: selectedTask.ppa_id, approve, comments });
-        } else if (selectedTask.module === 'performance' && selectedTask.report_id) {
-          await approvalsService.reviewAppraisal({
-            report_id: selectedTask.report_id,
-            decision: approve ? 'approve' : 'return',
-            comments: comments || (approve ? 'Approved' : 'Returned for revision'),
-            comment_role:
-              selectedTask.status === 'countersigning'
-                ? 'countersigning'
-                : selectedTask.status === 'responsible_review'
-                ? 'responsible_officer'
-                : 'appraiser',
-          });
-        }
-        Toaster.success(t('approvals_action_success', `Request ${approve ? 'Approved' : 'Rejected'} successfully!`));
+    actMutation.mutate(
+      { item: selectedTask, approve, comments },
+      {
+        onSuccess: (data) => {
+          if (data?.offline) {
+            Toaster.info(t('approvals_queued', 'Offline mode: Approval decision saved locally. Will sync automatically.'));
+          } else {
+            Toaster.success(t('approvals_action_success', `Request ${approve ? 'Approved' : 'Rejected'} successfully!`));
+          }
+          setSelectedTask(null);
+          setActionType(null);
+        },
+        onError: (err) => {
+          Toaster.error(getApiErrorMessage(err, 'Failed to process approval action.'));
+        },
       }
-      setSelectedTask(null);
-      setActionType(null);
-      fetchTasks();
-    } catch (err) {
-      Toaster.error(getApiErrorMessage(err, 'Failed to process approval action.'));
-    } finally {
-      setIsSubmitting(false);
-    }
+    );
   };
 
   return (
@@ -239,7 +174,7 @@ export const ApprovalsScreen: React.FC = () => {
             Pending Requests ({filteredTasks.length})
           </span>
           <button
-            onClick={fetchTasks}
+            onClick={() => fetchTasks()}
             disabled={isLoading}
             className="text-xs flex items-center gap-1 hover:opacity-80 transition-opacity"
             style={{ color: colors.muted }}
@@ -359,15 +294,15 @@ export const ApprovalsScreen: React.FC = () => {
               </button>
               <button
                 type="button"
-                disabled={isSubmitting}
+                disabled={actMutation.isPending}
                 onClick={handleExecuteAction}
                 className="flex-1 py-3 text-xs font-bold rounded-none text-white transition-opacity"
                 style={{
                   backgroundColor: actionType === 'approved' ? colors.success : colors.error,
-                  opacity: isSubmitting ? 0.6 : 1,
+                  opacity: actMutation.isPending ? 0.6 : 1,
                 }}
               >
-                {isSubmitting ? 'Processing...' : actionType === 'approved' ? 'Confirm Approval' : 'Confirm Rejection'}
+                {actMutation.isPending ? 'Processing...' : actionType === 'approved' ? 'Confirm Approval' : 'Confirm Rejection'}
               </button>
             </div>
           </div>

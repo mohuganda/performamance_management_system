@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Calendar, Loader2 } from 'lucide-react';
 import { MainTemplate } from '../../components/templates';
 import { Card } from '../../components/atoms/Card';
 import { Badge } from '../../components/atoms/Badge';
 import { useTheme } from '../../hooks/useTheme';
-import { leaveService } from '../../api/leave/service';
-import { LeaveRequest, LeaveType } from '../../api/leave/types';
+import { useLeaveRequestsQuery, useLeaveTypesQuery } from '../../hooks/useLeave';
 import { formatDate } from '../../utils/date';
 import { parseISODate } from '../../utils/leavePolicy';
 
@@ -14,44 +13,9 @@ export const LeaveHistoryScreen: React.FC = () => {
   const { t } = useTranslation();
   const { colors } = useTheme();
 
-  const [requests, setRequests] = useState<LeaveRequest[]>([]);
-  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    setIsLoading(true);
-    // Instant offline cache load
-    const cachedReqs = localStorage.getItem('moh-pms-leave-requests');
-    const cachedTypes = localStorage.getItem('moh-pms-leave-types');
-    if (cachedReqs) {
-      try {
-        setRequests(JSON.parse(cachedReqs));
-      } catch {}
-    }
-    if (cachedTypes) {
-      try {
-        setLeaveTypes(JSON.parse(cachedTypes));
-      } catch {}
-    }
-
-    // Remote API fetch using normalized leaveService
-    Promise.all([
-      leaveService.listRequests(),
-      leaveService.listTypes(),
-    ])
-      .then(([reqRes, typeRes]) => {
-        setRequests(reqRes);
-        localStorage.setItem('moh-pms-leave-requests', JSON.stringify(reqRes));
-        if (typeRes && typeRes.length > 0) {
-          setLeaveTypes(typeRes);
-          localStorage.setItem('moh-pms-leave-types', JSON.stringify(typeRes));
-        }
-      })
-      .catch((err) => {
-        console.warn('Failed to load leave history:', err);
-      })
-      .finally(() => setIsLoading(false));
-  }, []);
+  const { data: requests = [], isLoading: isLoadingRequests } = useLeaveRequestsQuery();
+  const { data: leaveTypes = [], isLoading: isLoadingTypes } = useLeaveTypesQuery();
+  const isLoading = isLoadingRequests || isLoadingTypes;
 
   const typeMap = React.useMemo(() => {
     const map = new Map<number, string>();

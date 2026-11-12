@@ -11,10 +11,9 @@ import { useTheme } from '../../hooks/useTheme';
 import { showAlert } from '../../stores/alertStore';
 import { Toaster } from '../../utils/toast';
 import { attendanceNotesSchema } from '../../schemas/attendance';
-import { useSyncStore } from '../../stores/syncStore';
 import { getApiErrorMessage } from '../../api/client';
-import attendanceService from '../../api/attendance/service';
-import { ClockResponse, ClockRequest } from '../../api/attendance/types';
+import { useAttendanceListQuery, useClockMutation } from '../../hooks/useAttendance';
+import { ClockRequest } from '../../api/attendance/types';
 import { formatDate as formatUtilDate, formatTime as formatUtilTime } from '../../utils/date';
 
 export const AttendanceScreen: React.FC = () => {
@@ -29,11 +28,9 @@ export const AttendanceScreen: React.FC = () => {
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [isPermissionBlocked, setIsPermissionBlocked] = useState(false);
 
-  const [clocks, setClocks] = useState<ClockResponse[]>([]);
-  const [isLoadingClocks, setIsLoadingClocks] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const addMutation = useSyncStore((state) => state.addMutation);
+  // TanStack Query custom hooks offload list fetching, offline cache, and clock mutations
+  const { data: clocks = [], isLoading: isLoadingClocks } = useAttendanceListQuery();
+  const clockMutation = useClockMutation();
 
   // Background GPS Position acquisition loop
   const startGPSCapture = useCallback(() => {
@@ -71,29 +68,9 @@ export const AttendanceScreen: React.FC = () => {
     );
   }, []);
 
-  const fetchClocks = useCallback(async () => {
-    setIsLoadingClocks(true);
-    const cached = localStorage.getItem('moh-pms-attendance-cache');
-    if (cached) {
-      try {
-        setClocks(JSON.parse(cached));
-      } catch {}
-    }
-    try {
-      const data = await attendanceService.listClocks();
-      setClocks(data);
-      localStorage.setItem('moh-pms-attendance-cache', JSON.stringify(data));
-    } catch (err) {
-      console.warn('Failed to load attendance list:', err);
-    } finally {
-      setIsLoadingClocks(false);
-    }
-  }, []);
-
   useEffect(() => {
     startGPSCapture();
-    fetchClocks();
-  }, [startGPSCapture, fetchClocks]);
+  }, [startGPSCapture]);
 
   const sortedClocks = useMemo(() => {
     return [...clocks].sort((a, b) => {
@@ -143,7 +120,6 @@ export const AttendanceScreen: React.FC = () => {
       cancelText: t('common_cancel', 'Cancel'),
       confirmText: actionLabel,
       onConfirm: async () => {
-        setIsSubmitting(true);
         const payload: ClockRequest = {
           action,
           clock_type: action,
@@ -154,43 +130,23 @@ export const AttendanceScreen: React.FC = () => {
           clocked_at: new Date().toISOString(),
         };
 
-        try {
-          if (!navigator.onLine) {
-            addMutation({
-              type: 'CLOCK',
-              endpoint: '/mobile/attendance/clock',
-              method: 'POST',
-              payload,
-            });
-
-            const optimisticClock: ClockResponse = {
-              id: Date.now(),
-              action,
-              clocked_at: payload.clocked_at!,
-              latitude: payload.latitude,
-              longitude: payload.longitude,
-              accuracy_meters: payload.accuracy_meters,
-              notes: payload.notes,
-              verified: false,
-              within_geofence: true,
-            };
-            setClocks((prev) => [optimisticClock, ...prev]);
-            Toaster.info(t('attendance_sync_offline', 'Attendance clocked offline. Will sync when reconnected.'));
-          } else {
-            const newClock = await attendanceService.clock(payload);
-            setClocks((prev) => [newClock, ...prev]);
-            Toaster.success(
-              action === 'in'
-                ? t('attendance_success_clock_in', 'Clocked in successfully!')
-                : t('attendance_success_clock_out', 'Clocked out successfully!')
-            );
-          }
-          setNotes('');
-        } catch (err) {
-          Toaster.error(getApiErrorMessage(err, 'Failed to submit attendance request.'));
-        } finally {
-          setIsSubmitting(false);
-        }
+        clockMutation.mutate(payload, {
+          onSuccess: (res) => {
+            if (res?.verified === false && !navigator.onLine) {
+              Toaster.info(t('attendance_sync_offline', 'Attendance clocked offline. Will sync when reconnected.'));
+            } else {
+              Toaster.success(
+                action === 'in'
+                  ? t('attendance_success_clock_in', 'Clocked in successfully!')
+                  : t('attendance_success_clock_out', 'Clocked out successfully!')
+              );
+            }
+            setNotes('');
+          },
+          onError: (err) => {
+            Toaster.error(getApiErrorMessage(err, 'Failed to submit attendance request.'));
+          },
+        });
       },
     });
   };
@@ -257,15 +213,15 @@ export const AttendanceScreen: React.FC = () => {
           {/* Action Trigger Button */}
           <button
             onClick={handleClockAction}
-            disabled={!coords || isSubmitting || !!notesError}
+            disabled={!coords || clockMutation.isPending || !!notesError}
             className="w-full py-4 rounded-none flex items-center justify-center gap-2 shadow-md font-bold text-base text-white transition-opacity active:opacity-90"
             style={{
               backgroundColor: isClockedIn ? colors.error : colors.success,
-              opacity: !coords || isSubmitting || !!notesError ? 0.5 : 1,
-              cursor: !coords || isSubmitting || !!notesError ? 'not-allowed' : 'pointer',
+              opacity: !coords || clockMutation.isPending || !!notesError ? 0.5 : 1,
+              cursor: !coords || clockMutation.isPending || !!notesError ? 'not-allowed' : 'pointer',
             }}
           >
-            {isSubmitting ? (
+            {clockMutation.isPending ? (
               <Loader2 className="animate-spin" size={20} color="#FFFFFF" />
             ) : (
               <>

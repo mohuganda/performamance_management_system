@@ -1,0 +1,113 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import mapsService from '../api/maps/service';
+import { GooglePlacePrediction } from '../api/maps/types';
+
+export interface PlaceSelectedResult {
+  name: string;
+  formatted_address: string;
+  latitude: number;
+  longitude: number;
+}
+
+interface UsePlacesSearchOptions {
+  onPlaceSelected?: (result: PlaceSelectedResult) => void;
+  onReverseGeocoded?: (result: { name: string; formatted_address: string }) => void;
+}
+
+export function usePlacesSearch(options: UsePlacesSearchOptions = {}) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [predictions, setPredictions] = useState<GooglePlacePrediction[]>([]);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const skipNextSearchRef = useRef(false);
+
+  // Debounced autocomplete predictions fetch (300ms)
+  useEffect(() => {
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false;
+      setPredictions([]);
+      return;
+    }
+
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
+      setPredictions([]);
+      return;
+    }
+
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const list = await mapsService.getPlacePredictions(searchQuery);
+        if (!skipNextSearchRef.current) {
+          setPredictions(list);
+        }
+      } catch {
+        if (!skipNextSearchRef.current) {
+          setPredictions([]);
+        }
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchQuery]);
+
+  const handleSetSearchQuery = useCallback((query: string) => {
+    skipNextSearchRef.current = false;
+    setSearchQuery(query);
+  }, []);
+
+  const selectPrediction = useCallback(
+    async (prediction: GooglePlacePrediction): Promise<PlaceSelectedResult | null> => {
+      skipNextSearchRef.current = true;
+      setPredictions([]);
+
+      // Direct resolution if coordinates are already present in prediction
+      if (prediction.latitude !== undefined && prediction.longitude !== undefined) {
+        const result: PlaceSelectedResult = {
+          name: prediction.name || prediction.structured_formatting?.main_text || prediction.description,
+          formatted_address: prediction.address || prediction.description,
+          latitude: prediction.latitude,
+          longitude: prediction.longitude,
+        };
+        setSearchQuery(result.name);
+        options.onPlaceSelected?.(result);
+        return result;
+      }
+
+      setIsGeocoding(true);
+      try {
+        const details = await mapsService.getPlaceDetails(prediction.place_id);
+        if (details) {
+          const result: PlaceSelectedResult = {
+            name: details.name,
+            formatted_address: details.formatted_address,
+            latitude: details.latitude,
+            longitude: details.longitude,
+          };
+          setSearchQuery(details.name);
+          options.onPlaceSelected?.(result);
+          return result;
+        }
+        return null;
+      } catch (err) {
+        console.error('[usePlacesSearch] selectPrediction error:', err);
+        return null;
+      } finally {
+        setIsGeocoding(false);
+      }
+    },
+    [options]
+  );
+
+  const clearSearch = useCallback(() => {
+    setSearchQuery('');
+    setPredictions([]);
+  }, []);
+
+  return {
+    searchQuery,
+    setSearchQuery: handleSetSearchQuery,
+    predictions,
+    isGeocoding,
+    selectPrediction,
+    clearSearch,
+  };
+}

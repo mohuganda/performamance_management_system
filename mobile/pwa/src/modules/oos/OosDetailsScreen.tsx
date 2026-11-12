@@ -10,10 +10,9 @@ import { Input } from '../../components/atoms/Input';
 import { MapCard } from '../../components/molecules/MapCard';
 import { Toaster } from '../../utils/toast';
 import { getApiErrorMessage } from '../../api/client';
-import oosService from '../../api/oos/service';
-import attendanceService from '../../api/attendance/service';
-import { OosRequest } from '../../api/oos/types';
-import { ClockRequest, ClockResponse } from '../../api/attendance/types';
+import { useOosRequestsQuery } from '../../hooks/useOos';
+import { useClockMutation } from '../../hooks/useAttendance';
+import { ClockRequest } from '../../api/attendance/types';
 import { getDistanceMeters } from '../../utils/haversine';
 import { formatDate } from '../../utils/date';
 
@@ -22,8 +21,10 @@ export const OosDetailsScreen: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
-  const [request, setRequest] = useState<OosRequest | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Custom TanStack Query hooks
+  const { data: requests = [], isLoading: isLoadingRequests } = useOosRequestsQuery();
+  const request = useMemo(() => requests.find((r) => String(r.id) === String(id)), [requests, id]);
+  const clockMutation = useClockMutation();
 
   // GPS Location & Proximity State
   const [coords, setCoords] = useState<{ latitude: number; longitude: number; accuracy?: number } | null>(null);
@@ -32,35 +33,7 @@ export const OosDetailsScreen: React.FC = () => {
 
   // Attendance Shift State for this assignment
   const [notes, setNotes] = useState('');
-  const [isSubmittingClock, setIsSubmittingClock] = useState(false);
   const [isClockedIn, setIsClockedIn] = useState(false);
-
-  const fetchRequestDetails = useCallback(async () => {
-    setIsLoading(true);
-    // Try local cache first
-    const cachedRequests = localStorage.getItem('moh-pms-oos-requests');
-    if (cachedRequests) {
-      try {
-        const list: OosRequest[] = JSON.parse(cachedRequests);
-        const match = list.find((item) => String(item.id) === String(id));
-        if (match) {
-          setRequest(match);
-        }
-      } catch {}
-    }
-
-    try {
-      const list = await oosService.listRequests();
-      const match = list.find((item) => String(item.id) === String(id));
-      if (match) {
-        setRequest(match);
-      }
-    } catch (err) {
-      console.warn('Failed to fetch OOS request details:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [id]);
 
   const fetchLocation = useCallback(() => {
     if (!navigator.geolocation) return;
@@ -85,9 +58,8 @@ export const OosDetailsScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchRequestDetails();
     fetchLocation();
-  }, [fetchRequestDetails, fetchLocation]);
+  }, [fetchLocation]);
 
   // Destination coordinates
   const destinationCoords = useMemo(() => {
@@ -132,8 +104,6 @@ export const OosDetailsScreen: React.FC = () => {
       return;
     }
 
-    setIsSubmittingClock(true);
-
     const payload: ClockRequest = {
       action: clockType,
       clock_type: clockType,
@@ -146,29 +116,42 @@ export const OosDetailsScreen: React.FC = () => {
       clocked_at: new Date().toISOString(),
     };
 
-    try {
-      await attendanceService.clock(payload);
-      setIsClockedIn(clockType === 'in');
-      Toaster.success(
-        clockType === 'in'
-          ? `Clocked in for duty at ${request?.destination_name}`
-          : `Clocked out from ${request?.destination_name}`
-      );
-      setNotes('');
-    } catch (err) {
-      Toaster.error(getApiErrorMessage(err, 'Failed to process travel attendance clock.'));
-    } finally {
-      setIsSubmittingClock(false);
-    }
+    clockMutation.mutate(payload, {
+      onSuccess: () => {
+        setIsClockedIn(clockType === 'in');
+        Toaster.success(
+          clockType === 'in'
+            ? `Clocked in for duty at ${request?.destination_name}`
+            : `Clocked out from ${request?.destination_name}`
+        );
+        setNotes('');
+      },
+      onError: (err) => {
+        Toaster.error(getApiErrorMessage(err, 'Failed to process travel attendance clock.'));
+      },
+    });
   };
 
-  if (isLoading || !request) {
+  if (isLoadingRequests && !request) {
     return (
       <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col">
         <AppBar title="Travel Assignment" showBack />
         <div className="flex-1 flex items-center justify-center p-6 text-xs text-zinc-400">
           <RefreshCw size={20} className="animate-spin mr-2" />
           Loading assignment details...
+        </div>
+      </div>
+    );
+  }
+
+  if (!request) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col">
+        <AppBar title="Travel Assignment" showBack />
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <p className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Assignment Not Found</p>
+          <p className="text-xs text-zinc-400 mt-1">This clearance request may have been removed or updated.</p>
+          <Button title="Back to Travel List" className="mt-4" onClick={() => navigate('/oos')} />
         </div>
       </div>
     );
@@ -270,7 +253,7 @@ export const OosDetailsScreen: React.FC = () => {
                   variant="danger"
                   title="Clock Out from Travel Duty Station"
                   onClick={() => handleClockAction('out')}
-                  loading={isSubmittingClock}
+                  loading={clockMutation.isPending}
                 />
               ) : (
                 <div>
@@ -278,8 +261,8 @@ export const OosDetailsScreen: React.FC = () => {
                     variant="primary"
                     title="Clock In for Travel Duty Station"
                     onClick={() => handleClockAction('in')}
-                    disabled={!isWithinGeofence || isSubmittingClock}
-                    loading={isSubmittingClock}
+                    disabled={!isWithinGeofence || clockMutation.isPending}
+                    loading={clockMutation.isPending}
                   />
                   {!isWithinGeofence && (
                     <p className="text-[11px] text-amber-600 dark:text-amber-400 text-center mt-2">

@@ -1,14 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, FileText, ChevronRight, HelpCircle } from 'lucide-react';
+import { Calendar, FileText, ChevronRight, HelpCircle, MapPin } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../hooks/useTheme';
 import { MainTemplate } from '../../components/templates';
 import { LeaveBalances } from '../../components/organisms/LeaveBalances';
 import { LeaveGuideModal } from '../../components/organisms/LeaveGuideModal';
 import { QuickActionCard } from '../../components/organisms/QuickActionCard';
-import { leaveService } from '../../api/leave/service';
-import { LeaveBalance, LeaveType } from '../../api/leave/types';
+import { useLeaveBalancesQuery, useLeaveTypesQuery } from '../../hooks/useLeave';
 
 export const LeaveScreen: React.FC = () => {
   const { t } = useTranslation();
@@ -16,44 +15,11 @@ export const LeaveScreen: React.FC = () => {
   const { colors } = useTheme();
 
   const [isGuideVisible, setIsGuideVisible] = useState(false);
-  const [balances, setBalances] = useState<LeaveBalance[]>([]);
-  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    setIsLoading(true);
-    // Instant offline cache load
-    const cachedBal = localStorage.getItem('moh-pms-leave-balances');
-    const cachedTypes = localStorage.getItem('moh-pms-leave-types');
-    if (cachedBal) {
-      try {
-        setBalances(JSON.parse(cachedBal));
-      } catch {}
-    }
-    if (cachedTypes) {
-      try {
-        setLeaveTypes(JSON.parse(cachedTypes));
-      } catch {}
-    }
-
-    // Fetch from remote API via normalized leaveService (/mobile/leave/balances & /mobile/leave/types)
-    Promise.all([
-      leaveService.listBalances(),
-      leaveService.listTypes(),
-    ])
-      .then(([balRes, typeRes]) => {
-        setBalances(balRes);
-        localStorage.setItem('moh-pms-leave-balances', JSON.stringify(balRes));
-        if (typeRes && typeRes.length > 0) {
-          setLeaveTypes(typeRes);
-          localStorage.setItem('moh-pms-leave-types', JSON.stringify(typeRes));
-        }
-      })
-      .catch((err) => {
-        console.warn('Failed to load leave data from API:', err);
-      })
-      .finally(() => setIsLoading(false));
-  }, []);
+  // TanStack Query custom hooks offload all API fetching, caching, and state management
+  const { data: balances = [], isLoading: isLoadingBalances } = useLeaveBalancesQuery();
+  const { data: leaveTypes = [], isLoading: isLoadingTypes } = useLeaveTypesQuery();
+  const isLoading = isLoadingBalances || isLoadingTypes;
 
   return (
     <MainTemplate title={t('leave_management_title', 'Leave Management')}>

@@ -78,8 +78,7 @@ yarn-error.log
 .agents/
 .agent/
 
+# Environment files
 .env
-.env.local
-.env.development.local
-.env.production.local
-.env.staging.local
+.env.*
+!.env.example

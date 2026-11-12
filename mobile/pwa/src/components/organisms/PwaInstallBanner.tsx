@@ -60,7 +60,7 @@ export const PwaInstallBanner: React.FC = () => {
       <div className="bg-zinc-900 text-white p-3 border-b border-zinc-700 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-2.5 text-xs">
           <Download size={18} className="text-amber-400 flex-shrink-0" />
-          <span>Install MoH PMS app for offline use and fast access</span>
+          <span>Install PMS iHRIS app for offline use and fast access</span>
         </div>
         <div className="flex items-center gap-2">
           <button

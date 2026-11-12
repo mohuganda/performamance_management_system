@@ -4,6 +4,7 @@ import { Bell } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
 import { useTheme } from '../../hooks/useTheme';
+import { useUnreadCountQuery } from '../../hooks/useNotifications';
 import { LOGO_SVG } from '../../assets/logoSvg';
 
 export const HomeHeader: React.FC = () => {
@@ -11,6 +12,7 @@ export const HomeHeader: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { colors } = useTheme();
+  const { data: unreadCount = 0 } = useUnreadCountQuery();
 
   return (
     <header
@@ -50,6 +52,11 @@ export const HomeHeader: React.FC = () => {
           aria-label="Notifications"
         >
           <Bell size={20} style={{ color: colors.text }} />
+          {unreadCount > 0 && (
+            <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
         </button>
 
         <button

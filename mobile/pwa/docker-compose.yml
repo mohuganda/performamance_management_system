@@ -11,3 +11,5 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
+      - BACKEND_API_SERVER=${BACKEND_API_SERVER:-http://127.0.0.1:8081}
+      - BACKEND_API_HOST=${BACKEND_API_HOST:-127.0.0.1:8081}

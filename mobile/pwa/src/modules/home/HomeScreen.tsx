@@ -9,9 +9,7 @@ import { HomeHeader } from '../../components/organisms/HomeHeader';
 import { ActionCard } from '../../components/organisms/ActionCard';
 import { StatCard } from '../../components/organisms/StatCard';
 import { AnnouncementBanner } from '../../components/organisms/AnnouncementBanner';
-import { PwaInstallBanner } from '../../components/organisms/PwaInstallBanner';
-import approvalsService from '../../api/approvals/service';
-import { ApprovalInboxStats } from '../../api/approvals/types';
+import { useApprovalsInboxQuery } from '../../hooks/useApprovals';
 
 export const HomeScreen: React.FC = () => {
   const { t } = useTranslation();
@@ -27,34 +25,12 @@ export const HomeScreen: React.FC = () => {
     'dashboard.hr',
   ]);
 
-  const [stats, setStats] = useState<ApprovalInboxStats | null>(null);
-
-  useEffect(() => {
-    if (showApprovals) {
-      const cached = localStorage.getItem('moh-pms-approvals-stats');
-      if (cached) {
-        try {
-          setStats(JSON.parse(cached));
-        } catch {}
-      }
-
-      approvalsService
-        .inbox()
-        .then((res) => {
-          if (res?.stats) {
-            setStats(res.stats);
-            localStorage.setItem('moh-pms-approvals-stats', JSON.stringify(res.stats));
-          }
-        })
-        .catch(() => {
-          // Keep cached stats if available
-        });
-    }
-  }, [showApprovals]);
+  // Offload approvals inbox & stats querying to TanStack Query custom hook
+  const { data: inboxData } = useApprovalsInboxQuery(showApprovals);
+  const stats = inboxData?.stats || null;
 
   return (
     <LayoutTemplate>
-      <PwaInstallBanner />
       <HomeHeader />
 
       {/* Main Content Container */}

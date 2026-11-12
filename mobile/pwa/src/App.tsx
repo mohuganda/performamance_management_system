@@ -7,6 +7,7 @@ import { useThemeStore } from './stores/themeStore';
 import { initNetworkListener } from './utils/network';
 import { GlobalAlertModal } from './components/organisms/GlobalAlertModal';
 import { ToastContainer } from './components/organisms/ToastContainer';
+import { GlobalPwaInstallPrompt } from './components/organisms/GlobalPwaInstallPrompt';
 import { BottomNavBar } from './components/organisms/BottomNavBar';
 
 // Screens
@@ -32,7 +33,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   if (!authReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
-        <div className="animate-pulse text-xs font-bold text-zinc-400">Loading MoH PMS...</div>
+        <div className="animate-pulse text-xs font-bold text-zinc-400">Loading PMS iHRIS...</div>
       </div>
     );
   }
@@ -178,6 +179,7 @@ export default function App() {
 
         <GlobalAlertModal />
         <ToastContainer />
+        <GlobalPwaInstallPrompt />
       </BrowserRouter>
     </QueryClientProvider>
   );
