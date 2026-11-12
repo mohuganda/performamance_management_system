@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useNavigation } from '@react-navigation/native';
 import Geolocation from 'react-native-geolocation-service';
 import { Clock, MessageSquare } from 'lucide-react-native';
 import { MainTemplate } from '../../components/templates';
@@ -43,6 +44,7 @@ interface AttendanceScreenProps {
 
 const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks }) => {
   const { t } = useTranslation();
+  const navigation = useNavigation<any>();
   const { colors, isDark } = useTheme();
 
   const [coords, setCoords] = useState<{ latitude: number; longitude: number; accuracy?: number } | null>(null);
@@ -121,18 +123,23 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks }) => {
       })
       .map((item) => ({
         id: item.remoteId ?? -1,
+        entry_id: (item as any).entryId || (item as any).entry_id,
+        staff_id: (item as any).staffId || (item as any).staff_id,
         action: item.action as 'in' | 'out',
+        clock_type: item.action as 'in' | 'out',
         clocked_at: item.clockedAt,
         created_at: item.createdAt || undefined,
         latitude: item.latitude,
         longitude: item.longitude,
         accuracy_meters: item.accuracyMeters || undefined,
+        source: (item as any).source || 'mobile',
         verified: item.verified || false,
         within_geofence: item.withinGeofence || false,
         notes: item.notes || undefined,
         location_label: item.locationLabel || undefined,
         verification_status: item.verificationStatus || undefined,
         distance_from_destination_meters: item.distanceFromDestinationMeters || undefined,
+        location_accuracy_percent: (item as any).locationAccuracyPercent || (item as any).location_accuracy_percent,
         isOfflinePending: item.remoteId === null,
       }));
   }, [clocks]);
@@ -310,6 +317,7 @@ const BaseAttendanceScreen: React.FC<AttendanceScreenProps> = ({ clocks }) => {
             sortedClocks={sortedClocks}
             formatDate={formatDate}
             formatTime={formatTime}
+            onPressItem={(log) => navigation.navigate('AttendanceDetails', { log })}
           />
         </ScrollView>
       </KeyboardAvoidingView>

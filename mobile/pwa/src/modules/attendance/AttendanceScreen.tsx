@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Clock, MessageSquare, Loader2 } from 'lucide-react';
 import { MainTemplate } from '../../components/templates';
@@ -18,6 +19,7 @@ import { formatDate as formatUtilDate, formatTime as formatUtilTime } from '../.
 
 export const AttendanceScreen: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { colors, isDark } = useTheme();
 
   const [coords, setCoords] = useState<{ latitude: number; longitude: number; accuracy?: number } | null>(null);
@@ -242,6 +244,11 @@ export const AttendanceScreen: React.FC = () => {
           sortedClocks={sortedClocks}
           formatDate={formatDate}
           formatTime={formatTime}
+          onPressItem={(log) =>
+            navigate(`/attendance/${log.id || (log as any).entry_id}`, {
+              state: { log },
+            })
+          }
         />
       </div>
 

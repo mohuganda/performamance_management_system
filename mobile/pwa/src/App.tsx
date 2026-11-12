@@ -14,6 +14,7 @@ import { BottomNavBar } from './components/organisms/BottomNavBar';
 import { LoginScreen } from './modules/auth/LoginScreen';
 import { HomeScreen } from './modules/home/HomeScreen';
 import { AttendanceScreen } from './modules/attendance/AttendanceScreen';
+import { AttendanceDetailsScreen } from './modules/attendance/AttendanceDetailsScreen';
 import { LeaveScreen } from './modules/leave/LeaveScreen';
 import { LeaveRequestScreen } from './modules/leave/LeaveRequestScreen';
 import { LeaveHistoryScreen } from './modules/leave/LeaveHistoryScreen';
@@ -81,6 +82,14 @@ export default function App() {
             element={
               <ProtectedLayout>
                 <AttendanceScreen />
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/attendance/:id"
+            element={
+              <ProtectedLayout>
+                <AttendanceDetailsScreen />
               </ProtectedLayout>
             }
           />

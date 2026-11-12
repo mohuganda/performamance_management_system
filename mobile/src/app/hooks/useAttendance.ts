@@ -6,7 +6,7 @@ import { useSyncStore } from '../../stores/syncStore';
 import { AttendanceDbService } from '../../db/services/AttendanceDbService';
 
 export function useAttendanceListSync(params?: ClockListParams) {
-  return useQuery({
+  return useQuery<ClockResponse[], Error>({
     queryKey: ['attendance', 'clocks_sync', params],
     queryFn: async () => {
       const clocks = await attendanceService.listClocks(params);

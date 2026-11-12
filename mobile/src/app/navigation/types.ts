@@ -1,3 +1,5 @@
+import { ClockResponse } from '../../api/attendance/types';
+
 export type AuthStackParamList = {
   Login: undefined;
   Activate: { token?: string } | undefined;
@@ -13,6 +15,7 @@ export type AppStackParamList = {
   LeaveRequest: { editMode?: boolean; localRecordId?: string } | undefined;
   LeaveHistory: undefined;
   SyncIssues: undefined;
+  AttendanceDetails: { log: ClockResponse };
 };
 
 export type AppTabParamList = {

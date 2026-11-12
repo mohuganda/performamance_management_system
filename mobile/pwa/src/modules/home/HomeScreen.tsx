@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Clock, Calendar, MapPin, CheckSquare, Activity, FileText } from 'lucide-react';
@@ -9,13 +9,29 @@ import { HomeHeader } from '../../components/organisms/HomeHeader';
 import { ActionCard } from '../../components/organisms/ActionCard';
 import { StatCard } from '../../components/organisms/StatCard';
 import { AnnouncementBanner } from '../../components/organisms/AnnouncementBanner';
+import { AttendanceHistory } from '../../components/organisms/AttendanceHistory';
 import { useApprovalsInboxQuery } from '../../hooks/useApprovals';
+import { useAttendanceListQuery } from '../../hooks/useAttendance';
 
 export const HomeScreen: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { hasPermission } = useAuthStore();
+  const { user, roles, hasPermission } = useAuthStore();
   const { colors } = useTheme();
+
+  const isStaff = roles.includes('staff') || user?.Role === 'staff';
+  const { data: clocks, isLoading: isLoadingClocks } = useAttendanceListQuery();
+
+  const sortedClocks = useMemo(() => {
+    if (!clocks) return [];
+    return [...clocks]
+      .filter((c) => !c.out_of_station_request_id)
+      .sort((a, b) => {
+        const timeA = new Date(a.clocked_at || (a as any).created_at || 0).getTime();
+        const timeB = new Date(b.clocked_at || (b as any).created_at || 0).getTime();
+        return timeB - timeA;
+      });
+  }, [clocks]);
 
   const showApprovals = hasPermission([
     'leave.requests.approve',
@@ -72,6 +88,24 @@ export const HomeScreen: React.FC = () => {
 
         {/* Announcement Banner */}
         <AnnouncementBanner />
+
+        {/* Recent Attendance for Staff */}
+        {isStaff && (
+          <div className="mt-6">
+            <AttendanceHistory
+              title={t('attendance_recent_title', 'Recent Attendance')}
+              isLoading={isLoadingClocks && !clocks?.length}
+              sortedClocks={sortedClocks}
+              limit={5}
+              onPressItem={(log) =>
+                navigate(`/attendance/${log.id || (log as any).entry_id}`, {
+                  state: { log },
+                })
+              }
+              onViewAll={() => navigate('/attendance')}
+            />
+          </div>
+        )}
 
         {/* Approvals Summary */}
         {showApprovals && stats ? (

@@ -10,6 +10,7 @@ import { SyncIssuesScreen } from '../../modules/sync/SyncIssuesScreen';
 import { OosScreen } from '../../modules/out-of-station/OosScreen';
 import { OosDetailsScreen } from '../../modules/out-of-station/OosDetailsScreen';
 import { AttendanceScreen } from '../../modules/attendance/AttendanceScreen';
+import { AttendanceDetailsScreen } from '../../modules/attendance/AttendanceDetailsScreen';
 import { ApprovalsScreen } from '../../modules/approvals/ApprovalsScreen';
 import { NotificationsScreen } from '../../modules/notifications/NotificationsScreen';
 import { HomeScreen } from '../../modules/home/HomeScreen';
@@ -132,6 +133,7 @@ export function AppNavigator() {
       <Stack.Screen name="LeaveRequest" component={LeaveRequestScreen} />
       <Stack.Screen name="LeaveHistory" component={LeaveHistoryScreen} />
       <Stack.Screen name="SyncIssues" component={SyncIssuesScreen} />
+      <Stack.Screen name="AttendanceDetails" component={AttendanceDetailsScreen} />
     </Stack.Navigator>
   );
 }

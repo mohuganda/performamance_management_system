@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SvgXml } from 'react-native-svg';
@@ -11,13 +11,29 @@ import { HomeHeader } from '../../components/organisms/home/HomeHeader';
 import { ActionCard } from '../../components/organisms/home/ActionCard';
 import { StatCard } from '../../components/organisms/common/StatCard';
 import { AnnouncementBanner } from '../../components/organisms/home/AnnouncementBanner';
+import { AttendanceHistory } from '../../components/organisms/attendance/AttendanceHistory';
 import { useApprovalsInboxSync } from '../../app/hooks/useApprovals';
+import { useAttendanceListSync } from '../../app/hooks/useAttendance';
 
 export function HomeScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
-  const { user, hasPermission } = useAuthStore();
+  const { user, roles, hasPermission } = useAuthStore();
   const { colors } = useTheme();
+
+  const isStaff = roles.includes('staff') || user?.Role === 'staff';
+  const { data: clocks, isLoading: isLoadingClocks } = useAttendanceListSync();
+
+  const sortedClocks = useMemo(() => {
+    if (!clocks) return [];
+    return [...clocks]
+      .filter((c) => !c.out_of_station_request_id)
+      .sort((a, b) => {
+        const timeA = new Date(a.clocked_at || a.created_at || 0).getTime();
+        const timeB = new Date(b.clocked_at || b.created_at || 0).getTime();
+        return timeB - timeA;
+      });
+  }, [clocks]);
 
   const showApprovals = hasPermission([
     'leave.requests.approve',
@@ -77,6 +93,20 @@ export function HomeScreen() {
 
         {/* Announcement Banner */}
         <AnnouncementBanner />
+
+        {/* Recent Attendance for Staff */}
+        {isStaff && (
+          <View className="mt-6">
+            <AttendanceHistory
+              title={t('attendance_recent_title')}
+              isLoading={isLoadingClocks && sortedClocks.length === 0}
+              sortedClocks={sortedClocks}
+              limit={5}
+              onPressItem={(log) => navigation.navigate('AttendanceDetails', { log })}
+              onViewAll={() => navigation.navigate('Attendance')}
+            />
+          </View>
+        )}
 
         {/* Approvals Summary */}
         {showApprovals && stats ? (
